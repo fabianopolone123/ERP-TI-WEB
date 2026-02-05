@@ -76,27 +76,30 @@
             gap: 8px;
             margin-top: 16px;
             border-bottom: 1px solid #1f2a44;
-            padding-bottom: 12px;
+            padding-bottom: 0;
         }
 
         .tab-button {
-            background: #111b2e;
-            border: 1px solid #1f2a44;
+            background: transparent;
+            border: 1px solid transparent;
             color: var(--text);
-            border-radius: 8px;
-            padding: 6px 12px;
+            border-radius: 8px 8px 0 0;
+            padding: 10px 12px;
             font-weight: 600;
             font-size: 0.92rem;
             cursor: pointer;
             text-decoration: none;
             display: inline-block;
             text-align: center;
+            position: relative;
+            top: 1px;
         }
 
         .tab-button.active {
-            background: var(--accent);
-            border-color: var(--accent);
+            background: #0f172a;
+            border-color: #1f2a44;
             color: #ffffff;
+            box-shadow: 0 -2px 0 var(--accent) inset;
         }
 
 
