@@ -6,11 +6,11 @@
     <title>{% block title %}ERP TI{% endblock %}</title>
     <style>
         :root {
-            --bg: #f5f7fb;
-            --card: #ffffff;
-            --text: #1f2a37;
-            --accent: #0058cc;
-            --muted: #6b7280;
+            --bg: #0b1220;
+            --card: #0f172a;
+            --text: #e2e8f0;
+            --accent: #3b82f6;
+            --muted: #94a3b8;
         }
 
         * { box-sizing: border-box; }
@@ -18,7 +18,7 @@
         body {
             margin: 0;
             font-family: "Segoe UI", sans-serif;
-            background: linear-gradient(120deg, #e8f0ff 0%, var(--bg) 65%);
+            background: radial-gradient(circle at top left, #1e293b 0%, var(--bg) 55%);
             color: var(--text);
             min-height: 100vh;
         }
@@ -42,11 +42,13 @@
 
         input {
             width: 100%;
-            border: 1px solid #d1d5db;
+            border: 1px solid #334155;
             border-radius: 8px;
             padding: 10px 12px;
             margin-top: 6px;
             margin-bottom: 14px;
+            background: #0b1324;
+            color: var(--text);
         }
 
         button {
@@ -63,7 +65,7 @@
         .muted { color: var(--muted); }
 
         .errorlist {
-            color: #b91c1c;
+            color: #f87171;
             margin: 0 0 8px;
             padding-left: 18px;
         }
@@ -73,14 +75,14 @@
             grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
             gap: 8px;
             margin-top: 16px;
-            border-bottom: 1px solid #e5e7eb;
+            border-bottom: 1px solid #1f2a44;
             padding-bottom: 12px;
         }
 
         .tab-button {
-            background: #eef2ff;
-            border: 1px solid #d7e3ff;
-            color: #1f2a37;
+            background: #111b2e;
+            border: 1px solid #1f2a44;
+            color: var(--text);
             border-radius: 8px;
             padding: 6px 12px;
             font-weight: 600;
@@ -104,8 +106,8 @@
 
         .tab-panel {
             display: none;
-            background: #f9fbff;
-            border: 1px solid #e5ecff;
+            background: #0c1527;
+            border: 1px solid #1f2a44;
             border-radius: 10px;
             padding: 16px;
         }
