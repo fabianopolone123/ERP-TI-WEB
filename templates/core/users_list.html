@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 
 {% block title %}Usuários | ERP TI{% endblock %}
 
@@ -26,15 +26,22 @@
             {% for module in modules %}
                 <div class="tab-panel{% if module.active %} active{% endif %}" data-panel="{{ module.slug }}">
                     {% if module.slug == "usuarios" %}
-                        <h3>Lista de usuários</h3>
+                        <div class="topbar" style="margin-bottom: 10px;">
+                            <h3>Lista de usuários</h3>
+                            <form method="post" class="inline-form">
+                                {% csrf_token %}
+                                <button type="submit">Importar do AD</button>
+                            </form>
+                        </div>
                         <div style="overflow-x: auto;">
-                            <table style="width: 100%; border-collapse: collapse; min-width: 700px;">
+                            <table style="width: 100%; border-collapse: collapse; min-width: 820px;">
                                 <thead>
                                     <tr style="text-align: left; border-bottom: 1px solid #e5e7eb;">
                                         <th style="padding: 8px;">Nome completo</th>
                                         <th style="padding: 8px;">Cargo</th>
                                         <th style="padding: 8px;">Departamento</th>
                                         <th style="padding: 8px;">Grupo</th>
+                                        <th style="padding: 8px;">Ativo</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -44,10 +51,11 @@
                                             <td style="padding: 8px;">{{ user.role }}</td>
                                             <td style="padding: 8px;">{{ user.department }}</td>
                                             <td style="padding: 8px;">{{ user.group.name|default:"-" }}</td>
+                                            <td style="padding: 8px;">{% if user.is_active %}Sim{% else %}Não{% endif %}</td>
                                         </tr>
                                     {% empty %}
                                         <tr>
-                                            <td colspan="4" style="padding: 12px;" class="muted">
+                                            <td colspan="5" style="padding: 12px;" class="muted">
                                                 Nenhum usuário cadastrado.
                                             </td>
                                         </tr>

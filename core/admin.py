@@ -1,4 +1,4 @@
-from django.contrib import admin
+﻿from django.contrib import admin
 
 from .models import ERPGroup, ERPUser
 
@@ -10,6 +10,6 @@ class ERPGroupAdmin(admin.ModelAdmin):
 
 @admin.register(ERPUser)
 class ERPUserAdmin(admin.ModelAdmin):
-    list_display = ('full_name', 'role', 'department', 'group')
-    list_filter = ('department', 'group')
-    search_fields = ('full_name', 'role', 'department')
+    list_display = ('full_name', 'role', 'department', 'username', 'is_active', 'group')
+    list_filter = ('department', 'group', 'is_active')
+    search_fields = ('full_name', 'role', 'department', 'username')

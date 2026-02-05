@@ -142,6 +142,16 @@ AD_LDAP_USER_ATTR_MAP = {
     'email': 'mail',
 }
 
+AD_LDAP_IMPORT_FILTER = '(&(objectCategory=person)(objectclass=user))'
+AD_LDAP_IMPORT_ATTR_MAP = {
+    'username': 'sAMAccountName',
+    'full_name': 'displayName',
+    'role': 'title',
+    'department': 'department',
+    'guid': 'objectGUID',
+    'active': 'userAccountControl',
+}
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
