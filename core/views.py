@@ -192,7 +192,12 @@ def move_ticket(request):
 @login_required
 @require_GET
 def ticket_detail(request, ticket_id: int):
-    ticket = Ticket.objects.filter(id=ticket_id).select_related('assigned_to', 'created_by').first()
+    ticket = (
+        Ticket.objects.filter(id=ticket_id)
+        .select_related('assigned_to', 'created_by')
+        .prefetch_related('collaborators')
+        .first()
+    )
     if not ticket:
         return JsonResponse({'ok': False, 'error': 'not_found'}, status=404)
 
@@ -229,7 +234,16 @@ def ticket_detail(request, ticket_id: int):
             'urgency': ticket.get_urgency_display(),
             'status': ticket.get_status_display(),
             'created_by': ticket.created_by.username if ticket.created_by else '-',
-            'assigned_to': ticket.assigned_to.full_name if ticket.assigned_to else '-',
+            'assignees': ', '.join(
+                [
+                    name
+                    for name in (
+                        [ticket.assigned_to.full_name] if ticket.assigned_to else []
+                    )
+                    + [u.full_name for u in ticket.collaborators.all() if not ticket.assigned_to or u.id != ticket.assigned_to_id]
+                ]
+            )
+            or '-',
             'attachment_url': ticket.attachment.url if ticket.attachment else '',
             'created_at': ticket.created_at.strftime('%d/%m/%Y %H:%M'),
         },

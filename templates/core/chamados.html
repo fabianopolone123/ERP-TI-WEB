@@ -149,7 +149,7 @@
             <div><strong>Urgência:</strong> <span data-detail-urgency></span></div>
             <div><strong>Status:</strong> <span data-detail-status></span></div>
             <div><strong>Solicitante:</strong> <span data-detail-created-by></span></div>
-            <div><strong>Responsável:</strong> <span data-detail-assigned-to></span></div>
+            <div><strong>Responsáveis:</strong> <span data-detail-assignees></span></div>
             <div>
                 <strong>Anexo:</strong>
                 <a href="#" data-detail-attachment target="_blank" rel="noreferrer">abrir</a>
@@ -405,7 +405,7 @@
             setText('[data-detail-urgency]', data.ticket.urgency);
             setText('[data-detail-status]', data.ticket.status);
             setText('[data-detail-created-by]', data.ticket.created_by);
-            setText('[data-detail-assigned-to]', data.ticket.assigned_to);
+            setText('[data-detail-assignees]', data.ticket.assignees);
 
             const attachLink = detailsModal.querySelector('[data-detail-attachment]');
             const noAttach = detailsModal.querySelector('[data-detail-no-attachment]');
