@@ -144,9 +144,16 @@
         (function () {
             const tabs = document.querySelectorAll('.tabs .tab-button');
             if (!tabs.length) return;
+            const panels = document.querySelectorAll('.tab-panels .tab-panel');
 
             const setActive = (tab) => {
+                const tabId = tab.getAttribute('data-tab') || '';
                 tabs.forEach((t) => t.classList.toggle('active', t === tab));
+                if (panels.length) {
+                    panels.forEach((panel) => {
+                        panel.classList.toggle('active', panel.getAttribute('data-panel') === tabId);
+                    });
+                }
             };
 
             tabs.forEach((tab) => {
@@ -162,6 +169,11 @@
             const hasActive = Array.from(tabs).some((tab) => tab.classList.contains('active'));
             if (!hasActive) {
                 setActive(tabs[0]);
+            } else if (panels.length) {
+                const activeTab = Array.from(tabs).find((tab) => tab.classList.contains('active'));
+                if (activeTab) {
+                    setActive(activeTab);
+                }
             }
         })();
     </script>

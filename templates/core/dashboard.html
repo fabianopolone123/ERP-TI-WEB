@@ -23,10 +23,12 @@
         <h3>Módulos</h3>
         {% include "core/_tabs.html" %}
         <div class="tab-panels">
-            <div class="tab-panel active">
-                <h3>Visão geral</h3>
-                <p class="muted">Selecione um módulo acima para abrir a tela.</p>
-            </div>
+            {% for module in modules %}
+                <div class="tab-panel{% if module.active %} active{% endif %}" data-panel="{{ module.slug }}">
+                    <h3>{{ module.label }}</h3>
+                    <p class="muted">Conteúdo do módulo em desenvolvimento.</p>
+                </div>
+            {% endfor %}
         </div>
     {% else %}
         <p>Solicite ao administrador a inclusão no grupo <strong>TI</strong>.</p>

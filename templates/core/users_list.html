@@ -23,37 +23,44 @@
         {% include "core/_tabs.html" %}
 
         <div class="tab-panels">
-            <div class="tab-panel active">
-                <h3>Lista de usuários</h3>
-                <div style="overflow-x: auto;">
-                    <table style="width: 100%; border-collapse: collapse; min-width: 700px;">
-                        <thead>
-                            <tr style="text-align: left; border-bottom: 1px solid #e5e7eb;">
-                                <th style="padding: 8px;">Nome completo</th>
-                                <th style="padding: 8px;">Cargo</th>
-                                <th style="padding: 8px;">Departamento</th>
-                                <th style="padding: 8px;">Grupo</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for user in users %}
-                                <tr style="border-bottom: 1px solid #eef2f7;">
-                                    <td style="padding: 8px;">{{ user.full_name }}</td>
-                                    <td style="padding: 8px;">{{ user.role }}</td>
-                                    <td style="padding: 8px;">{{ user.department }}</td>
-                                    <td style="padding: 8px;">{{ user.group.name|default:"-" }}</td>
-                                </tr>
-                            {% empty %}
-                                <tr>
-                                    <td colspan="4" style="padding: 12px;" class="muted">
-                                        Nenhum usuário cadastrado.
-                                    </td>
-                                </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+            {% for module in modules %}
+                <div class="tab-panel{% if module.active %} active{% endif %}" data-panel="{{ module.slug }}">
+                    {% if module.slug == "usuarios" %}
+                        <h3>Lista de usuários</h3>
+                        <div style="overflow-x: auto;">
+                            <table style="width: 100%; border-collapse: collapse; min-width: 700px;">
+                                <thead>
+                                    <tr style="text-align: left; border-bottom: 1px solid #e5e7eb;">
+                                        <th style="padding: 8px;">Nome completo</th>
+                                        <th style="padding: 8px;">Cargo</th>
+                                        <th style="padding: 8px;">Departamento</th>
+                                        <th style="padding: 8px;">Grupo</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for user in users %}
+                                        <tr style="border-bottom: 1px solid #eef2f7;">
+                                            <td style="padding: 8px;">{{ user.full_name }}</td>
+                                            <td style="padding: 8px;">{{ user.role }}</td>
+                                            <td style="padding: 8px;">{{ user.department }}</td>
+                                            <td style="padding: 8px;">{{ user.group.name|default:"-" }}</td>
+                                        </tr>
+                                    {% empty %}
+                                        <tr>
+                                            <td colspan="4" style="padding: 12px;" class="muted">
+                                                Nenhum usuário cadastrado.
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <h3>{{ module.label }}</h3>
+                        <p class="muted">Conteúdo do módulo em desenvolvimento.</p>
+                    {% endif %}
                 </div>
-            </div>
+            {% endfor %}
         </div>
     {% else %}
         <p>Solicite ao administrador a inclusão no grupo <strong>TI</strong>.</p>
