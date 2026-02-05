@@ -18,12 +18,14 @@ class ERPUser(models.Model):
 
 class Ticket(models.Model):
     class TicketType(models.TextChoices):
+        NAO_CLASSIFICADO = 'nao_classificado', 'Não classificado'
         REQUISICAO = 'requisicao', 'Requisição'
         MELHORIA = 'melhoria', 'Melhoria'
         INCIDENTE = 'incidente', 'Incidente'
         PROGRAMADO = 'programado', 'Programado'
 
     class Urgency(models.TextChoices):
+        NAO_CLASSIFICADO = 'nao_classificado', 'Não classificado'
         BAIXA = 'baixa', 'Baixa'
         NORMAL = 'normal', 'Normal'
         MEDIA = 'media', 'Média'
@@ -37,8 +39,16 @@ class Ticket(models.Model):
 
     title = models.CharField(max_length=200)
     description = models.TextField()
-    ticket_type = models.CharField(max_length=20, choices=TicketType.choices)
-    urgency = models.CharField(max_length=20, choices=Urgency.choices)
+    ticket_type = models.CharField(
+        max_length=20,
+        choices=TicketType.choices,
+        default=TicketType.NAO_CLASSIFICADO,
+    )
+    urgency = models.CharField(
+        max_length=20,
+        choices=Urgency.choices,
+        default=Urgency.NAO_CLASSIFICADO,
+    )
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDENTE)
     created_by = models.ForeignKey(
         'auth.User',

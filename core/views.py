@@ -5,6 +5,7 @@ from django.http import JsonResponse
 from django.urls import reverse
 from django.views.decorators.http import require_GET, require_POST
 from django.views.generic import TemplateView
+from django.contrib.auth import views as auth_views
 
 from .ldap_importer import import_ad_users
 from .models import ERPUser, Ticket, TicketMessage
@@ -62,6 +63,15 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         return context
 
 
+class CustomLoginView(auth_views.LoginView):
+    template_name = 'auth/login.html'
+
+    def get_success_url(self):
+        if is_ti_user(self.request):
+            return reverse('usuarios')
+        return reverse('chamados')
+
+
 class UsersListView(LoginRequiredMixin, TemplateView):
     template_name = 'core/users_list.html'
 
@@ -96,14 +106,22 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
     template_name = 'core/chamados.html'
 
     def post(self, request, *args, **kwargs):
+        is_ti = is_ti_user(request)
         title = request.POST.get('title', '').strip()
         description = request.POST.get('description', '').strip()
         ticket_type = request.POST.get('ticket_type', '').strip()
         urgency = request.POST.get('urgency', '').strip()
         attachment = request.FILES.get('attachment')
 
-        if not title or not description or not ticket_type or not urgency:
-            messages.error(request, 'Preencha título, descrição, tipo e urgência.')
+        if not title or not description:
+            messages.error(request, 'Preencha título e descrição.')
+            return self.get(request, *args, **kwargs)
+
+        if not is_ti:
+            ticket_type = Ticket.TicketType.NAO_CLASSIFICADO
+            urgency = Ticket.Urgency.NAO_CLASSIFICADO
+        elif not ticket_type or not urgency:
+            messages.error(request, 'Preencha tipo e urgência.')
             return self.get(request, *args, **kwargs)
 
         Ticket.objects.create(
@@ -123,6 +141,12 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
         is_ti = is_ti_user(self.request)
         context['is_ti_group'] = is_ti
         context['modules'] = build_modules('chamados') if is_ti else []
+        if not is_ti:
+            context['own_tickets'] = (
+                Ticket.objects.filter(created_by=self.request.user).order_by('-created_at')
+            )
+            return context
+
         ti_users = list(ERPUser.objects.filter(department__iexact='TI', is_active=True).order_by('full_name'))
         context['ti_users'] = ti_users
         context['pending_tickets'] = Ticket.objects.filter(status=Ticket.Status.PENDENTE).order_by('-created_at')

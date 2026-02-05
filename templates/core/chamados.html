@@ -82,7 +82,26 @@
             </div>
         </div>
     {% else %}
-        <p>Solicite ao administrador a inclusão no departamento <strong>TI</strong>.</p>
+        <div class="topbar" style="margin-top: 16px;">
+            <h3>Meus chamados</h3>
+            <button type="button" data-open-modal>Abrir chamado</button>
+        </div>
+
+        <div class="kanban" data-ticket-list>
+            <div class="kanban-column">
+                <div class="kanban-header">Solicitações</div>
+                <div class="kanban-body">
+                    {% for ticket in own_tickets %}
+                        <div class="ticket-card" data-ticket-id="{{ ticket.id }}">
+                            <div class="ticket-title">
+                                <span class="urgency-dot urgency-{{ ticket.urgency }}"></span>
+                                #{{ ticket.id }} - {{ ticket.title }}
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
     {% endif %}
 </div>
 
@@ -100,25 +119,33 @@
                     <label for="id_title">Título</label>
                     <input id="id_title" name="title" type="text" required />
                 </div>
-                <div>
-                    <label for="id_type">Tipo</label>
-                    <select id="id_type" name="ticket_type" required>
-                        <option value="requisicao">Requisição</option>
-                        <option value="melhoria">Melhoria</option>
-                        <option value="incidente">Incidente</option>
-                        <option value="programado">Programado</option>
-                    </select>
-                </div>
-                <div>
-                    <label for="id_urgency">Urgência</label>
-                    <select id="id_urgency" name="urgency" required>
-                        <option value="baixa">Baixa</option>
-                        <option value="normal" selected>Normal</option>
-                        <option value="media">Média</option>
-                        <option value="alta">Alta</option>
-                        <option value="urgente">Urgente</option>
-                    </select>
-                </div>
+                {% if is_ti_group %}
+                    <div>
+                        <label for="id_type">Tipo</label>
+                        <select id="id_type" name="ticket_type" required>
+                            <option value="requisicao">Requisição</option>
+                            <option value="melhoria">Melhoria</option>
+                            <option value="incidente">Incidente</option>
+                            <option value="programado">Programado</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="id_urgency">Urgência</label>
+                        <select id="id_urgency" name="urgency" required>
+                            <option value="baixa">Baixa</option>
+                            <option value="normal" selected>Normal</option>
+                            <option value="media">Média</option>
+                            <option value="alta">Alta</option>
+                            <option value="urgente">Urgente</option>
+                        </select>
+                    </div>
+                {% else %}
+                    <input type="hidden" name="ticket_type" value="nao_classificado" />
+                    <input type="hidden" name="urgency" value="nao_classificado" />
+                    <div class="muted" style="align-self: flex-end;">
+                        A classificação será feita pela equipe de TI.
+                    </div>
+                {% endif %}
             </div>
             <div class="form-row">
                 <div style="flex: 2;">
@@ -158,7 +185,7 @@
         </div>
 
         <div class="chat-section">
-            <h4>Chat público</h4>
+            <h4>{% if is_ti_group %}Chat público{% else %}Chat{% endif %}</h4>
             <div class="chat-messages" data-chat-public></div>
             <form class="chat-form" data-chat-form data-internal="0">
                 <input type="text" name="message" placeholder="Escreva uma mensagem..." />
@@ -169,17 +196,19 @@
             </form>
         </div>
 
-        <div class="chat-section" data-chat-internal-section>
-            <h4>Chat interno TI</h4>
-            <div class="chat-messages" data-chat-internal></div>
-            <form class="chat-form" data-chat-form data-internal="1">
-                <input type="text" name="message" placeholder="Mensagem interna..." />
-                <div class="chat-actions">
-                    <input type="file" name="attachment" />
-                    <button type="submit">Enviar</button>
-                </div>
-            </form>
-        </div>
+        {% if is_ti_group %}
+            <div class="chat-section" data-chat-internal-section>
+                <h4>Chat interno TI</h4>
+                <div class="chat-messages" data-chat-internal></div>
+                <form class="chat-form" data-chat-form data-internal="1">
+                    <input type="text" name="message" placeholder="Mensagem interna..." />
+                    <div class="chat-actions">
+                        <input type="file" name="attachment" />
+                        <button type="submit">Enviar</button>
+                    </div>
+                </form>
+            </div>
+        {% endif %}
     </div>
 </div>
 
@@ -321,7 +350,9 @@
         const detailsModal = document.querySelector('[data-details-modal]');
         const closeButtons = document.querySelectorAll('[data-close-details]');
         const board = document.querySelector('[data-board]');
-        if (!detailsModal || !board) return;
+        const list = document.querySelector('[data-ticket-list]');
+        const clickRoot = board || list;
+        if (!detailsModal || !clickRoot) return;
 
         const getCookie = (name) => {
             const value = `; ${document.cookie}`;
@@ -333,14 +364,16 @@
         let currentTicketId = null;
         let dragging = false;
 
-        board.addEventListener('dragstart', () => {
-            dragging = true;
-        });
-        board.addEventListener('dragend', () => {
-            setTimeout(() => {
-                dragging = false;
-            }, 0);
-        });
+        if (board) {
+            board.addEventListener('dragstart', () => {
+                dragging = true;
+            });
+            board.addEventListener('dragend', () => {
+                setTimeout(() => {
+                    dragging = false;
+                }, 0);
+            });
+        }
 
         const setText = (selector, value) => {
             const el = detailsModal.querySelector(selector);
@@ -438,7 +471,7 @@
             currentTicketId = null;
         };
 
-        board.addEventListener('click', (event) => {
+        clickRoot.addEventListener('click', (event) => {
             if (dragging) return;
             if (event.target.closest('.ticket-multi')) return;
             const card = event.target.closest('.ticket-card');
