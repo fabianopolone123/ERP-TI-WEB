@@ -1,4 +1,5 @@
 ﻿{% extends "base.html" %}
+{% load core_extras %}
 
 {% block title %}Chamados | ERP TI{% endblock %}
 
@@ -29,6 +30,12 @@
                 <div class="kanban-body">
                     {% for ticket in pending_tickets %}
                         <div class="ticket-card" draggable="true" data-ticket-id="{{ ticket.id }}">
+                            <div class="ticket-actions">
+                                <label class="ticket-multi">
+                                    <input type="checkbox" class="ticket-multi-check" />
+                                    Multi
+                                </label>
+                            </div>
                             <div class="ticket-title">
                                 <span class="urgency-dot urgency-{{ ticket.urgency }}"></span>
                                 #{{ ticket.id }} - {{ ticket.title }}
@@ -44,15 +51,21 @@
                 <div class="kanban-column" data-target="user_{{ user.id }}">
                     <div class="kanban-header">{{ user.full_name }}</div>
                     <div class="kanban-body">
-                        {% for ticket in in_progress_tickets %}
-                            {% if ticket.assigned_to_id == user.id %}
-                                <div class="ticket-card" draggable="true" data-ticket-id="{{ ticket.id }}">
-                                    <div class="ticket-title">
-                                        <span class="urgency-dot urgency-{{ ticket.urgency }}"></span>
-                                        #{{ ticket.id }} - {{ ticket.title }}
-                                    </div>
+                        {% for ticket in user_tickets|get_item:user.id %}
+                            <div class="ticket-card" draggable="true" data-ticket-id="{{ ticket.id }}">
+                                <div class="ticket-actions">
+                                    <label class="ticket-multi">
+                                        <input type="checkbox" class="ticket-multi-check" />
+                                        Multi
+                                    </label>
                                 </div>
-                            {% endif %}
+                                <div class="ticket-title">
+                                    <span class="urgency-dot urgency-{{ ticket.urgency }}"></span>
+                                    #{{ ticket.id }} - {{ ticket.title }}
+                                </div>
+                            </div>
+                        {% empty %}
+                            <div class="ticket-empty">Sem chamados.</div>
                         {% endfor %}
                     </div>
                 </div>
@@ -63,6 +76,12 @@
                 <div class="kanban-body">
                     {% for ticket in closed_tickets %}
                         <div class="ticket-card" draggable="true" data-ticket-id="{{ ticket.id }}">
+                            <div class="ticket-actions">
+                                <label class="ticket-multi">
+                                    <input type="checkbox" class="ticket-multi-check" />
+                                    Multi
+                                </label>
+                            </div>
                             <div class="ticket-title">
                                 <span class="urgency-dot urgency-{{ ticket.urgency }}"></span>
                                 #{{ ticket.id }} - {{ ticket.title }}
@@ -191,6 +210,7 @@
         let draggingId = null;
         let draggingCard = null;
         let sourceColumn = null;
+        let draggingMulti = false;
 
         board.addEventListener('dragstart', (event) => {
             const card = event.target.closest('.ticket-card');
@@ -198,6 +218,8 @@
             draggingId = card.dataset.ticketId;
             draggingCard = card;
             sourceColumn = card.closest('.kanban-column');
+            const multiCheck = card.querySelector('.ticket-multi-check');
+            draggingMulti = multiCheck ? multiCheck.checked : false;
             card.classList.add('dragging');
         });
 
@@ -206,6 +228,7 @@
             if (card) card.classList.remove('dragging');
             draggingCard = null;
             sourceColumn = null;
+            draggingMulti = false;
         });
 
         board.querySelectorAll('.kanban-column').forEach((column) => {
@@ -230,8 +253,25 @@
                     return;
                 }
 
+                const isUserTarget = target.startsWith('user_');
+                const isUserSource = sourceColumn && sourceColumn.dataset.target.startsWith('user_');
+                const shouldClone = draggingMulti && isUserTarget && isUserSource;
+
+                if (targetBody.querySelector(`.ticket-card[data-ticket-id="${draggingId}"]`)) {
+                    draggingId = null;
+                    return;
+                }
+
                 const previousParent = draggingCard.parentElement;
-                targetBody.appendChild(draggingCard);
+                let movedCard = draggingCard;
+
+                if (shouldClone) {
+                    movedCard = draggingCard.cloneNode(true);
+                    const cloneCheck = movedCard.querySelector('.ticket-multi-check');
+                    if (cloneCheck) cloneCheck.checked = false;
+                }
+
+                targetBody.appendChild(movedCard);
 
                 const response = await fetch('{% url "chamados_mover" %}', {
                     method: 'POST',
@@ -242,11 +282,26 @@
                     body: new URLSearchParams({
                         ticket_id: draggingId,
                         target: target,
+                        multi: draggingMulti ? '1' : '0',
                     }),
                 });
 
-                if (!response.ok && previousParent) {
-                    previousParent.appendChild(draggingCard);
+                if (!response.ok) {
+                    if (shouldClone) {
+                        movedCard.remove();
+                    } else if (previousParent) {
+                        previousParent.appendChild(draggingCard);
+                    }
+                    draggingId = null;
+                    return;
+                }
+
+                if (!shouldClone) {
+                    board.querySelectorAll(`.ticket-card[data-ticket-id="${draggingId}"]`).forEach((card) => {
+                        if (card !== movedCard) {
+                            card.remove();
+                        }
+                    });
                 }
                 draggingId = null;
             });
@@ -397,6 +452,7 @@
 
         board.addEventListener('click', (event) => {
             if (dragging) return;
+            if (event.target.closest('.ticket-multi')) return;
             const card = event.target.closest('.ticket-card');
             if (!card) return;
             openDetails(card.dataset.ticketId);

@@ -123,10 +123,23 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
         is_ti = is_ti_user(self.request)
         context['is_ti_group'] = is_ti
         context['modules'] = build_modules('chamados') if is_ti else []
-        context['ti_users'] = ERPUser.objects.filter(department__iexact='TI', is_active=True).order_by('full_name')
+        ti_users = list(ERPUser.objects.filter(department__iexact='TI', is_active=True).order_by('full_name'))
+        context['ti_users'] = ti_users
         context['pending_tickets'] = Ticket.objects.filter(status=Ticket.Status.PENDENTE).order_by('-created_at')
         context['closed_tickets'] = Ticket.objects.filter(status=Ticket.Status.FECHADO).order_by('-created_at')
-        context['in_progress_tickets'] = Ticket.objects.filter(status=Ticket.Status.EM_ATENDIMENTO)
+        in_progress_tickets = Ticket.objects.filter(status=Ticket.Status.EM_ATENDIMENTO).prefetch_related(
+            'collaborators'
+        )
+        ticket_map = {user.id: [] for user in ti_users}
+        for ticket in in_progress_tickets:
+            ids = set()
+            if ticket.assigned_to_id:
+                ids.add(ticket.assigned_to_id)
+            ids.update(ticket.collaborators.values_list('id', flat=True))
+            for uid in ids:
+                if uid in ticket_map:
+                    ticket_map[uid].append(ticket)
+        context['user_tickets'] = ticket_map
         return context
 
 
@@ -144,23 +157,36 @@ def move_ticket(request):
     if not ticket:
         return JsonResponse({'ok': False, 'error': 'not_found'}, status=404)
 
+    multi = request.POST.get('multi') == '1'
+
     if target == 'pendente':
         ticket.status = Ticket.Status.PENDENTE
         ticket.assigned_to = None
-    elif target == 'fechado':
+        ticket.save()
+        ticket.collaborators.clear()
+        return JsonResponse({'ok': True})
+    if target == 'fechado':
         ticket.status = Ticket.Status.FECHADO
-    elif target.startswith('user_'):
+        ticket.assigned_to = None
+        ticket.save()
+        ticket.collaborators.clear()
+        return JsonResponse({'ok': True})
+    if target.startswith('user_'):
         user_id = target.replace('user_', '')
         assignee = ERPUser.objects.filter(id=user_id).first()
         if not assignee:
             return JsonResponse({'ok': False, 'error': 'user_not_found'}, status=404)
         ticket.status = Ticket.Status.EM_ATENDIMENTO
-        ticket.assigned_to = assignee
-    else:
-        return JsonResponse({'ok': False, 'error': 'invalid_target'}, status=400)
+        if multi and ticket.assigned_to_id and ticket.assigned_to_id != assignee.id:
+            ticket.save()
+            ticket.collaborators.add(assignee)
+        else:
+            ticket.assigned_to = assignee
+            ticket.save()
+            ticket.collaborators.clear()
+        return JsonResponse({'ok': True})
 
-    ticket.save()
-    return JsonResponse({'ok': True})
+    return JsonResponse({'ok': False, 'error': 'invalid_target'}, status=400)
 
 
 @login_required

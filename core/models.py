@@ -54,6 +54,11 @@ class Ticket(models.Model):
         on_delete=models.SET_NULL,
         related_name='assigned_tickets',
     )
+    collaborators = models.ManyToManyField(
+        ERPUser,
+        blank=True,
+        related_name='collaborating_tickets',
+    )
     attachment = models.FileField(upload_to='tickets/', null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
