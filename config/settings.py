@@ -123,43 +123,24 @@ LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = 'dashboard'
 LOGOUT_REDIRECT_URL = 'login'
 
-# LDAP / Active Directory (SIDERTEC)
-try:
-    import ldap
-    from django_auth_ldap.config import LDAPSearch
-    LDAP_READY = True
-except Exception:  # pragma: no cover - permite iniciar mesmo sem dependencias
-    ldap = None
-    LDAPSearch = None
-    LDAP_READY = False
-
+# LDAP / Active Directory (SIDERTEC) - via ldap3
 AUTHENTICATION_BACKENDS = [
+    'core.auth_backend.ActiveDirectoryBackend',
     'django.contrib.auth.backends.ModelBackend',
 ]
-if LDAP_READY:
-    AUTHENTICATION_BACKENDS.insert(0, 'django_auth_ldap.backend.LDAPBackend')
 
-AUTH_LDAP_SERVER_URI = 'ldap://192.168.22.8:389'
-AUTH_LDAP_BIND_DN = 'glpi_ldap@sidertec.intra.net'
-AUTH_LDAP_BIND_PASSWORD = os.environ.get('ERP_LDAP_BIND_PASSWORD', '')
+AD_LDAP_SERVER_URI = 'ldap://192.168.22.8:389'
+AD_LDAP_BASE_DN = 'dc=sidertec,dc=intra,dc=net'
+AD_LDAP_BIND_DN = 'glpi_ldap@sidertec.intra.net'
+AD_LDAP_BIND_PASSWORD = os.environ.get('ERP_LDAP_BIND_PASSWORD', '')
+AD_LDAP_USER_FILTER = '(&(objectCategory=person)(objectclass=user)(sAMAccountName=%(user)s))'
 
-if LDAP_READY:
-    AUTH_LDAP_USER_SEARCH = LDAPSearch(
-        'dc=sidertec,dc=intra,dc=net',
-        ldap.SCOPE_SUBTREE,
-        '(&(objectCategory=person)(objectclass=user)(sAMAccountName=%(user)s))',
-    )
-
-    AUTH_LDAP_USER_ATTR_MAP = {
-        'username': 'sAMAccountName',
-        'first_name': 'givenName',
-        'last_name': 'sn',
-        'email': 'mail',
-    }
-
-    AUTH_LDAP_ALWAYS_UPDATE_USER = True
-    AUTH_LDAP_FIND_GROUP_PERMS = False
-    AUTH_LDAP_CACHE_TIMEOUT = 3600
+AD_LDAP_USER_ATTR_MAP = {
+    'username': 'sAMAccountName',
+    'first_name': 'givenName',
+    'last_name': 'sn',
+    'email': 'mail',
+}
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
