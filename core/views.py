@@ -118,10 +118,20 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
             return self.get(request, *args, **kwargs)
 
         if not is_ti:
-            valid_types = {choice[0] for choice in Ticket.TicketType.choices if choice[0] != Ticket.TicketType.NAO_CLASSIFICADO}
+            valid_types = {
+                choice[0]
+                for choice in Ticket.TicketType.choices
+                if choice[0] != Ticket.TicketType.NAO_CLASSIFICADO
+            }
+            valid_urgencies = {
+                choice[0]
+                for choice in Ticket.Urgency.choices
+                if choice[0] != Ticket.Urgency.NAO_CLASSIFICADO
+            }
             if ticket_type not in valid_types:
                 ticket_type = Ticket.TicketType.NAO_CLASSIFICADO
-            urgency = Ticket.Urgency.NAO_CLASSIFICADO
+            if urgency not in valid_urgencies:
+                urgency = Ticket.Urgency.NAO_CLASSIFICADO
         elif not ticket_type or not urgency:
             messages.error(request, 'Preencha tipo e urgência.')
             return self.get(request, *args, **kwargs)
@@ -257,7 +267,9 @@ def ticket_detail(request, ticket_id: int):
             'title': ticket.title,
             'description': ticket.description,
             'ticket_type': ticket.get_ticket_type_display(),
+            'ticket_type_value': ticket.ticket_type,
             'urgency': ticket.get_urgency_display(),
+            'urgency_value': ticket.urgency,
             'status': ticket.get_status_display(),
             'created_by': ticket.created_by.username if ticket.created_by else '-',
             'assignees': ', '.join(
@@ -280,6 +292,34 @@ def ticket_detail(request, ticket_id: int):
         'internal_allowed': is_ti,
     }
     return JsonResponse(data)
+
+
+@login_required
+@require_POST
+def ticket_reclassify(request):
+    if not is_ti_user(request):
+        return JsonResponse({'ok': False, 'error': 'forbidden'}, status=403)
+
+    ticket_id = request.POST.get('ticket_id')
+    ticket_type = (request.POST.get('ticket_type') or '').strip()
+    urgency = (request.POST.get('urgency') or '').strip()
+
+    if not ticket_id or not ticket_type or not urgency:
+        return JsonResponse({'ok': False, 'error': 'invalid'}, status=400)
+
+    ticket = Ticket.objects.filter(id=ticket_id).first()
+    if not ticket:
+        return JsonResponse({'ok': False, 'error': 'not_found'}, status=404)
+
+    valid_types = {choice[0] for choice in Ticket.TicketType.choices}
+    valid_urgencies = {choice[0] for choice in Ticket.Urgency.choices}
+    if ticket_type not in valid_types or urgency not in valid_urgencies:
+        return JsonResponse({'ok': False, 'error': 'invalid'}, status=400)
+
+    ticket.ticket_type = ticket_type
+    ticket.urgency = urgency
+    ticket.save(update_fields=['ticket_type', 'urgency', 'updated_at'])
+    return JsonResponse({'ok': True})
 
 
 @login_required

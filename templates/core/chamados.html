@@ -149,9 +149,30 @@
                             <option value="programado">Programado</option>
                         </select>
                     </div>
-                    <input type="hidden" name="urgency" value="nao_classificado" />
+                    <div>
+                        <label for="id_urgency">Urgência</label>
+                        <select id="id_urgency" name="urgency" required>
+                            <option value="baixa">Baixa</option>
+                            <option value="normal">Normal</option>
+                            <option value="media">Média</option>
+                            <option value="alta">Alta</option>
+                            <option value="urgente">Urgente</option>
+                        </select>
+                    </div>
                 {% endif %}
             </div>
+            {% if not is_ti_group %}
+                <div class="ticket-legend">
+                    <strong>Legenda de urgência</strong>
+                    <ul>
+                        <li><strong>Baixa:</strong> sem impacto imediato, pode esperar.</li>
+                        <li><strong>Normal:</strong> impacto só no solicitante, solução no fluxo.</li>
+                        <li><strong>Média:</strong> impacto no time/área, precisa atenção.</li>
+                        <li><strong>Alta:</strong> várias pessoas ou setor parado.</li>
+                        <li><strong>Urgente:</strong> impacto na empresa inteira ou serviço crítico parado.</li>
+                    </ul>
+                </div>
+            {% endif %}
             <div class="form-row">
                 <div style="flex: 2;">
                     <label for="id_desc">Descrição</label>
@@ -188,6 +209,36 @@
                 <span data-detail-no-attachment>-</span>
             </div>
         </div>
+        {% if is_ti_group %}
+            <form class="ticket-reclassify" data-reclassify-form>
+                <div class="form-row">
+                    <div>
+                        <label for="id_reclass_type">Tipo</label>
+                        <select id="id_reclass_type" name="ticket_type" required>
+                            <option value="nao_classificado">Não classificado</option>
+                            <option value="requisicao">Requisição</option>
+                            <option value="melhoria">Melhoria</option>
+                            <option value="incidente">Incidente</option>
+                            <option value="programado">Programado</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="id_reclass_urgency">Urgência</label>
+                        <select id="id_reclass_urgency" name="urgency" required>
+                            <option value="nao_classificado">Não classificado</option>
+                            <option value="baixa">Baixa</option>
+                            <option value="normal">Normal</option>
+                            <option value="media">Média</option>
+                            <option value="alta">Alta</option>
+                            <option value="urgente">Urgente</option>
+                        </select>
+                    </div>
+                    <div style="align-self: flex-end;">
+                        <button type="submit">Reclassificar</button>
+                    </div>
+                </div>
+            </form>
+        {% endif %}
 
         <div class="chat-section">
             <h4>{% if is_ti_group %}Chat público{% else %}Chat{% endif %}</h4>
@@ -463,6 +514,14 @@
             if (internalSection) {
                 internalSection.style.display = data.internal_allowed ? 'block' : 'none';
             }
+
+            const reclassForm = detailsModal.querySelector('[data-reclassify-form]');
+            if (reclassForm) {
+                const typeSelect = reclassForm.querySelector('select[name="ticket_type"]');
+                const urgencySelect = reclassForm.querySelector('select[name="urgency"]');
+                if (typeSelect) typeSelect.value = data.ticket.ticket_type_value || 'nao_classificado';
+                if (urgencySelect) urgencySelect.value = data.ticket.urgency_value || 'nao_classificado';
+            }
         };
 
         const openDetails = async (ticketId) => {
@@ -508,6 +567,28 @@
                 }
             });
         });
+
+        const reclassForm = detailsModal.querySelector('[data-reclassify-form]');
+        if (reclassForm) {
+            reclassForm.addEventListener('submit', async (event) => {
+                event.preventDefault();
+                if (!currentTicketId) return;
+                const formData = new FormData(reclassForm);
+                formData.append('ticket_id', currentTicketId);
+
+                const response = await fetch('{% url "chamados_reclassificar" %}', {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': getCookie('csrftoken'),
+                    },
+                    body: formData,
+                });
+
+                if (response.ok) {
+                    await loadDetails(currentTicketId);
+                }
+            });
+        }
     })();
 </script>
 {% endblock %}
