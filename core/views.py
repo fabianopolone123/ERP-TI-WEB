@@ -5,7 +5,7 @@ from django.views.generic import TemplateView
 from .models import ERPUser
 
 ERP_MODULES = [
-    {'slug': 'usuarios', 'label': 'Usuarios', 'url_name': 'usuarios'},
+    {'slug': 'usuarios', 'label': 'Usuários', 'url_name': 'usuarios'},
     {'slug': 'acessos', 'label': 'Acessos', 'url_name': None},
     {'slug': 'equipamentos', 'label': 'Equipamentos', 'url_name': None},
     {'slug': 'ips', 'label': 'IPs', 'url_name': None},
@@ -13,7 +13,7 @@ ERP_MODULES = [
     {'slug': 'ramais', 'label': 'Ramais', 'url_name': None},
     {'slug': 'softwares', 'label': 'Softwares', 'url_name': None},
     {'slug': 'insumos', 'label': 'Insumos', 'url_name': None},
-    {'slug': 'requisicoes', 'label': 'Requisicoes', 'url_name': None},
+    {'slug': 'requisicoes', 'label': 'Requisições', 'url_name': None},
     {'slug': 'emprestimos', 'label': 'Emprestimos', 'url_name': None},
     {'slug': 'chamados', 'label': 'Chamados', 'url_name': None},
 ]

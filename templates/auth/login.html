@@ -5,14 +5,14 @@
 {% block content %}
 <div class="card" style="max-width: 420px; margin: 60px auto;">
     <h1>ERP TI</h1>
-    <p class="muted">Entre com seu usuario para acessar o sistema.</p>
+    <p class="muted">Entre com seu usuário para acessar o sistema.</p>
 
     <form method="post">
         {% csrf_token %}
 
         {{ form.non_field_errors }}
 
-        <label for="id_username">Usuario</label>
+        <label for="id_username">Usuário</label>
         {{ form.username }}
 
         <label for="id_password">Senha</label>
