@@ -31,16 +31,8 @@
                         <div class="ticket-card" draggable="true" data-ticket-id="{{ ticket.id }}">
                             <div class="ticket-title">
                                 <span class="urgency-dot urgency-{{ ticket.urgency }}"></span>
-                                {{ ticket.title }}
+                                #{{ ticket.id }} - {{ ticket.title }}
                             </div>
-                            <div class="ticket-meta">
-                                <span>{{ ticket.get_ticket_type_display }}</span>
-                                <span>{{ ticket.get_urgency_display }}</span>
-                            </div>
-                            <div class="ticket-desc">{{ ticket.description|truncatechars:120 }}</div>
-                            {% if ticket.attachment %}
-                                <div class="ticket-attach">Anexo: <a href="{{ ticket.attachment.url }}">abrir</a></div>
-                            {% endif %}
                         </div>
                     {% empty %}
                         <div class="ticket-empty">Sem chamados pendentes.</div>
@@ -57,16 +49,8 @@
                                 <div class="ticket-card" draggable="true" data-ticket-id="{{ ticket.id }}">
                                     <div class="ticket-title">
                                         <span class="urgency-dot urgency-{{ ticket.urgency }}"></span>
-                                        {{ ticket.title }}
+                                        #{{ ticket.id }} - {{ ticket.title }}
                                     </div>
-                                    <div class="ticket-meta">
-                                        <span>{{ ticket.get_ticket_type_display }}</span>
-                                        <span>{{ ticket.get_urgency_display }}</span>
-                                    </div>
-                                    <div class="ticket-desc">{{ ticket.description|truncatechars:120 }}</div>
-                                    {% if ticket.attachment %}
-                                        <div class="ticket-attach">Anexo: <a href="{{ ticket.attachment.url }}">abrir</a></div>
-                                    {% endif %}
                                 </div>
                             {% endif %}
                         {% endfor %}
@@ -81,13 +65,8 @@
                         <div class="ticket-card" draggable="true" data-ticket-id="{{ ticket.id }}">
                             <div class="ticket-title">
                                 <span class="urgency-dot urgency-{{ ticket.urgency }}"></span>
-                                {{ ticket.title }}
+                                #{{ ticket.id }} - {{ ticket.title }}
                             </div>
-                            <div class="ticket-meta">
-                                <span>{{ ticket.get_ticket_type_display }}</span>
-                                <span>{{ ticket.get_urgency_display }}</span>
-                            </div>
-                            <div class="ticket-desc">{{ ticket.description|truncatechars:120 }}</div>
                         </div>
                     {% empty %}
                         <div class="ticket-empty">Sem chamados fechados.</div>
