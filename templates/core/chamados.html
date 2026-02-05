@@ -41,8 +41,6 @@
                                 #{{ ticket.id }} - {{ ticket.title }}
                             </div>
                         </div>
-                    {% empty %}
-                        <div class="ticket-empty">Sem chamados pendentes.</div>
                     {% endfor %}
                 </div>
             </div>
@@ -64,8 +62,6 @@
                                     #{{ ticket.id }} - {{ ticket.title }}
                                 </div>
                             </div>
-                        {% empty %}
-                            <div class="ticket-empty">Sem chamados.</div>
                         {% endfor %}
                     </div>
                 </div>
@@ -87,8 +83,6 @@
                                 #{{ ticket.id }} - {{ ticket.title }}
                             </div>
                         </div>
-                    {% empty %}
-                        <div class="ticket-empty">Sem chamados fechados.</div>
                     {% endfor %}
                 </div>
             </div>
