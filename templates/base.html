@@ -77,11 +77,14 @@
             margin-top: 16px;
             border-bottom: 1px solid #1f2a44;
             padding-bottom: 0;
+            background: #0b1324;
+            padding: 8px 8px 0;
+            border-radius: 10px 10px 0 0;
         }
 
         .tab-button {
-            background: transparent;
-            border: 1px solid transparent;
+            background: #0c162a;
+            border: 1px solid #1f2a44;
             color: var(--text);
             border-radius: 8px 8px 0 0;
             padding: 10px 12px;
@@ -96,8 +99,8 @@
         }
 
         .tab-button.active {
-            background: #0f172a;
-            border-color: #1f2a44;
+            background: #101c33;
+            border-color: #2b3a5c;
             color: #ffffff;
             box-shadow: 0 -2px 0 var(--accent) inset;
         }
@@ -153,7 +156,7 @@
         }
 
         .data-table thead {
-            background: #111b2e;
+            background: #14213d;
         }
 
         .data-table th,
@@ -161,6 +164,14 @@
             padding: 10px 12px;
             text-align: left;
             border-bottom: 1px solid #1f2a44;
+        }
+
+        .data-table th {
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            font-size: 0.78rem;
+            color: #cbd5f5;
+            border-bottom: 2px solid #2b3a5c;
         }
 
         .data-table tbody tr:nth-child(even) {
