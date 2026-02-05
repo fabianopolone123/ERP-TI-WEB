@@ -37,15 +37,25 @@ def build_modules(active_slug: str | None) -> list[dict[str, str | bool]]:
     return modules
 
 
+def is_ti_user(request) -> bool:
+    username = getattr(request.user, 'username', '')
+    if not username:
+        return False
+    user = ERPUser.objects.filter(username__iexact=username).first()
+    if not user:
+        return False
+    return (user.department or '').strip().upper() == 'TI'
+
+
 class DashboardView(LoginRequiredMixin, TemplateView):
     template_name = 'core/dashboard.html'
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        is_ti_group = self.request.user.groups.filter(name='TI').exists()
-        active_slug = ERP_MODULES[0]['slug'] if is_ti_group and ERP_MODULES else None
-        context['is_ti_group'] = is_ti_group
-        context['modules'] = build_modules(active_slug) if is_ti_group else []
+        is_ti = is_ti_user(self.request)
+        active_slug = ERP_MODULES[0]['slug'] if is_ti and ERP_MODULES else None
+        context['is_ti_group'] = is_ti
+        context['modules'] = build_modules(active_slug) if is_ti else []
         return context
 
 
@@ -53,9 +63,9 @@ class UsersListView(LoginRequiredMixin, TemplateView):
     template_name = 'core/users_list.html'
 
     def post(self, request, *args, **kwargs):
-        is_ti_group = request.user.groups.filter(name='TI').exists()
-        if not is_ti_group:
-            messages.error(request, 'Apenas usuários do grupo TI podem importar do AD.')
+        is_ti = is_ti_user(request)
+        if not is_ti:
+            messages.error(request, 'Apenas usuários do departamento TI podem importar do AD.')
             return self.get(request, *args, **kwargs)
 
         try:
@@ -67,8 +77,8 @@ class UsersListView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        is_ti_group = self.request.user.groups.filter(name='TI').exists()
-        context['is_ti_group'] = is_ti_group
-        context['modules'] = build_modules('usuarios') if is_ti_group else []
-        context['users'] = ERPUser.objects.select_related('group').all().order_by('full_name')
+        is_ti = is_ti_user(self.request)
+        context['is_ti_group'] = is_ti
+        context['modules'] = build_modules('usuarios') if is_ti else []
+        context['users'] = ERPUser.objects.all().order_by('full_name')
         return context
