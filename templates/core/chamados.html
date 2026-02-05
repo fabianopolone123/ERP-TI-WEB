@@ -128,6 +128,54 @@
     </div>
 </div>
 
+<div class="modal" data-details-modal hidden>
+    <div class="modal-backdrop" data-close-details></div>
+    <div class="modal-content">
+        <div class="topbar" style="margin-bottom: 8px;">
+            <h3>Chamado #<span data-detail-id></span></h3>
+            <button type="button" data-close-details>Fechar</button>
+        </div>
+        <div class="ticket-details">
+            <div><strong>Título:</strong> <span data-detail-title></span></div>
+            <div><strong>Descrição:</strong> <span data-detail-description></span></div>
+            <div><strong>Tipo:</strong> <span data-detail-type></span></div>
+            <div><strong>Urgência:</strong> <span data-detail-urgency></span></div>
+            <div><strong>Status:</strong> <span data-detail-status></span></div>
+            <div><strong>Solicitante:</strong> <span data-detail-created-by></span></div>
+            <div><strong>Responsável:</strong> <span data-detail-assigned-to></span></div>
+            <div>
+                <strong>Anexo:</strong>
+                <a href="#" data-detail-attachment target="_blank" rel="noreferrer">abrir</a>
+                <span data-detail-no-attachment>-</span>
+            </div>
+        </div>
+
+        <div class="chat-section">
+            <h4>Chat público</h4>
+            <div class="chat-messages" data-chat-public></div>
+            <form class="chat-form" data-chat-form data-internal="0">
+                <input type="text" name="message" placeholder="Escreva uma mensagem..." />
+                <div class="chat-actions">
+                    <input type="file" name="attachment" />
+                    <button type="submit">Enviar</button>
+                </div>
+            </form>
+        </div>
+
+        <div class="chat-section" data-chat-internal-section>
+            <h4>Chat interno TI</h4>
+            <div class="chat-messages" data-chat-internal></div>
+            <form class="chat-form" data-chat-form data-internal="1">
+                <input type="text" name="message" placeholder="Mensagem interna..." />
+                <div class="chat-actions">
+                    <input type="file" name="attachment" />
+                    <button type="submit">Enviar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <script>
     (function () {
         const board = document.querySelector('[data-board]');
@@ -222,6 +270,162 @@
 
         openBtn.addEventListener('click', open);
         closeEls.forEach((el) => el.addEventListener('click', close));
+    })();
+</script>
+
+<script>
+    (function () {
+        const detailsModal = document.querySelector('[data-details-modal]');
+        const closeButtons = document.querySelectorAll('[data-close-details]');
+        const board = document.querySelector('[data-board]');
+        if (!detailsModal || !board) return;
+
+        const getCookie = (name) => {
+            const value = `; ${document.cookie}`;
+            const parts = value.split(`; ${name}=`);
+            if (parts.length === 2) return parts.pop().split(';').shift();
+            return '';
+        };
+
+        let currentTicketId = null;
+        let dragging = false;
+
+        board.addEventListener('dragstart', () => {
+            dragging = true;
+        });
+        board.addEventListener('dragend', () => {
+            setTimeout(() => {
+                dragging = false;
+            }, 0);
+        });
+
+        const setText = (selector, value) => {
+            const el = detailsModal.querySelector(selector);
+            if (el) el.textContent = value || '-';
+        };
+
+        const renderMessages = (container, messages) => {
+            if (!container) return;
+            container.innerHTML = '';
+            if (!messages.length) {
+                const empty = document.createElement('div');
+                empty.className = 'ticket-empty';
+                empty.textContent = 'Sem mensagens.';
+                container.appendChild(empty);
+                return;
+            }
+            messages.forEach((msg) => {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'chat-message';
+
+                const author = document.createElement('div');
+                author.className = 'chat-author';
+                author.textContent = msg.author;
+
+                const text = document.createElement('div');
+                text.className = 'chat-text';
+                text.textContent = msg.message || '';
+
+                wrapper.appendChild(author);
+                if (msg.message) wrapper.appendChild(text);
+
+                if (msg.attachment_url) {
+                    const attach = document.createElement('div');
+                    const link = document.createElement('a');
+                    link.href = msg.attachment_url;
+                    link.target = '_blank';
+                    link.rel = 'noreferrer';
+                    link.textContent = 'Anexo';
+                    attach.appendChild(link);
+                    wrapper.appendChild(attach);
+                }
+
+                const time = document.createElement('div');
+                time.className = 'chat-time';
+                time.textContent = msg.created_at;
+                wrapper.appendChild(time);
+
+                container.appendChild(wrapper);
+            });
+        };
+
+        const loadDetails = async (ticketId) => {
+            const response = await fetch(`/chamados/detalhe/${ticketId}/`);
+            if (!response.ok) return;
+            const data = await response.json();
+            if (!data.ok) return;
+
+            setText('[data-detail-id]', data.ticket.id);
+            setText('[data-detail-title]', data.ticket.title);
+            setText('[data-detail-description]', data.ticket.description);
+            setText('[data-detail-type]', data.ticket.ticket_type);
+            setText('[data-detail-urgency]', data.ticket.urgency);
+            setText('[data-detail-status]', data.ticket.status);
+            setText('[data-detail-created-by]', data.ticket.created_by);
+            setText('[data-detail-assigned-to]', data.ticket.assigned_to);
+
+            const attachLink = detailsModal.querySelector('[data-detail-attachment]');
+            const noAttach = detailsModal.querySelector('[data-detail-no-attachment]');
+            if (data.ticket.attachment_url) {
+                attachLink.href = data.ticket.attachment_url;
+                attachLink.style.display = 'inline';
+                noAttach.style.display = 'none';
+            } else {
+                attachLink.style.display = 'none';
+                noAttach.style.display = 'inline';
+            }
+
+            renderMessages(detailsModal.querySelector('[data-chat-public]'), data.messages.public || []);
+            renderMessages(detailsModal.querySelector('[data-chat-internal]'), data.messages.internal || []);
+
+            const internalSection = detailsModal.querySelector('[data-chat-internal-section]');
+            if (internalSection) {
+                internalSection.style.display = data.internal_allowed ? 'block' : 'none';
+            }
+        };
+
+        const openDetails = async (ticketId) => {
+            currentTicketId = ticketId;
+            detailsModal.hidden = false;
+            await loadDetails(ticketId);
+        };
+
+        const closeDetails = () => {
+            detailsModal.hidden = true;
+            currentTicketId = null;
+        };
+
+        board.addEventListener('click', (event) => {
+            if (dragging) return;
+            const card = event.target.closest('.ticket-card');
+            if (!card) return;
+            openDetails(card.dataset.ticketId);
+        });
+
+        closeButtons.forEach((btn) => btn.addEventListener('click', closeDetails));
+
+        detailsModal.querySelectorAll('[data-chat-form]').forEach((form) => {
+            form.addEventListener('submit', async (event) => {
+                event.preventDefault();
+                if (!currentTicketId) return;
+                const formData = new FormData(form);
+                formData.append('ticket_id', currentTicketId);
+                formData.append('internal', form.dataset.internal || '0');
+
+                const response = await fetch('{% url "chamados_mensagem" %}', {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': getCookie('csrftoken'),
+                    },
+                    body: formData,
+                });
+
+                if (response.ok) {
+                    form.reset();
+                    await loadDetails(currentTicketId);
+                }
+            });
+        });
     })();
 </script>
 {% endblock %}

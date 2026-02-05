@@ -1,7 +1,7 @@
 from django.contrib.auth import views as auth_views
 from django.urls import path
 
-from .views import ChamadosView, DashboardView, UsersListView, move_ticket
+from .views import ChamadosView, DashboardView, UsersListView, move_ticket, ticket_detail, ticket_message
 
 urlpatterns = [
     path('login/', auth_views.LoginView.as_view(template_name='auth/login.html'), name='login'),
@@ -9,5 +9,7 @@ urlpatterns = [
     path('usuarios/', UsersListView.as_view(), name='usuarios'),
     path('chamados/', ChamadosView.as_view(), name='chamados'),
     path('chamados/mover/', move_ticket, name='chamados_mover'),
+    path('chamados/detalhe/<int:ticket_id>/', ticket_detail, name='chamados_detalhe'),
+    path('chamados/mensagem/', ticket_message, name='chamados_mensagem'),
     path('', DashboardView.as_view(), name='dashboard'),
 ]
