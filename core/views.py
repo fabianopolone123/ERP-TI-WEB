@@ -80,5 +80,10 @@ class UsersListView(LoginRequiredMixin, TemplateView):
         is_ti = is_ti_user(self.request)
         context['is_ti_group'] = is_ti
         context['modules'] = build_modules('usuarios') if is_ti else []
-        context['users'] = ERPUser.objects.all().order_by('full_name')
+        show_inactive = self.request.GET.get('show_inactive') == '1'
+        queryset = ERPUser.objects.all()
+        if not show_inactive:
+            queryset = queryset.filter(is_active=True)
+        context['show_inactive'] = show_inactive
+        context['users'] = queryset.order_by('full_name')
         return context

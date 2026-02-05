@@ -33,8 +33,23 @@
                                 <button type="submit">Importar do AD</button>
                             </form>
                         </div>
+                        <div class="topbar" style="margin-bottom: 10px;">
+                            <input
+                                type="text"
+                                class="table-search"
+                                placeholder="Pesquisar por nome..."
+                                data-table-search="usuarios"
+                            />
+                            <form method="get" class="inline-form">
+                                <label class="muted" style="display: inline-flex; align-items: center; gap: 6px;">
+                                    <input type="checkbox" name="show_inactive" value="1" {% if show_inactive %}checked{% endif %} />
+                                    Mostrar inativos
+                                </label>
+                                <button type="submit">Aplicar</button>
+                            </form>
+                        </div>
                         <div style="overflow-x: auto;">
-                            <table class="data-table">
+                            <table class="data-table" data-table-name="usuarios">
                                 <thead>
                                     <tr>
                                         <th>Nome completo</th>

@@ -78,22 +78,28 @@ def import_ad_users() -> tuple[int, int]:
             'email': email or '',
             'extension': extension,
             'is_active': is_active,
+            'username': username,
+            'ad_guid': guid or '',
         }
 
+        existing = None
         if guid:
-            _user, was_created = ERPUser.objects.update_or_create(
-                ad_guid=guid,
-                defaults={**defaults, 'username': username},
-            )
-        else:
-            _user, was_created = ERPUser.objects.update_or_create(
-                username=username,
-                defaults={**defaults, 'ad_guid': ''},
-            )
+            existing = ERPUser.objects.filter(ad_guid=guid).first()
+        if existing is None:
+            existing = ERPUser.objects.filter(username=username).first()
 
-        if was_created:
+        if existing is None:
+            ERPUser.objects.create(**defaults)
             created += 1
-        else:
+            continue
+
+        changed = False
+        for field, value in defaults.items():
+            if getattr(existing, field) != value:
+                setattr(existing, field, value)
+                changed = True
+        if changed:
+            existing.save()
             updated += 1
 
     conn.unbind()

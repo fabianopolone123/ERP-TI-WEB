@@ -176,6 +176,11 @@
             user-select: none;
         }
 
+        .table-search {
+            max-width: 320px;
+            margin: 0;
+        }
+
         .data-table tbody tr:nth-child(even) {
             background: #0c162a;
         }
@@ -281,6 +286,33 @@
                         rows.forEach((row) => tbody.appendChild(row));
                     });
                 });
+            });
+        })();
+    </script>
+
+    <script>
+        (function () {
+            const inputs = document.querySelectorAll('[data-table-search]');
+            if (!inputs.length) return;
+
+            inputs.forEach((input) => {
+                const tableName = input.getAttribute('data-table-search');
+                const table = document.querySelector(`.data-table[data-table-name="${tableName}"]`);
+                if (!table) return;
+                const tbody = table.querySelector('tbody');
+                if (!tbody) return;
+
+                const filterRows = () => {
+                    const query = input.value.trim().toLowerCase();
+                    const rows = Array.from(tbody.querySelectorAll('tr'));
+                    rows.forEach((row) => {
+                        const firstCell = row.children[0];
+                        const text = firstCell ? firstCell.textContent.toLowerCase() : '';
+                        row.style.display = text.includes(query) ? '' : 'none';
+                    });
+                };
+
+                input.addEventListener('input', filterRows);
             });
         })();
     </script>
