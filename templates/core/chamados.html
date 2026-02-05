@@ -30,13 +30,11 @@
                 <div class="kanban-body">
                     {% for ticket in pending_tickets %}
                         <div class="ticket-card" draggable="true" data-ticket-id="{{ ticket.id }}">
-                            <div class="ticket-actions">
+                            <div class="ticket-title">
                                 <label class="ticket-multi">
                                     <input type="checkbox" class="ticket-multi-check" />
                                     Multi
                                 </label>
-                            </div>
-                            <div class="ticket-title">
                                 <span class="urgency-dot urgency-{{ ticket.urgency }}"></span>
                                 #{{ ticket.id }} - {{ ticket.title }}
                             </div>
@@ -51,13 +49,11 @@
                     <div class="kanban-body">
                         {% for ticket in user_tickets|get_item:user.id %}
                             <div class="ticket-card" draggable="true" data-ticket-id="{{ ticket.id }}">
-                                <div class="ticket-actions">
+                                <div class="ticket-title">
                                     <label class="ticket-multi">
                                         <input type="checkbox" class="ticket-multi-check" />
                                         Multi
                                     </label>
-                                </div>
-                                <div class="ticket-title">
                                     <span class="urgency-dot urgency-{{ ticket.urgency }}"></span>
                                     #{{ ticket.id }} - {{ ticket.title }}
                                 </div>
@@ -72,13 +68,11 @@
                 <div class="kanban-body">
                     {% for ticket in closed_tickets %}
                         <div class="ticket-card" draggable="true" data-ticket-id="{{ ticket.id }}">
-                            <div class="ticket-actions">
+                            <div class="ticket-title">
                                 <label class="ticket-multi">
                                     <input type="checkbox" class="ticket-multi-check" />
                                     Multi
                                 </label>
-                            </div>
-                            <div class="ticket-title">
                                 <span class="urgency-dot urgency-{{ ticket.urgency }}"></span>
                                 #{{ ticket.id }} - {{ ticket.title }}
                             </div>
