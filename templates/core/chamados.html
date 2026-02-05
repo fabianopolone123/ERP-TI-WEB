@@ -140,11 +140,16 @@
                         </select>
                     </div>
                 {% else %}
-                    <input type="hidden" name="ticket_type" value="nao_classificado" />
-                    <input type="hidden" name="urgency" value="nao_classificado" />
-                    <div class="muted" style="align-self: flex-end;">
-                        A classificação será feita pela equipe de TI.
+                    <div>
+                        <label for="id_type">Tipo</label>
+                        <select id="id_type" name="ticket_type" required>
+                            <option value="requisicao">Requisição</option>
+                            <option value="melhoria">Melhoria</option>
+                            <option value="incidente">Incidente</option>
+                            <option value="programado">Programado</option>
+                        </select>
                     </div>
+                    <input type="hidden" name="urgency" value="nao_classificado" />
                 {% endif %}
             </div>
             <div class="form-row">

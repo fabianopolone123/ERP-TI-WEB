@@ -118,7 +118,9 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
             return self.get(request, *args, **kwargs)
 
         if not is_ti:
-            ticket_type = Ticket.TicketType.NAO_CLASSIFICADO
+            valid_types = {choice[0] for choice in Ticket.TicketType.choices if choice[0] != Ticket.TicketType.NAO_CLASSIFICADO}
+            if ticket_type not in valid_types:
+                ticket_type = Ticket.TicketType.NAO_CLASSIFICADO
             urgency = Ticket.Urgency.NAO_CLASSIFICADO
         elif not ticket_type or not urgency:
             messages.error(request, 'Preencha tipo e urgência.')
