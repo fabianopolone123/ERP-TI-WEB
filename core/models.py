@@ -26,11 +26,10 @@ class Ticket(models.Model):
 
     class Urgency(models.TextChoices):
         NAO_CLASSIFICADO = 'nao_classificado', 'Não classificado'
+        PROGRAMADA = 'programada', 'Programada'
         BAIXA = 'baixa', 'Baixa'
-        NORMAL = 'normal', 'Normal'
         MEDIA = 'media', 'Média'
         ALTA = 'alta', 'Alta'
-        URGENTE = 'urgente', 'Urgente'
 
     class Status(models.TextChoices):
         PENDENTE = 'pendente', 'Pendente'

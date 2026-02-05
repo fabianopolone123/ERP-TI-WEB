@@ -132,11 +132,10 @@
                     <div>
                         <label for="id_urgency">Urgência</label>
                         <select id="id_urgency" name="urgency" required>
+                            <option value="programada">Programada</option>
                             <option value="baixa">Baixa</option>
-                            <option value="normal" selected>Normal</option>
                             <option value="media">Média</option>
                             <option value="alta">Alta</option>
-                            <option value="urgente">Urgente</option>
                         </select>
                     </div>
                 {% else %}
@@ -152,11 +151,10 @@
                     <div>
                         <label for="id_urgency">Urgência</label>
                         <select id="id_urgency" name="urgency" required>
+                            <option value="programada">Programada</option>
                             <option value="baixa">Baixa</option>
-                            <option value="normal">Normal</option>
                             <option value="media">Média</option>
                             <option value="alta">Alta</option>
-                            <option value="urgente">Urgente</option>
                         </select>
                     </div>
                 {% endif %}
@@ -165,11 +163,10 @@
                 <div class="ticket-legend">
                     <strong>Legenda de urgência</strong>
                     <ul>
-                        <li><strong>Baixa:</strong> sem impacto imediato, pode esperar.</li>
-                        <li><strong>Normal:</strong> impacto só no solicitante, solução no fluxo.</li>
-                        <li><strong>Média:</strong> impacto no time/área, precisa atenção.</li>
-                        <li><strong>Alta:</strong> várias pessoas ou setor parado.</li>
-                        <li><strong>Urgente:</strong> impacto na empresa inteira ou serviço crítico parado.</li>
+                        <li><span class="urgency-dot urgency-programada"></span> <strong>Programada:</strong> menor prioridade, pode ser agendada.</li>
+                        <li><span class="urgency-dot urgency-baixa"></span> <strong>Baixa:</strong> impacto pequeno e localizado.</li>
+                        <li><span class="urgency-dot urgency-media"></span> <strong>Média:</strong> impacto no time/área, precisa atenção.</li>
+                        <li><span class="urgency-dot urgency-alta"></span> <strong>Alta:</strong> várias pessoas ou setor parado.</li>
                     </ul>
                 </div>
             {% endif %}
@@ -226,11 +223,10 @@
                         <label for="id_reclass_urgency">Urgência</label>
                         <select id="id_reclass_urgency" name="urgency" required>
                             <option value="nao_classificado">Não classificado</option>
+                            <option value="programada">Programada</option>
                             <option value="baixa">Baixa</option>
-                            <option value="normal">Normal</option>
                             <option value="media">Média</option>
                             <option value="alta">Alta</option>
-                            <option value="urgente">Urgente</option>
                         </select>
                     </div>
                     <div style="align-self: flex-end;">
