@@ -17,6 +17,18 @@ import socket
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+ENV_PATH = BASE_DIR / '.env'
+if ENV_PATH.exists():
+    for line in ENV_PATH.read_text(encoding='utf-8').splitlines():
+        raw = line.strip()
+        if not raw or raw.startswith('#') or '=' not in raw:
+            continue
+        key, value = raw.split('=', 1)
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        if key:
+            os.environ.setdefault(key, value)
+
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
