@@ -120,7 +120,7 @@ USE_TZ = True
 STATIC_URL = 'static/'
 
 LOGIN_URL = 'login'
-LOGIN_REDIRECT_URL = 'dashboard'
+LOGIN_REDIRECT_URL = 'usuarios'
 LOGOUT_REDIRECT_URL = 'login'
 
 # LDAP / Active Directory (SIDERTEC) - via ldap3
