@@ -22,7 +22,7 @@ if not exist "%ROOT%.venv\Scripts\activate.bat" (
   call "%ROOT%.venv\Scripts\activate.bat"
 )
 
-python manage.py runserver 0.0.0.0:8010
+python manage.py runserver 0.0.0.0:8000
 if errorlevel 1 (
   echo.
   echo [ERRO] O servidor encerrou com erro.
