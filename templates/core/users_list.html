@@ -34,26 +34,26 @@
                             </form>
                         </div>
                         <div style="overflow-x: auto;">
-                            <table style="width: 100%; border-collapse: collapse; min-width: 760px;">
+                            <table class="data-table">
                                 <thead>
-                                    <tr style="text-align: left; border-bottom: 1px solid #e5e7eb;">
-                                        <th style="padding: 8px;">Nome completo</th>
-                                        <th style="padding: 8px;">Cargo</th>
-                                        <th style="padding: 8px;">Departamento</th>
-                                        <th style="padding: 8px;">Ativo</th>
+                                    <tr>
+                                        <th>Nome completo</th>
+                                        <th>Cargo</th>
+                                        <th>Departamento</th>
+                                        <th>Ativo</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {% for user in users %}
-                                        <tr style="border-bottom: 1px solid #eef2f7;">
-                                            <td style="padding: 8px;">{{ user.full_name }}</td>
-                                            <td style="padding: 8px;">{{ user.role }}</td>
-                                            <td style="padding: 8px;">{{ user.department }}</td>
-                                            <td style="padding: 8px;">{% if user.is_active %}Sim{% else %}Não{% endif %}</td>
+                                        <tr>
+                                            <td>{{ user.full_name }}</td>
+                                            <td>{{ user.role }}</td>
+                                            <td>{{ user.department }}</td>
+                                            <td>{% if user.is_active %}Sim{% else %}Não{% endif %}</td>
                                         </tr>
                                     {% empty %}
                                         <tr>
-                                            <td colspan="4" style="padding: 12px;" class="muted">
+                                            <td colspan="4" class="muted">
                                                 Nenhum usuário cadastrado.
                                             </td>
                                         </tr>
