@@ -96,10 +96,6 @@
             color: #ffffff;
         }
 
-        .tab-button.disabled {
-            opacity: 0.55;
-            pointer-events: none;
-        }
 
         .tab-panels {
             margin-top: 16px;
@@ -137,5 +133,31 @@
     <div class="container">
         {% block content %}{% endblock %}
     </div>
+
+    <script>
+        (function () {
+            const tabs = document.querySelectorAll('.tabs .tab-button');
+            if (!tabs.length) return;
+
+            const setActive = (tab) => {
+                tabs.forEach((t) => t.classList.toggle('active', t === tab));
+            };
+
+            tabs.forEach((tab) => {
+                tab.addEventListener('click', (event) => {
+                    const href = tab.getAttribute('href') || '';
+                    if (href === '#') {
+                        event.preventDefault();
+                        setActive(tab);
+                    }
+                });
+            });
+
+            const hasActive = Array.from(tabs).some((tab) => tab.classList.contains('active'));
+            if (!hasActive) {
+                setActive(tabs[0]);
+            }
+        })();
+    </script>
 </body>
 </html>

@@ -3,7 +3,8 @@
     {% for module in modules %}
         <a
             href="{{ module.url }}"
-            class="tab-button{% if module.active %} active{% endif %}{% if module.url == '#' %} disabled{% endif %}"
+            class="tab-button{% if module.active %} active{% endif %}"
+            data-tab="{{ module.slug }}"
         >
             {{ module.label }}
         </a>
