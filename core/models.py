@@ -14,3 +14,49 @@ class ERPUser(models.Model):
 
     def __str__(self) -> str:
         return self.full_name
+
+
+class Ticket(models.Model):
+    class TicketType(models.TextChoices):
+        REQUISICAO = 'requisicao', 'Requisição'
+        MELHORIA = 'melhoria', 'Melhoria'
+        INCIDENTE = 'incidente', 'Incidente'
+        PROGRAMADO = 'programado', 'Programado'
+
+    class Urgency(models.TextChoices):
+        BAIXA = 'baixa', 'Baixa'
+        NORMAL = 'normal', 'Normal'
+        MEDIA = 'media', 'Média'
+        ALTA = 'alta', 'Alta'
+        URGENTE = 'urgente', 'Urgente'
+
+    class Status(models.TextChoices):
+        PENDENTE = 'pendente', 'Pendente'
+        EM_ATENDIMENTO = 'em_atendimento', 'Em atendimento'
+        FECHADO = 'fechado', 'Fechado'
+
+    title = models.CharField(max_length=200)
+    description = models.TextField()
+    ticket_type = models.CharField(max_length=20, choices=TicketType.choices)
+    urgency = models.CharField(max_length=20, choices=Urgency.choices)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDENTE)
+    created_by = models.ForeignKey(
+        'auth.User',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='created_tickets',
+    )
+    assigned_to = models.ForeignKey(
+        ERPUser,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='assigned_tickets',
+    )
+    attachment = models.FileField(upload_to='tickets/', null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self) -> str:
+        return f'{self.title} ({self.get_status_display()})'

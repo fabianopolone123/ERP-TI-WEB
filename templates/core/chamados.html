@@ -1,0 +1,192 @@
+﻿{% extends "base.html" %}
+
+{% block title %}Chamados | ERP TI{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="topbar">
+        <div>
+            <h2>Chamados</h2>
+            <p class="muted">Gerencie pendências e atendimentos da equipe de TI.</p>
+        </div>
+        <form method="post" action="{% url 'logout' %}" class="inline-form">
+            {% csrf_token %}
+            <button type="submit">Sair</button>
+        </form>
+    </div>
+
+    {% if is_ti_group %}
+        {% include "core/_tabs.html" %}
+
+        <div class="ticket-form">
+            <h3>Abrir chamado</h3>
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                <div class="form-row">
+                    <div>
+                        <label for="id_title">Título</label>
+                        <input id="id_title" name="title" type="text" required />
+                    </div>
+                    <div>
+                        <label for="id_type">Tipo</label>
+                        <select id="id_type" name="ticket_type" required>
+                            <option value="requisicao">Requisição</option>
+                            <option value="melhoria">Melhoria</option>
+                            <option value="incidente">Incidente</option>
+                            <option value="programado">Programado</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="id_urgency">Urgência</label>
+                        <select id="id_urgency" name="urgency" required>
+                            <option value="baixa">Baixa</option>
+                            <option value="normal" selected>Normal</option>
+                            <option value="media">Média</option>
+                            <option value="alta">Alta</option>
+                            <option value="urgente">Urgente</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div style="flex: 2;">
+                        <label for="id_desc">Descrição</label>
+                        <textarea id="id_desc" name="description" rows="3" required></textarea>
+                    </div>
+                    <div>
+                        <label for="id_attach">Anexo</label>
+                        <input id="id_attach" name="attachment" type="file" />
+                    </div>
+                </div>
+                <button type="submit">Abrir chamado</button>
+            </form>
+        </div>
+
+        <div class="kanban" data-board>
+            <div class="kanban-column" data-target="pendente">
+                <div class="kanban-header">Pendentes</div>
+                <div class="kanban-body">
+                    {% for ticket in pending_tickets %}
+                        <div class="ticket-card" draggable="true" data-ticket-id="{{ ticket.id }}">
+                            <div class="ticket-title">{{ ticket.title }}</div>
+                            <div class="ticket-meta">
+                                <span>{{ ticket.get_ticket_type_display }}</span>
+                                <span>{{ ticket.get_urgency_display }}</span>
+                            </div>
+                            <div class="ticket-desc">{{ ticket.description|truncatechars:120 }}</div>
+                            {% if ticket.attachment %}
+                                <div class="ticket-attach">Anexo: <a href="{{ ticket.attachment.url }}">abrir</a></div>
+                            {% endif %}
+                        </div>
+                    {% empty %}
+                        <div class="ticket-empty">Sem chamados pendentes.</div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            {% for user in ti_users %}
+                <div class="kanban-column" data-target="user_{{ user.id }}">
+                    <div class="kanban-header">{{ user.full_name }}</div>
+                    <div class="kanban-body">
+                        {% for ticket in in_progress_tickets %}
+                            {% if ticket.assigned_to_id == user.id %}
+                                <div class="ticket-card" draggable="true" data-ticket-id="{{ ticket.id }}">
+                                    <div class="ticket-title">{{ ticket.title }}</div>
+                                    <div class="ticket-meta">
+                                        <span>{{ ticket.get_ticket_type_display }}</span>
+                                        <span>{{ ticket.get_urgency_display }}</span>
+                                    </div>
+                                    <div class="ticket-desc">{{ ticket.description|truncatechars:120 }}</div>
+                                    {% if ticket.attachment %}
+                                        <div class="ticket-attach">Anexo: <a href="{{ ticket.attachment.url }}">abrir</a></div>
+                                    {% endif %}
+                                </div>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                </div>
+            {% endfor %}
+
+            <div class="kanban-column" data-target="fechado">
+                <div class="kanban-header">Fechados</div>
+                <div class="kanban-body">
+                    {% for ticket in closed_tickets %}
+                        <div class="ticket-card" draggable="true" data-ticket-id="{{ ticket.id }}">
+                            <div class="ticket-title">{{ ticket.title }}</div>
+                            <div class="ticket-meta">
+                                <span>{{ ticket.get_ticket_type_display }}</span>
+                                <span>{{ ticket.get_urgency_display }}</span>
+                            </div>
+                            <div class="ticket-desc">{{ ticket.description|truncatechars:120 }}</div>
+                        </div>
+                    {% empty %}
+                        <div class="ticket-empty">Sem chamados fechados.</div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    {% else %}
+        <p>Solicite ao administrador a inclusão no departamento <strong>TI</strong>.</p>
+    {% endif %}
+</div>
+
+<script>
+    (function () {
+        const board = document.querySelector('[data-board]');
+        if (!board) return;
+
+        const getCookie = (name) => {
+            const value = `; ${document.cookie}`;
+            const parts = value.split(`; ${name}=`);
+            if (parts.length === 2) return parts.pop().split(';').shift();
+            return '';
+        };
+
+        let draggingId = null;
+
+        board.addEventListener('dragstart', (event) => {
+            const card = event.target.closest('.ticket-card');
+            if (!card) return;
+            draggingId = card.dataset.ticketId;
+            card.classList.add('dragging');
+        });
+
+        board.addEventListener('dragend', (event) => {
+            const card = event.target.closest('.ticket-card');
+            if (card) card.classList.remove('dragging');
+        });
+
+        board.querySelectorAll('.kanban-column').forEach((column) => {
+            column.addEventListener('dragover', (event) => {
+                event.preventDefault();
+                column.classList.add('drag-over');
+            });
+
+            column.addEventListener('dragleave', () => {
+                column.classList.remove('drag-over');
+            });
+
+            column.addEventListener('drop', async () => {
+                column.classList.remove('drag-over');
+                if (!draggingId) return;
+                const target = column.dataset.target;
+
+                const response = await fetch('{% url "chamados_mover" %}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'X-CSRFToken': getCookie('csrftoken'),
+                    },
+                    body: new URLSearchParams({
+                        ticket_id: draggingId,
+                        target: target,
+                    }),
+                });
+
+                if (response.ok) {
+                    window.location.reload();
+                }
+            });
+        });
+    })();
+</script>
+{% endblock %}
