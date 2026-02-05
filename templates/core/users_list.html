@@ -38,7 +38,6 @@
                                 <thead>
                                     <tr>
                                         <th>Nome completo</th>
-                                        <th>Cargo</th>
                                         <th>Departamento</th>
                                         <th>Telefone</th>
                                         <th>Celular</th>
@@ -51,7 +50,6 @@
                                     {% for user in users %}
                                         <tr>
                                             <td>{{ user.full_name }}</td>
-                                            <td>{{ user.role }}</td>
                                             <td>{{ user.department }}</td>
                                             <td>{{ user.phone }}</td>
                                             <td>{{ user.mobile }}</td>
@@ -61,7 +59,7 @@
                                         </tr>
                                     {% empty %}
                                         <tr>
-                                            <td colspan="8" class="muted">
+                                            <td colspan="7" class="muted">
                                                 Nenhum usuário cadastrado.
                                             </td>
                                         </tr>

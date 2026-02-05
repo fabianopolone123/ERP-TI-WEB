@@ -7,7 +7,6 @@ from .models import ERPUser
 class ERPUserAdmin(admin.ModelAdmin):
     list_display = (
         'full_name',
-        'role',
         'department',
         'phone',
         'mobile',
@@ -17,4 +16,4 @@ class ERPUserAdmin(admin.ModelAdmin):
         'is_active',
     )
     list_filter = ('department', 'is_active')
-    search_fields = ('full_name', 'role', 'department', 'username', 'email')
+    search_fields = ('full_name', 'department', 'username', 'email')

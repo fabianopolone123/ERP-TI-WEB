@@ -56,7 +56,6 @@ def import_ad_users() -> tuple[int, int]:
     for entry in conn.entries:
         username = entry[attr_map['username']].value if attr_map.get('username') in entry else None
         full_name = entry[attr_map['full_name']].value if attr_map.get('full_name') in entry else None
-        role = entry[attr_map['role']].value if attr_map.get('role') in entry else ''
         department = entry[attr_map['department']].value if attr_map.get('department') in entry else ''
         guid_val = entry[attr_map['guid']].value if attr_map.get('guid') in entry else None
         active_val = entry[attr_map['active']].value if attr_map.get('active') in entry else None
@@ -73,7 +72,6 @@ def import_ad_users() -> tuple[int, int]:
 
         defaults = {
             'full_name': full_name or username,
-            'role': role or '',
             'department': department or '',
             'phone': phone or '',
             'mobile': mobile or '',

@@ -146,7 +146,6 @@ AD_LDAP_IMPORT_FILTER = '(&(objectCategory=person)(objectclass=user))'
 AD_LDAP_IMPORT_ATTR_MAP = {
     'username': 'sAMAccountName',
     'full_name': 'displayName',
-    'role': 'title',
     'department': 'department',
     'phone': 'telephoneNumber',
     'mobile': 'mobile',
