@@ -21,52 +21,15 @@
 
     {% if is_ti_group %}
         <h3>Modulos</h3>
-        <div class="tabs" data-tabs>
-            {% for module in modules %}
-                <button
-                    type="button"
-                    class="tab-button{% if forloop.first %} active{% endif %}"
-                    data-tab="{{ forloop.counter0 }}"
-                >
-                    {{ module }}
-                </button>
-            {% endfor %}
-        </div>
-        <div class="tab-panels" data-panels>
-            {% for module in modules %}
-                <div
-                    class="tab-panel{% if forloop.first %} active{% endif %}"
-                    data-panel="{{ forloop.counter0 }}"
-                >
-                    <h3>{{ module }}</h3>
-                    <p class="muted">Modulo em desenvolvimento.</p>
-                </div>
-            {% endfor %}
+        {% include "core/_tabs.html" %}
+        <div class="tab-panels">
+            <div class="tab-panel active">
+                <h3>Visao geral</h3>
+                <p class="muted">Selecione um modulo acima para abrir a tela.</p>
+            </div>
         </div>
     {% else %}
         <p>Solicite ao administrador a inclusao no grupo <strong>TI</strong>.</p>
     {% endif %}
 </div>
-
-<script>
-    (function () {
-        const tabs = document.querySelectorAll('[data-tabs] .tab-button');
-        const panels = document.querySelectorAll('[data-panels] .tab-panel');
-        if (!tabs.length || !panels.length) return;
-
-        const activate = (tabId) => {
-            tabs.forEach((tab) => tab.classList.toggle('active', tab.dataset.tab === tabId));
-            panels.forEach((panel) => panel.classList.toggle('active', panel.dataset.panel === tabId));
-        };
-
-        tabs.forEach((tab) => {
-            tab.addEventListener('click', () => activate(tab.dataset.tab));
-        });
-
-        const hasActive = Array.from(tabs).some((tab) => tab.classList.contains('active'));
-        if (!hasActive) {
-            activate(tabs[0].dataset.tab);
-        }
-    })();
-</script>
 {% endblock %}

@@ -1,0 +1,12 @@
+{% if modules %}
+<div class="tabs">
+    {% for module in modules %}
+        <a
+            href="{{ module.url }}"
+            class="tab-button{% if module.active %} active{% endif %}{% if module.url == '#' %} disabled{% endif %}"
+        >
+            {{ module.label }}
+        </a>
+    {% endfor %}
+</div>
+{% endif %}

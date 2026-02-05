@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block title %}Usuarios | ERP TI{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="topbar">
+        <div>
+            <h2>Usuarios</h2>
+            {% if is_ti_group %}
+            <p class="muted">Cadastros e grupos internos.</p>
+            {% else %}
+            <p class="muted">Seu usuario nao esta no grupo TI.</p>
+            {% endif %}
+        </div>
+        <form method="post" action="{% url 'logout' %}" class="inline-form">
+            {% csrf_token %}
+            <button type="submit">Sair</button>
+        </form>
+    </div>
+
+    {% if is_ti_group %}
+        {% include "core/_tabs.html" %}
+
+        <div class="tab-panels">
+            <div class="tab-panel active">
+                <h3>Lista de usuarios</h3>
+                <div style="overflow-x: auto;">
+                    <table style="width: 100%; border-collapse: collapse; min-width: 700px;">
+                        <thead>
+                            <tr style="text-align: left; border-bottom: 1px solid #e5e7eb;">
+                                <th style="padding: 8px;">Nome completo</th>
+                                <th style="padding: 8px;">Cargo</th>
+                                <th style="padding: 8px;">Departamento</th>
+                                <th style="padding: 8px;">Grupo</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for user in users %}
+                                <tr style="border-bottom: 1px solid #eef2f7;">
+                                    <td style="padding: 8px;">{{ user.full_name }}</td>
+                                    <td style="padding: 8px;">{{ user.role }}</td>
+                                    <td style="padding: 8px;">{{ user.department }}</td>
+                                    <td style="padding: 8px;">{{ user.group.name|default:"-" }}</td>
+                                </tr>
+                            {% empty %}
+                                <tr>
+                                    <td colspan="4" style="padding: 12px;" class="muted">
+                                        Nenhum usuario cadastrado.
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    {% else %}
+        <p>Solicite ao administrador a inclusao no grupo <strong>TI</strong>.</p>
+    {% endif %}
+</div>
+{% endblock %}

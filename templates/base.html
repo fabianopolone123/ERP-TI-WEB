@@ -86,12 +86,19 @@
             font-weight: 600;
             font-size: 0.92rem;
             cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
         }
 
         .tab-button.active {
             background: var(--accent);
             border-color: var(--accent);
             color: #ffffff;
+        }
+
+        .tab-button.disabled {
+            opacity: 0.55;
+            pointer-events: none;
         }
 
         .tab-panels {
