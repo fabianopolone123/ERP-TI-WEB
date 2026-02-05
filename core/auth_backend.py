@@ -1,3 +1,4 @@
+ï»¿# -*- coding: utf-8 -*-
 from __future__ import annotations
 
 from typing import Any
@@ -24,10 +25,19 @@ class ActiveDirectoryBackend:
         if not server_uri or not base_dn or not user_filter:
             return None
 
-        server = Server(server_uri, get_info=None)
-        conn = Connection(server, user=bind_dn, password=bind_password, auto_bind=True)
+        try:
+            server = Server(server_uri, get_info=None)
+            conn = Connection(server, user=bind_dn, password=bind_password, auto_bind=True)
+        except Exception:
+            return None
+
         search_filter = user_filter.replace('%(user)s', username)
-        conn.search(search_base=base_dn, search_filter=search_filter, search_scope=SUBTREE, attributes=list(user_attr_map.values()))
+        conn.search(
+            search_base=base_dn,
+            search_filter=search_filter,
+            search_scope=SUBTREE,
+            attributes=list(user_attr_map.values()),
+        )
         if not conn.entries:
             conn.unbind()
             return None
@@ -36,9 +46,11 @@ class ActiveDirectoryBackend:
         user_dn = entry.entry_dn
         conn.unbind()
 
-        # Verifica senha do usuário no AD
-        user_conn = Connection(server, user=user_dn, password=password, auto_bind=True)
-        user_conn.unbind()
+        try:
+            user_conn = Connection(server, user=user_dn, password=password, auto_bind=True)
+            user_conn.unbind()
+        except Exception:
+            return None
 
         User = get_user_model()
         user, _created = User.objects.get_or_create(username=username)
