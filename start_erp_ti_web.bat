@@ -15,14 +15,13 @@ if not exist "%ROOT%.venv\Scripts\activate.bat" (
     exit /b 1
   )
   echo [INFO] Instalando dependencias...
-  call "%ROOT%.venv\Scripts\activate.bat"
-  python -m pip install --upgrade pip
-  python -m pip install -r requirements.txt
-) else (
-  call "%ROOT%.venv\Scripts\activate.bat"
 )
 
-python manage.py runserver 0.0.0.0:8000
+call "%ROOT%.venv\Scripts\activate.bat"
+"%ROOT%.venv\Scripts\python.exe" -m pip install --upgrade pip
+"%ROOT%.venv\Scripts\python.exe" -m pip install -r requirements.txt
+
+"%ROOT%.venv\Scripts\python.exe" manage.py runserver 0.0.0.0:8000
 if errorlevel 1 (
   echo.
   echo [ERRO] O servidor encerrou com erro.
