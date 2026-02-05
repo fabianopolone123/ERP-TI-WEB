@@ -40,6 +40,10 @@
                                         <th>Nome completo</th>
                                         <th>Cargo</th>
                                         <th>Departamento</th>
+                                        <th>Telefone</th>
+                                        <th>Celular</th>
+                                        <th>Email</th>
+                                        <th>Ramal</th>
                                         <th>Ativo</th>
                                     </tr>
                                 </thead>
@@ -49,11 +53,15 @@
                                             <td>{{ user.full_name }}</td>
                                             <td>{{ user.role }}</td>
                                             <td>{{ user.department }}</td>
+                                            <td>{{ user.phone }}</td>
+                                            <td>{{ user.mobile }}</td>
+                                            <td>{{ user.email }}</td>
+                                            <td>{{ user.extension }}</td>
                                             <td>{% if user.is_active %}Sim{% else %}Não{% endif %}</td>
                                         </tr>
                                     {% empty %}
                                         <tr>
-                                            <td colspan="4" class="muted">
+                                            <td colspan="8" class="muted">
                                                 Nenhum usuário cadastrado.
                                             </td>
                                         </tr>

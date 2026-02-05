@@ -1,5 +1,6 @@
 ﻿from __future__ import annotations
 
+import re
 import uuid
 
 from django.conf import settings
@@ -24,6 +25,13 @@ def _is_active_from_uac(uac_value) -> bool:
     except (TypeError, ValueError):
         return True
     return (uac & 2) == 0
+
+
+def _last4_digits(value: str) -> str:
+    if not value:
+        return ''
+    digits = re.sub(r'\D', '', value)
+    return digits[-4:] if len(digits) >= 4 else digits
 
 
 def import_ad_users() -> tuple[int, int]:
@@ -52,24 +60,38 @@ def import_ad_users() -> tuple[int, int]:
         department = entry[attr_map['department']].value if attr_map.get('department') in entry else ''
         guid_val = entry[attr_map['guid']].value if attr_map.get('guid') in entry else None
         active_val = entry[attr_map['active']].value if attr_map.get('active') in entry else None
+        phone = entry[attr_map['phone']].value if attr_map.get('phone') in entry else ''
+        mobile = entry[attr_map['mobile']].value if attr_map.get('mobile') in entry else ''
+        email = entry[attr_map['email']].value if attr_map.get('email') in entry else ''
 
         if not username:
             continue
 
         guid = _guid_to_str(guid_val)
         is_active = _is_active_from_uac(active_val)
+        extension = _last4_digits(phone)
 
         defaults = {
             'full_name': full_name or username,
             'role': role or '',
             'department': department or '',
+            'phone': phone or '',
+            'mobile': mobile or '',
+            'email': email or '',
+            'extension': extension,
             'is_active': is_active,
         }
 
         if guid:
-            user, was_created = ERPUser.objects.update_or_create(ad_guid=guid, defaults={**defaults, 'username': username})
+            _user, was_created = ERPUser.objects.update_or_create(
+                ad_guid=guid,
+                defaults={**defaults, 'username': username},
+            )
         else:
-            user, was_created = ERPUser.objects.update_or_create(username=username, defaults={**defaults, 'ad_guid': ''})
+            _user, was_created = ERPUser.objects.update_or_create(
+                username=username,
+                defaults={**defaults, 'ad_guid': ''},
+            )
 
         if was_created:
             created += 1

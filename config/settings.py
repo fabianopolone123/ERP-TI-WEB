@@ -148,6 +148,9 @@ AD_LDAP_IMPORT_ATTR_MAP = {
     'full_name': 'displayName',
     'role': 'title',
     'department': 'department',
+    'phone': 'telephoneNumber',
+    'mobile': 'mobile',
+    'email': 'mail',
     'guid': 'objectGUID',
     'active': 'userAccountControl',
 }
