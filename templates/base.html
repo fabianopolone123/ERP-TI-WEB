@@ -299,6 +299,33 @@
             color: var(--muted);
         }
 
+        .modal {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+        }
+
+        .modal-backdrop {
+            position: absolute;
+            inset: 0;
+            background: rgba(3, 7, 18, 0.7);
+        }
+
+        .modal-content {
+            position: relative;
+            z-index: 1;
+            background: #0f172a;
+            border: 1px solid #1f2a44;
+            border-radius: 12px;
+            padding: 18px;
+            width: min(860px, 92vw);
+            max-height: 90vh;
+            overflow: auto;
+        }
+
         @media (max-width: 600px) {
             .topbar { flex-direction: column; align-items: flex-start; gap: 10px; }
             .tabs { gap: 6px; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }

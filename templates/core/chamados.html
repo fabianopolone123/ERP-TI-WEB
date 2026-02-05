@@ -18,47 +18,9 @@
     {% if is_ti_group %}
         {% include "core/_tabs.html" %}
 
-        <div class="ticket-form">
-            <h3>Abrir chamado</h3>
-            <form method="post" enctype="multipart/form-data">
-                {% csrf_token %}
-                <div class="form-row">
-                    <div>
-                        <label for="id_title">Título</label>
-                        <input id="id_title" name="title" type="text" required />
-                    </div>
-                    <div>
-                        <label for="id_type">Tipo</label>
-                        <select id="id_type" name="ticket_type" required>
-                            <option value="requisicao">Requisição</option>
-                            <option value="melhoria">Melhoria</option>
-                            <option value="incidente">Incidente</option>
-                            <option value="programado">Programado</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label for="id_urgency">Urgência</label>
-                        <select id="id_urgency" name="urgency" required>
-                            <option value="baixa">Baixa</option>
-                            <option value="normal" selected>Normal</option>
-                            <option value="media">Média</option>
-                            <option value="alta">Alta</option>
-                            <option value="urgente">Urgente</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div style="flex: 2;">
-                        <label for="id_desc">Descrição</label>
-                        <textarea id="id_desc" name="description" rows="3" required></textarea>
-                    </div>
-                    <div>
-                        <label for="id_attach">Anexo</label>
-                        <input id="id_attach" name="attachment" type="file" />
-                    </div>
-                </div>
-                <button type="submit">Abrir chamado</button>
-            </form>
+        <div class="topbar" style="margin-top: 16px;">
+            <h3>Chamados</h3>
+            <button type="button" data-open-modal>Abrir chamado</button>
         </div>
 
         <div class="kanban" data-board>
@@ -129,6 +91,55 @@
     {% endif %}
 </div>
 
+<div class="modal" data-modal hidden>
+    <div class="modal-backdrop" data-close-modal></div>
+    <div class="modal-content">
+        <div class="topbar" style="margin-bottom: 8px;">
+            <h3>Abrir chamado</h3>
+            <button type="button" data-close-modal>Fechar</button>
+        </div>
+        <form method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            <div class="form-row">
+                <div>
+                    <label for="id_title">Título</label>
+                    <input id="id_title" name="title" type="text" required />
+                </div>
+                <div>
+                    <label for="id_type">Tipo</label>
+                    <select id="id_type" name="ticket_type" required>
+                        <option value="requisicao">Requisição</option>
+                        <option value="melhoria">Melhoria</option>
+                        <option value="incidente">Incidente</option>
+                        <option value="programado">Programado</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="id_urgency">Urgência</label>
+                    <select id="id_urgency" name="urgency" required>
+                        <option value="baixa">Baixa</option>
+                        <option value="normal" selected>Normal</option>
+                        <option value="media">Média</option>
+                        <option value="alta">Alta</option>
+                        <option value="urgente">Urgente</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-row">
+                <div style="flex: 2;">
+                    <label for="id_desc">Descrição</label>
+                    <textarea id="id_desc" name="description" rows="3" required></textarea>
+                </div>
+                <div>
+                    <label for="id_attach">Anexo</label>
+                    <input id="id_attach" name="attachment" type="file" />
+                </div>
+            </div>
+            <button type="submit">Abrir chamado</button>
+        </form>
+    </div>
+</div>
+
 <script>
     (function () {
         const board = document.querySelector('[data-board]');
@@ -187,6 +198,25 @@
                 }
             });
         });
+    })();
+</script>
+
+<script>
+    (function () {
+        const modal = document.querySelector('[data-modal]');
+        const openBtn = document.querySelector('[data-open-modal]');
+        const closeEls = document.querySelectorAll('[data-close-modal]');
+        if (!modal || !openBtn) return;
+
+        const open = () => {
+            modal.hidden = false;
+        };
+        const close = () => {
+            modal.hidden = true;
+        };
+
+        openBtn.addEventListener('click', open);
+        closeEls.forEach((el) => el.addEventListener('click', close));
     })();
 </script>
 {% endblock %}
