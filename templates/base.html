@@ -274,6 +274,9 @@
         .ticket-title {
             font-weight: 700;
             margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
 
         .ticket-meta {
@@ -298,6 +301,20 @@
             font-size: 0.85rem;
             color: var(--muted);
         }
+
+        .urgency-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 999px;
+            display: inline-block;
+            flex-shrink: 0;
+        }
+
+        .urgency-baixa { background: #22c55e; }
+        .urgency-normal { background: #38bdf8; }
+        .urgency-media { background: #facc15; }
+        .urgency-alta { background: #f97316; }
+        .urgency-urgente { background: #ef4444; }
 
         .modal {
             position: fixed;

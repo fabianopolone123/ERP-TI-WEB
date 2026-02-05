@@ -29,7 +29,10 @@
                 <div class="kanban-body">
                     {% for ticket in pending_tickets %}
                         <div class="ticket-card" draggable="true" data-ticket-id="{{ ticket.id }}">
-                            <div class="ticket-title">{{ ticket.title }}</div>
+                            <div class="ticket-title">
+                                <span class="urgency-dot urgency-{{ ticket.urgency }}"></span>
+                                {{ ticket.title }}
+                            </div>
                             <div class="ticket-meta">
                                 <span>{{ ticket.get_ticket_type_display }}</span>
                                 <span>{{ ticket.get_urgency_display }}</span>
@@ -52,7 +55,10 @@
                         {% for ticket in in_progress_tickets %}
                             {% if ticket.assigned_to_id == user.id %}
                                 <div class="ticket-card" draggable="true" data-ticket-id="{{ ticket.id }}">
-                                    <div class="ticket-title">{{ ticket.title }}</div>
+                                    <div class="ticket-title">
+                                        <span class="urgency-dot urgency-{{ ticket.urgency }}"></span>
+                                        {{ ticket.title }}
+                                    </div>
                                     <div class="ticket-meta">
                                         <span>{{ ticket.get_ticket_type_display }}</span>
                                         <span>{{ ticket.get_urgency_display }}</span>
@@ -73,7 +79,10 @@
                 <div class="kanban-body">
                     {% for ticket in closed_tickets %}
                         <div class="ticket-card" draggable="true" data-ticket-id="{{ ticket.id }}">
-                            <div class="ticket-title">{{ ticket.title }}</div>
+                            <div class="ticket-title">
+                                <span class="urgency-dot urgency-{{ ticket.urgency }}"></span>
+                                {{ ticket.title }}
+                            </div>
                             <div class="ticket-meta">
                                 <span>{{ ticket.get_ticket_type_display }}</span>
                                 <span>{{ ticket.get_urgency_display }}</span>
