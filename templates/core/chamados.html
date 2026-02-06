@@ -252,6 +252,31 @@
                 <span data-detail-no-attachment>-</span>
             </div>
         </div>
+        {% if is_ti_group %}
+            <form class="ticket-edit" data-edit-form hidden>
+                <div class="form-row">
+                    <div style="flex: 2;">
+                        <label for="id_edit_title">Título</label>
+                        <input id="id_edit_title" name="title" type="text" required />
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div style="flex: 2;">
+                        <label for="id_edit_desc">Descrição</label>
+                        <textarea id="id_edit_desc" name="description" rows="3" required></textarea>
+                    </div>
+                    <div style="align-self: flex-end;">
+                        <button type="submit">Salvar</button>
+                    </div>
+                </div>
+                <div class="muted" style="margin-top: 6px;">
+                    Somente o TI que abriu o chamado pode editar.
+                </div>
+            </form>
+            <div style="margin-top: 12px;">
+                <button type="button" data-edit-toggle hidden>Editar título/descrição</button>
+            </div>
+        {% endif %}
         {% if not is_ti_group %}
             <div style="margin-top: 12px;">
                 <button type="button" data-detail-reopen hidden>Reabrir chamado</button>
@@ -820,6 +845,22 @@
                 if (urgencySelect) urgencySelect.value = data.ticket.urgency_value || 'nao_classificado';
             }
 
+            const editForm = detailsModal.querySelector('[data-edit-form]');
+            const editToggle = detailsModal.querySelector('[data-edit-toggle]');
+            if (editForm && editToggle) {
+                const canEdit = !!data.ticket.can_edit;
+                editForm.hidden = true;
+                editToggle.hidden = !canEdit;
+                const titleInput = editForm.querySelector('input[name="title"]');
+                const descInput = editForm.querySelector('textarea[name="description"]');
+                if (titleInput) titleInput.value = data.ticket.title || '';
+                if (descInput) descInput.value = data.ticket.description || '';
+                editToggle.onclick = () => {
+                    if (!canEdit) return;
+                    editForm.hidden = !editForm.hidden;
+                };
+            }
+
             const detailReopen = detailsModal.querySelector('[data-detail-reopen]');
             if (detailReopen) {
                 const canReopen = data.ticket.status_code === 'fechado';
@@ -923,6 +964,39 @@
                 });
 
                 if (response.ok) {
+                    await loadDetails(currentTicketId);
+                }
+            });
+        }
+
+        const editForm = detailsModal.querySelector('[data-edit-form]');
+        if (editForm) {
+            editForm.addEventListener('submit', async (event) => {
+                event.preventDefault();
+                if (!currentTicketId) return;
+                const formData = new FormData(editForm);
+                formData.append('ticket_id', currentTicketId);
+                const response = await fetch('{% url "chamados_atualizar" %}', {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': getCookie('csrftoken'),
+                    },
+                    body: formData,
+                });
+                if (response.ok) {
+                    const newTitle = (formData.get('title') || '').toString();
+                    const newDesc = (formData.get('description') || '').toString();
+                    setText('[data-detail-title]', newTitle);
+                    setText('[data-detail-description]', newDesc);
+                    document.querySelectorAll(`.ticket-card[data-ticket-id="${currentTicketId}"] .ticket-title`).forEach((el) => {
+                        const prefix = `#${currentTicketId} - ${newTitle}`;
+                        const textNodes = Array.from(el.childNodes).filter((node) => node.nodeType === Node.TEXT_NODE);
+                        if (textNodes.length) {
+                            textNodes[textNodes.length - 1].textContent = ` ${prefix}`;
+                        } else {
+                            el.appendChild(document.createTextNode(` ${prefix}`));
+                        }
+                    });
                     await loadDetails(currentTicketId);
                 }
             });

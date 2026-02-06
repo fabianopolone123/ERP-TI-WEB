@@ -578,6 +578,7 @@ def ticket_detail(request, ticket_id: int):
         else:
             public_messages.append(payload)
 
+    can_edit = is_ti and ticket.created_by_id == request.user.id
     data = {
         'ok': True,
         'ticket': {
@@ -604,6 +605,7 @@ def ticket_detail(request, ticket_id: int):
             or '-',
             'attachment_url': ticket.attachment.url if ticket.attachment else '',
             'created_at': ticket.created_at.strftime('%d/%m/%Y %H:%M'),
+            'can_edit': can_edit,
         },
         'messages': {
             'public': public_messages,
@@ -686,6 +688,30 @@ def ticket_message(request):
         _notify_whatsapp(ticket, event_type=event_type, event_label="Nova mensagem no chamado", extra_line=extra)
     if not internal:
         _notify_ticket_email(ticket, event_label="Nova mensagem no chamado", extra_line=extra)
+    return JsonResponse({'ok': True})
+
+
+@login_required
+@require_POST
+def ticket_update(request):
+    if not is_ti_user(request):
+        return JsonResponse({'ok': False, 'error': 'forbidden'}, status=403)
+
+    ticket_id = request.POST.get('ticket_id')
+    title = (request.POST.get('title') or '').strip()
+    description = (request.POST.get('description') or '').strip()
+    if not ticket_id or not title or not description:
+        return JsonResponse({'ok': False, 'error': 'invalid'}, status=400)
+
+    ticket = Ticket.objects.filter(id=ticket_id).first()
+    if not ticket:
+        return JsonResponse({'ok': False, 'error': 'not_found'}, status=404)
+    if ticket.created_by_id != request.user.id:
+        return JsonResponse({'ok': False, 'error': 'forbidden'}, status=403)
+
+    ticket.title = title
+    ticket.description = description
+    ticket.save(update_fields=['title', 'description', 'updated_at'])
     return JsonResponse({'ok': True})
 
 
