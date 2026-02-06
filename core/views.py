@@ -101,6 +101,12 @@ def _get_whatsapp_settings() -> WhatsAppNotificationSettings:
 
 def _clean_phone(value: str) -> str:
     digits = ''.join(ch for ch in (value or '') if ch.isdigit())
+    if not digits:
+        return ''
+    if digits.startswith('55') and len(digits) in {12, 13}:
+        return digits
+    if len(digits) in {10, 11}:
+        return f'55{digits}'
     return digits
 
 

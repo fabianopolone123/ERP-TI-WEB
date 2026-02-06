@@ -34,6 +34,17 @@ def _last4_digits(value: str) -> str:
     return digits[-4:] if len(digits) >= 4 else digits
 
 
+def _format_br_phone(value: str) -> str:
+    if not value:
+        return ''
+    digits = re.sub(r'\D', '', value)
+    if len(digits) == 11:
+        return f'({digits[:2]}) {digits[2:7]}-{digits[7:]}'
+    if len(digits) == 10:
+        return f'({digits[:2]}) {digits[2:6]}-{digits[6:]}'
+    return value.strip()
+
+
 def import_ad_users() -> tuple[int, int]:
     server_uri = getattr(settings, 'AD_LDAP_SERVER_URI', '')
     base_dn = getattr(settings, 'AD_LDAP_BASE_DN', '')
@@ -59,8 +70,8 @@ def import_ad_users() -> tuple[int, int]:
         department = entry[attr_map['department']].value if attr_map.get('department') in entry else ''
         guid_val = entry[attr_map['guid']].value if attr_map.get('guid') in entry else None
         active_val = entry[attr_map['active']].value if attr_map.get('active') in entry else None
-        phone = entry[attr_map['phone']].value if attr_map.get('phone') in entry else ''
-        mobile = entry[attr_map['mobile']].value if attr_map.get('mobile') in entry else ''
+        phone_raw = entry[attr_map['phone']].value if attr_map.get('phone') in entry else ''
+        mobile_raw = entry[attr_map['mobile']].value if attr_map.get('mobile') in entry else ''
         email = entry[attr_map['email']].value if attr_map.get('email') in entry else ''
 
         if not username:
@@ -68,7 +79,9 @@ def import_ad_users() -> tuple[int, int]:
 
         guid = _guid_to_str(guid_val)
         is_active = _is_active_from_uac(active_val)
-        extension = _last4_digits(phone)
+        phone = _format_br_phone(phone_raw)
+        mobile = _format_br_phone(mobile_raw)
+        extension = _last4_digits(phone_raw)
 
         defaults = {
             'full_name': full_name or username,
