@@ -86,9 +86,10 @@ def _resolve_group_members(conn: Connection, group_name: str) -> list[tuple[str,
     if not conn.entries:
         return []
     group_dn = conn.entries[0].distinguishedName.value
+    safe_group_dn = escape_filter_chars(group_dn)
     user_filter = (
         '(&(objectCategory=person)(objectClass=user)'
-        f'(memberOf:1.2.840.113556.1.4.1941:={group_dn}))'
+        f'(memberOf:1.2.840.113556.1.4.1941:={safe_group_dn}))'
     )
     conn.search(
         search_base=base_dn,
