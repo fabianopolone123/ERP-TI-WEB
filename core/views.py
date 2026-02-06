@@ -549,6 +549,7 @@ def ticket_detail(request, ticket_id: int):
             'urgency': ticket.get_urgency_display(),
             'urgency_value': ticket.urgency,
             'status': ticket.get_status_display(),
+            'status_code': ticket.status,
             'created_by': ticket.created_by.username if ticket.created_by else '-',
             'resolution': ticket.resolution,
             'assignees': ', '.join(
@@ -642,6 +643,28 @@ def ticket_message(request):
         _notify_ticket_email(ticket, event_label="Nova mensagem no chamado", extra_line=extra)
     return JsonResponse({'ok': True})
 
+
+@login_required
+@require_POST
+def ticket_reopen(request):
+    ticket_id = request.POST.get('ticket_id')
+    if not ticket_id:
+        return JsonResponse({'ok': False, 'error': 'invalid'}, status=400)
+
+    ticket = Ticket.objects.filter(id=ticket_id).first()
+    if not ticket:
+        return JsonResponse({'ok': False, 'error': 'not_found'}, status=404)
+
+    is_ti = is_ti_user(request)
+    if not is_ti and ticket.created_by_id != request.user.id:
+        return JsonResponse({'ok': False, 'error': 'forbidden'}, status=403)
+
+    if ticket.status == Ticket.Status.FECHADO:
+        ticket.status = Ticket.Status.PENDENTE
+        ticket.save(update_fields=['status', 'updated_at'])
+        _notify_whatsapp(ticket, event_type="status", event_label="Status atualizado", extra_line="Status atual: Pendente")
+        _notify_ticket_email(ticket, event_label="Status atualizado", extra_line="Status atual: Pendente")
+    return JsonResponse({'ok': True})
 
 @login_required
 @require_POST

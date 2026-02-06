@@ -126,6 +126,7 @@
                             <div class="ticket-title">
                                 <span class="urgency-dot urgency-{{ ticket.urgency }}"></span>
                                 #{{ ticket.id }} - {{ ticket.title }}
+                                <span class="status-pill status-{{ ticket.status }}">{{ ticket.get_status_display }}</span>
                             </div>
                             <div class="ticket-meta">
                                 {{ ticket_meta|get_item:ticket.id|default:""|get_item:'requester' }}
@@ -136,6 +137,11 @@
                                     - {{ ticket_meta|get_item:ticket.id|default:""|get_item:'description' }}
                                 {% endif %}
                             </div>
+                            {% if ticket.status == 'fechado' %}
+                                <div class="ticket-meta" style="margin-top: 6px;">
+                                    <button type="button" data-reopen-ticket data-ticket-id="{{ ticket.id }}">Reabrir chamado</button>
+                                </div>
+                            {% endif %}
                         </div>
                     {% endfor %}
                 </div>
@@ -246,6 +252,11 @@
                 <span data-detail-no-attachment>-</span>
             </div>
         </div>
+        {% if not is_ti_group %}
+            <div style="margin-top: 12px;">
+                <button type="button" data-detail-reopen hidden>Reabrir chamado</button>
+            </div>
+        {% endif %}
         {% if is_ti_group %}
             <form class="ticket-reclassify" data-reclassify-form>
                 <div class="form-row">
@@ -786,6 +797,28 @@
             }
         };
 
+
+            const detailReopen = detailsModal.querySelector('[data-detail-reopen]');
+            if (detailReopen) {
+                const canReopen = data.ticket.status_code === 'fechado';
+                detailReopen.hidden = !canReopen;
+                detailReopen.onclick = async () => {
+                    if (!currentTicketId) return;
+                    const response = await fetch('{% url "chamados_reabrir" %}', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                            'X-CSRFToken': getCookie('csrftoken'),
+                        },
+                        body: new URLSearchParams({ ticket_id: currentTicketId }),
+                    });
+                    if (response.ok) {
+                        await loadDetails(currentTicketId);
+                        window.location.reload();
+                    }
+                };
+            }
+
         const openDetails = async (ticketId) => {
             currentTicketId = ticketId;
             detailsModal.hidden = false;
@@ -805,6 +838,27 @@
         });
 
         closeButtons.forEach((btn) => btn.addEventListener('click', closeDetails));
+
+
+        const reopenButtons = document.querySelectorAll('[data-reopen-ticket]');
+        reopenButtons.forEach((btn) => {
+            btn.addEventListener('click', async (event) => {
+                event.preventDefault();
+                const ticketId = btn.dataset.ticketId;
+                if (!ticketId) return;
+                const response = await fetch('{% url "chamados_reabrir" %}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'X-CSRFToken': getCookie('csrftoken'),
+                    },
+                    body: new URLSearchParams({ ticket_id: ticketId }),
+                });
+                if (response.ok) {
+                    window.location.reload();
+                }
+            });
+        });
 
         detailsModal.querySelectorAll('[data-chat-form]').forEach((form) => {
             form.addEventListener('submit', async (event) => {

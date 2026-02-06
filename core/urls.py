@@ -13,6 +13,7 @@ from .views import (
     email_templates_update,
     whatsapp_templates_update,
     whatsapp_settings_update,
+    ticket_reopen,
 )
 
 urlpatterns = [
@@ -27,5 +28,6 @@ urlpatterns = [
     path('chamados/email-templates/', email_templates_update, name='chamados_email_templates'),
     path('chamados/whatsapp-templates/', whatsapp_templates_update, name='chamados_whatsapp_templates'),
     path('chamados/whatsapp-settings/', whatsapp_settings_update, name='chamados_whatsapp_settings'),
+    path('chamados/reabrir/', ticket_reopen, name='chamados_reabrir'),
     path('', DashboardView.as_view(), name='dashboard'),
 ]
