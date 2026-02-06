@@ -16,6 +16,25 @@ class ERPUser(models.Model):
         return self.full_name
 
 
+class Equipment(models.Model):
+    sector = models.CharField(max_length=120, blank=True, default='')
+    user = models.CharField(max_length=200, blank=True, default='')
+    equipment = models.CharField(max_length=120, blank=True, default='')
+    model = models.CharField(max_length=120, blank=True, default='')
+    brand = models.CharField(max_length=120, blank=True, default='')
+    serial = models.CharField(max_length=120, blank=True, default='')
+    memory = models.CharField(max_length=60, blank=True, default='')
+    processor = models.CharField(max_length=120, blank=True, default='')
+    generation = models.CharField(max_length=60, blank=True, default='')
+    hd = models.CharField(max_length=120, blank=True, default='')
+    mod_hd = models.CharField(max_length=120, blank=True, default='')
+    windows = models.CharField(max_length=120, blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self) -> str:
+        return f'{self.equipment} - {self.user}'
+
+
 class Ticket(models.Model):
     class TicketType(models.TextChoices):
         NAO_CLASSIFICADO = 'nao_classificado', 'Não classificado'

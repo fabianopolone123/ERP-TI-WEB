@@ -17,6 +17,7 @@ from django.contrib.auth import views as auth_views
 from .ldap_importer import import_ad_users
 from .models import (
     ERPUser,
+    Equipment,
     Ticket,
     TicketMessage,
     WhatsAppTemplate,
@@ -45,7 +46,7 @@ DEFAULT_WA_TEMPLATES = {
 ERP_MODULES = [
     {'slug': 'usuarios', 'label': 'Usuários', 'url_name': 'usuarios'},
     {'slug': 'acessos', 'label': 'Acessos', 'url_name': None},
-    {'slug': 'equipamentos', 'label': 'Equipamentos', 'url_name': None},
+    {'slug': 'equipamentos', 'label': 'Equipamentos', 'url_name': 'equipamentos'},
     {'slug': 'ips', 'label': 'IPs', 'url_name': None},
     {'slug': 'emails', 'label': 'Emails', 'url_name': None},
     {'slug': 'ramais', 'label': 'Ramais', 'url_name': None},
@@ -301,6 +302,40 @@ class UsersListView(LoginRequiredMixin, TemplateView):
             queryset = queryset.filter(is_active=True)
         context['show_inactive'] = show_inactive
         context['users'] = queryset.order_by('full_name')
+        return context
+
+
+class EquipamentosView(LoginRequiredMixin, TemplateView):
+    template_name = 'core/equipamentos.html'
+
+    def post(self, request, *args, **kwargs):
+        if not is_ti_user(request):
+            messages.error(request, 'Apenas usuários do departamento TI podem cadastrar equipamentos.')
+            return self.get(request, *args, **kwargs)
+
+        Equipment.objects.create(
+            sector=request.POST.get('sector', '').strip(),
+            user=request.POST.get('user', '').strip(),
+            equipment=request.POST.get('equipment', '').strip(),
+            model=request.POST.get('model', '').strip(),
+            brand=request.POST.get('brand', '').strip(),
+            serial=request.POST.get('serial', '').strip(),
+            memory=request.POST.get('memory', '').strip(),
+            processor=request.POST.get('processor', '').strip(),
+            generation=request.POST.get('generation', '').strip(),
+            hd=request.POST.get('hd', '').strip(),
+            mod_hd=request.POST.get('mod_hd', '').strip(),
+            windows=request.POST.get('windows', '').strip(),
+        )
+        messages.success(request, 'Equipamento cadastrado com sucesso.')
+        return self.get(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        is_ti = is_ti_user(self.request)
+        context['is_ti_group'] = is_ti
+        context['modules'] = build_modules('equipamentos') if is_ti else []
+        context['equipments'] = Equipment.objects.all().order_by('-created_at')
         return context
 
 
