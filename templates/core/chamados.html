@@ -366,6 +366,22 @@
     </div>
 {% endif %}
 
+
+<div class="modal" data-resolution-modal hidden>
+    <div class="modal-backdrop" data-close-resolution></div>
+    <div class="modal-content">
+        <div class="topbar" style="margin-bottom: 8px;">
+            <h3>Finalizar chamado</h3>
+            <button type="button" data-close-resolution>Fechar</button>
+        </div>
+        <form data-resolution-form>
+            <label for="id_resolution_text">Resolução</label>
+            <textarea id="id_resolution_text" name="resolution" rows="4" placeholder="Descreva a resolução..." required></textarea>
+            <button type="submit">Salvar resolução e finalizar</button>
+        </form>
+    </div>
+</div>
+
 <script>
     (function () {
         const board = document.querySelector('[data-board]');
@@ -382,6 +398,23 @@
         let draggingCard = null;
         let sourceColumn = null;
         let draggingMulti = false;
+        let pendingClose = null;
+
+        const resolutionModal = document.querySelector('[data-resolution-modal]');
+        const resolutionForm = document.querySelector('[data-resolution-form]');
+        const resolutionInput = document.querySelector('#id_resolution_text');
+        const closeResolutionEls = document.querySelectorAll('[data-close-resolution]');
+        const closedBody = document.querySelector('[data-target="fechado"] .kanban-body');
+
+        const closeResolutionModal = () => {
+            if (!resolutionModal) return;
+            resolutionModal.hidden = true;
+            if (resolutionInput) resolutionInput.value = '';
+            pendingClose = null;
+        };
+
+        closeResolutionEls.forEach((el) => el.addEventListener('click', closeResolutionModal));
+
 
         board.addEventListener('dragstart', (event) => {
             const card = event.target.closest('.ticket-card');
@@ -489,6 +522,42 @@
                 draggingId = null;
             });
         });
+
+        if (resolutionForm) {
+            resolutionForm.addEventListener('submit', async (event) => {
+                event.preventDefault();
+                if (!pendingClose) return;
+                const resolutionText = (resolutionInput?.value || '').trim();
+                if (!resolutionText) return;
+
+                const response = await fetch('{% url "chamados_mover" %}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'X-CSRFToken': getCookie('csrftoken'),
+                    },
+                    body: new URLSearchParams({
+                        ticket_id: pendingClose.ticketId,
+                        target: 'fechado',
+                        multi: '0',
+                        resolution: resolutionText,
+                    }),
+                });
+
+                if (!response.ok) {
+                    closeResolutionModal();
+                    return;
+                }
+
+                pendingClose.targetBody.appendChild(pendingClose.card);
+                board.querySelectorAll(`.ticket-card[data-ticket-id="${pendingClose.ticketId}"]`).forEach((card) => {
+                    if (card !== pendingClose.card) {
+                        card.remove();
+                    }
+                });
+                closeResolutionModal();
+            });
+        }
     })();
 </script>
 
