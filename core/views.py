@@ -1,4 +1,7 @@
-﻿from django.contrib import messages
+﻿import logging
+from textwrap import shorten
+from django.conf import settings
+from django.contrib import messages
 from django.shortcuts import redirect
 from django.utils import timezone
 from datetime import timedelta
@@ -12,6 +15,10 @@ from django.contrib.auth import views as auth_views
 
 from .ldap_importer import import_ad_users
 from .models import ERPUser, Ticket, TicketMessage
+from .wapi import send_whatsapp_message
+
+logger = logging.getLogger(__name__)
+TI_CHAMADOS_GROUP_JID = getattr(settings, "WAPI_DEFAULT_GROUP_JID", "")
 
 ERP_MODULES = [
     {'slug': 'usuarios', 'label': 'Usuários', 'url_name': 'usuarios'},
@@ -42,6 +49,30 @@ def build_modules(active_slug: str | None) -> list[dict[str, str | bool]]:
             }
         )
     return modules
+
+
+def _build_whatsapp_summary(ticket, event_label="Novo chamado", extra_line=None):
+    label = (event_label or "").strip().lower()
+    title = shorten((ticket.title or "").strip(), width=120, placeholder='...')
+    description = shorten((ticket.description or "").strip(), width=160, placeholder='...')
+    detail = shorten(((extra_line or "").replace('\n', ' ')).strip(), width=180, placeholder='...')
+
+    if 'nova mensagem' in label:
+        return f"Nova mensagem no chamado: {detail or description or title}"
+    if 'status atualizado' in label or 'atualizado' in label:
+        return f"Status atualizado: {detail or ticket.get_status_display()}"
+    return f"Novo chamado: {title} | Mensagem: {description or '-'}"
+
+
+def _notify_whatsapp(ticket, event_label="Novo chamado", extra_line=None):
+    if not TI_CHAMADOS_GROUP_JID:
+        return
+    summary = _build_whatsapp_summary(ticket, event_label=event_label, extra_line=extra_line)
+    try:
+        send_whatsapp_message(TI_CHAMADOS_GROUP_JID, summary)
+    except Exception:
+        logger.exception("Nao foi possivel notificar o grupo WhatsApp %s", TI_CHAMADOS_GROUP_JID)
+
 
 
 def is_ti_user(request) -> bool:
@@ -150,7 +181,7 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
             messages.info(request, 'Chamado id?ntico detectado recentemente. N?o foi criado novamente.')
             return redirect('chamados')
 
-        Ticket.objects.create(
+        ticket = Ticket.objects.create(
             title=title,
             description=description,
             ticket_type=ticket_type,
@@ -159,6 +190,7 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
             created_by=request.user,
             attachment=attachment,
         )
+        _notify_whatsapp(ticket)
         messages.success(request, 'Chamado aberto com sucesso.')
         return redirect('chamados')
 
@@ -214,12 +246,14 @@ def move_ticket(request):
         ticket.assigned_to = None
         ticket.save()
         ticket.collaborators.clear()
+        _notify_whatsapp(ticket, event_label="Status atualizado", extra_line="Status atual: Pendente")
         return JsonResponse({'ok': True})
     if target == 'fechado':
         ticket.status = Ticket.Status.FECHADO
         ticket.assigned_to = None
         ticket.save()
         ticket.collaborators.clear()
+        _notify_whatsapp(ticket, event_label="Status atualizado", extra_line="Status atual: Fechado")
         return JsonResponse({'ok': True})
     if target.startswith('user_'):
         user_id = target.replace('user_', '')
@@ -234,6 +268,11 @@ def move_ticket(request):
             ticket.assigned_to = assignee
             ticket.save()
             ticket.collaborators.clear()
+        _notify_whatsapp(
+            ticket,
+            event_label="Status atualizado",
+            extra_line=f"Status atual: Em atendimento | Responsavel: {assignee.full_name}",
+        )
         return JsonResponse({'ok': True})
 
     return JsonResponse({'ok': False, 'error': 'invalid_target'}, status=400)
@@ -360,11 +399,17 @@ def ticket_message(request):
     if not message and not attachment:
         return JsonResponse({'ok': False, 'error': 'empty'}, status=400)
 
-    TicketMessage.objects.create(
+    ticket_message = TicketMessage.objects.create(
         ticket=ticket,
         created_by=request.user,
         message=message,
         is_internal=internal,
         attachment=attachment,
     )
+    author_name = request.user.username
+    preview = shorten(message.strip(), width=120, placeholder='...') if message else 'Anexo enviado'
+    extra = f"Mensagem de {author_name}: {preview}"
+    if internal:
+        extra = f"(Interno) {extra}"
+    _notify_whatsapp(ticket, event_label="Nova mensagem no chamado", extra_line=extra)
     return JsonResponse({'ok': True})

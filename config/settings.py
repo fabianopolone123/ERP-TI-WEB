@@ -168,6 +168,9 @@ AD_LDAP_IMPORT_ATTR_MAP = {
     'active': 'userAccountControl',
 }
 
+# WhatsApp (WAPI)
+WAPI_DEFAULT_GROUP_JID = os.environ.get('WAPI_DEFAULT_GROUP_JID', '')
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
