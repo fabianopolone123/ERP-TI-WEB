@@ -52,12 +52,12 @@
                             </div>
                             {% if is_ti_group %}
                                 <div class="ticket-meta">
-                                    {{ ticket_meta|get_item:ticket.id|default:{}|get_item:'requester' }}
-                                    {% if ticket_meta|get_item:ticket.id|default:{}|get_item:'department' %}
-                                        - {{ ticket_meta|get_item:ticket.id|default:{}|get_item:'department' }}
+                                    {{ ticket_meta|get_item:ticket.id|default:""|get_item:'requester' }}
+                                    {% if ticket_meta|get_item:ticket.id|default:""|get_item:'department' %}
+                                        - {{ ticket_meta|get_item:ticket.id|default:""|get_item:'department' }}
                                     {% endif %}
-                                    {% if ticket_meta|get_item:ticket.id|default:{}|get_item:'description' %}
-                                        - {{ ticket_meta|get_item:ticket.id|default:{}|get_item:'description' }}
+                                    {% if ticket_meta|get_item:ticket.id|default:""|get_item:'description' %}
+                                        - {{ ticket_meta|get_item:ticket.id|default:""|get_item:'description' }}
                                     {% endif %}
                                 </div>
                             {% endif %}
@@ -100,12 +100,12 @@
                                 #{{ ticket.id }} - {{ ticket.title }}
                             </div>
                             <div class="ticket-meta">
-                                {{ ticket_meta|get_item:ticket.id|default:{}|get_item:'requester' }}
-                                {% if ticket_meta|get_item:ticket.id|default:{}|get_item:'department' %}
-                                    - {{ ticket_meta|get_item:ticket.id|default:{}|get_item:'department' }}
+                                {{ ticket_meta|get_item:ticket.id|default:""|get_item:'requester' }}
+                                {% if ticket_meta|get_item:ticket.id|default:""|get_item:'department' %}
+                                    - {{ ticket_meta|get_item:ticket.id|default:""|get_item:'department' }}
                                 {% endif %}
-                                {% if ticket_meta|get_item:ticket.id|default:{}|get_item:'description' %}
-                                    - {{ ticket_meta|get_item:ticket.id|default:{}|get_item:'description' }}
+                                {% if ticket_meta|get_item:ticket.id|default:""|get_item:'description' %}
+                                    - {{ ticket_meta|get_item:ticket.id|default:""|get_item:'description' }}
                                 {% endif %}
                             </div>
                         </div>
@@ -130,12 +130,12 @@
                                 #{{ ticket.id }} - {{ ticket.title }}
                             </div>
                             <div class="ticket-meta">
-                                {{ ticket_meta|get_item:ticket.id|default:{}|get_item:'requester' }}
-                                {% if ticket_meta|get_item:ticket.id|default:{}|get_item:'department' %}
-                                    - {{ ticket_meta|get_item:ticket.id|default:{}|get_item:'department' }}
+                                {{ ticket_meta|get_item:ticket.id|default:""|get_item:'requester' }}
+                                {% if ticket_meta|get_item:ticket.id|default:""|get_item:'department' %}
+                                    - {{ ticket_meta|get_item:ticket.id|default:""|get_item:'department' }}
                                 {% endif %}
-                                {% if ticket_meta|get_item:ticket.id|default:{}|get_item:'description' %}
-                                    - {{ ticket_meta|get_item:ticket.id|default:{}|get_item:'description' }}
+                                {% if ticket_meta|get_item:ticket.id|default:""|get_item:'description' %}
+                                    - {{ ticket_meta|get_item:ticket.id|default:""|get_item:'description' }}
                                 {% endif %}
                             </div>
                         </div>
