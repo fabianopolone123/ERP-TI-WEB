@@ -43,10 +43,6 @@
                     {% for ticket in pending_tickets %}
                         <div class="ticket-card" draggable="true" data-ticket-id="{{ ticket.id }}">
                             <div class="ticket-title">
-                                <label class="ticket-multi">
-                                    <input type="checkbox" class="ticket-multi-check" />
-                                    Multi
-                                </label>
                                 <span class="urgency-dot urgency-{{ ticket.urgency }}"></span>
                                 #{{ ticket.id }} - {{ ticket.title }}
                             </div>
@@ -73,10 +69,6 @@
                         {% for ticket in user_tickets|get_item:user.id %}
                             <div class="ticket-card" draggable="true" data-ticket-id="{{ ticket.id }}">
                                 <div class="ticket-title">
-                                    <label class="ticket-multi">
-                                        <input type="checkbox" class="ticket-multi-check" />
-                                        Multi
-                                    </label>
                                     <span class="urgency-dot urgency-{{ ticket.urgency }}"></span>
                                     #{{ ticket.id }} - {{ ticket.title }}
                                 </div>
@@ -92,10 +84,6 @@
                     {% for ticket in closed_tickets %}
                         <div class="ticket-card" draggable="true" data-ticket-id="{{ ticket.id }}">
                             <div class="ticket-title">
-                                <label class="ticket-multi">
-                                    <input type="checkbox" class="ticket-multi-check" />
-                                    Multi
-                                </label>
                                 <span class="urgency-dot urgency-{{ ticket.urgency }}"></span>
                                 #{{ ticket.id }} - {{ ticket.title }}
                             </div>
@@ -451,8 +439,7 @@
             draggingId = card.dataset.ticketId;
             draggingCard = card;
             sourceColumn = card.closest('.kanban-column');
-            const multiCheck = card.querySelector('.ticket-multi-check');
-            draggingMulti = multiCheck ? multiCheck.checked : false;
+            draggingMulti = !!(event.ctrlKey || event.metaKey);
             card.classList.add('dragging');
         });
 
@@ -511,8 +498,6 @@
 
                 if (shouldClone) {
                     movedCard = draggingCard.cloneNode(true);
-                    const cloneCheck = movedCard.querySelector('.ticket-multi-check');
-                    if (cloneCheck) cloneCheck.checked = false;
                 }
 
                 targetBody.appendChild(movedCard);
@@ -765,8 +750,7 @@
 
         clickRoot.addEventListener('click', (event) => {
             if (dragging) return;
-            if (event.target.closest('.ticket-multi')) return;
-            const card = event.target.closest('.ticket-card');
+                        const card = event.target.closest('.ticket-card');
             if (!card) return;
             openDetails(card.dataset.ticketId);
         });
