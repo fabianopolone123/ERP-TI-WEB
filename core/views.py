@@ -199,6 +199,7 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
         is_ti = is_ti_user(self.request)
         context['is_ti_group'] = is_ti
         context['modules'] = build_modules('chamados') if is_ti else []
+        context['whatsapp_group'] = TI_CHAMADOS_GROUP_JID
         if not is_ti:
             context['own_tickets'] = (
                 Ticket.objects.filter(created_by=self.request.user).order_by('-created_at')

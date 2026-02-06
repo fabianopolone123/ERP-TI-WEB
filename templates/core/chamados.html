@@ -110,7 +110,14 @@
     <div class="modal-content">
         <div class="topbar" style="margin-bottom: 8px;">
             <h3>Abrir chamado</h3>
-            <button type="button" data-close-modal>Fechar</button>
+            <div style="display: flex; gap: 8px; align-items: center;">
+                {% if is_ti_group and whatsapp_group %}
+                    <button type="button" class="whatsapp-chip" title="Grupo configurado para notificações">
+                        WhatsApp: {{ whatsapp_group }}
+                    </button>
+                {% endif %}
+                <button type="button" data-close-modal>Fechar</button>
+            </div>
         </div>
         <form method="post" enctype="multipart/form-data">
             {% csrf_token %}
