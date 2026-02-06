@@ -21,6 +21,14 @@ call "%ROOT%.venv\Scripts\activate.bat"
 "%ROOT%.venv\Scripts\python.exe" -m pip install --upgrade pip
 "%ROOT%.venv\Scripts\python.exe" -m pip install -r requirements.txt
 
+"%ROOT%.venv\Scripts\python.exe" -c "from config import settings; import sys; sys.exit(0 if settings.AD_LDAP_BIND_PASSWORD else 2)"
+if errorlevel 1 (
+  echo [ERRO] ERP_LDAP_BIND_PASSWORD nao encontrado no .env
+  echo Crie o arquivo .env com: ERP_LDAP_BIND_PASSWORD=SUASENHA
+  pause
+  exit /b 1
+)
+
 "%ROOT%.venv\Scripts\python.exe" manage.py runserver 0.0.0.0:8000
 if errorlevel 1 (
   echo.
