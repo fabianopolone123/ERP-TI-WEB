@@ -15,7 +15,15 @@ from django.views.generic import TemplateView
 from django.contrib.auth import views as auth_views
 
 from .ldap_importer import import_ad_users
-from .models import ERPUser, Ticket, TicketMessage, WhatsAppTemplate, EmailTemplate
+from .models import (
+    ERPUser,
+    Ticket,
+    TicketMessage,
+    WhatsAppTemplate,
+    EmailTemplate,
+    WhatsAppNotificationSettings,
+    WhatsAppOptOut,
+)
 from .wapi import send_whatsapp_message
 
 logger = logging.getLogger(__name__)
@@ -86,6 +94,42 @@ def _get_email_templates() -> EmailTemplate:
     return template
 
 
+def _get_whatsapp_settings() -> WhatsAppNotificationSettings:
+    settings_obj, _ = WhatsAppNotificationSettings.objects.get_or_create(pk=1)
+    return settings_obj
+
+
+def _clean_phone(value: str) -> str:
+    digits = ''.join(ch for ch in (value or '') if ch.isdigit())
+    return digits
+
+
+def _get_attendant_numbers(ticket: Ticket) -> list[str]:
+    users = []
+    if ticket.assigned_to:
+        users.append(ticket.assigned_to)
+    users.extend(list(ticket.collaborators.all()))
+
+    if not users:
+        return []
+
+    opt_out_ids = set(WhatsAppOptOut.objects.values_list('user_id', flat=True))
+    numbers = []
+    seen = set()
+    for user in users:
+        if user.id in opt_out_ids:
+            continue
+        phone = user.mobile or user.phone or ''
+        phone = _clean_phone(phone)
+        if not phone:
+            continue
+        if phone in seen:
+            continue
+        seen.add(phone)
+        numbers.append(phone)
+    return numbers
+
+
 def _build_whatsapp_summary(ticket, event_label="Novo chamado", extra_line=None):
     label = (event_label or "").strip().lower()
     title = shorten((ticket.title or "").strip(), width=120, placeholder='...')
@@ -111,14 +155,37 @@ def _build_whatsapp_summary(ticket, event_label="Novo chamado", extra_line=None)
     return (templates.new_ticket or DEFAULT_WA_TEMPLATES['new_ticket']).format_map(payload)
 
 
-def _notify_whatsapp(ticket, event_label="Novo chamado", extra_line=None):
-    if not TI_CHAMADOS_GROUP_JID:
-        return
+def _notify_whatsapp(ticket, event_type="new_ticket", event_label="Novo chamado", extra_line=None):
+    settings_obj = _get_whatsapp_settings()
     summary = _build_whatsapp_summary(ticket, event_label=event_label, extra_line=extra_line)
-    try:
-        send_whatsapp_message(TI_CHAMADOS_GROUP_JID, summary)
-    except Exception:
-        logger.exception("Nao foi possivel notificar o grupo WhatsApp %s", TI_CHAMADOS_GROUP_JID)
+
+    send_group = False
+    send_individual = False
+    if event_type == "new_ticket":
+        send_group = settings_obj.send_group_on_new_ticket
+        send_individual = settings_obj.send_individual_on_new_ticket
+    elif event_type == "assignment":
+        send_group = settings_obj.send_group_on_assignment
+        send_individual = settings_obj.send_individual_on_assignment
+    elif event_type == "status":
+        send_group = settings_obj.send_group_on_status
+        send_individual = settings_obj.send_individual_on_status
+    elif event_type == "message":
+        send_group = settings_obj.send_group_on_message
+        send_individual = settings_obj.send_individual_on_message
+
+    if send_group and TI_CHAMADOS_GROUP_JID:
+        try:
+            send_whatsapp_message(TI_CHAMADOS_GROUP_JID, summary)
+        except Exception:
+            logger.exception("Nao foi possivel notificar o grupo WhatsApp %s", TI_CHAMADOS_GROUP_JID)
+
+    if send_individual:
+        for phone in _get_attendant_numbers(ticket):
+            try:
+                send_whatsapp_message(phone, summary)
+            except Exception:
+                logger.exception("Nao foi possivel notificar o atendente %s", phone)
 
 
 def _notify_ticket_email(ticket, event_label="Novo chamado", extra_line=None):
@@ -276,7 +343,7 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
             created_by=request.user,
             attachment=attachment,
         )
-        _notify_whatsapp(ticket)
+        _notify_whatsapp(ticket, event_type="new_ticket", event_label="Novo chamado")
         messages.success(request, 'Chamado aberto com sucesso.')
         return redirect('chamados')
 
@@ -293,6 +360,17 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
                 'status_update': templates.status_update,
                 'new_message': templates.new_message,
             }
+            wa_settings = _get_whatsapp_settings()
+            context['wa_settings'] = {
+                'send_group_on_new_ticket': wa_settings.send_group_on_new_ticket,
+                'send_group_on_assignment': wa_settings.send_group_on_assignment,
+                'send_group_on_status': wa_settings.send_group_on_status,
+                'send_group_on_message': wa_settings.send_group_on_message,
+                'send_individual_on_new_ticket': wa_settings.send_individual_on_new_ticket,
+                'send_individual_on_assignment': wa_settings.send_individual_on_assignment,
+                'send_individual_on_status': wa_settings.send_individual_on_status,
+                'send_individual_on_message': wa_settings.send_individual_on_message,
+            }
             email_templates = _get_email_templates()
             context['email_templates'] = {
                 'new_ticket_subject': email_templates.new_ticket_subject,
@@ -302,6 +380,21 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
                 'new_message_subject': email_templates.new_message_subject,
                 'new_message_body': email_templates.new_message_body,
             }
+            ti_users_list = list(ERPUser.objects.filter(department__iexact='TI', is_active=True).order_by('full_name'))
+            opt_out_ids = set(WhatsAppOptOut.objects.values_list('user_id', flat=True))
+            contacts = []
+            for user in ti_users_list:
+                phone = user.mobile or user.phone or ''
+                contacts.append(
+                    {
+                        'id': user.id,
+                        'name': user.full_name,
+                        'department': user.department,
+                        'phone': phone,
+                        'opt_out': user.id in opt_out_ids,
+                    }
+                )
+            context['wa_contacts'] = contacts
         if not is_ti:
             context['own_tickets'] = (
                 Ticket.objects.filter(created_by=self.request.user).order_by('-created_at')
@@ -367,7 +460,7 @@ def move_ticket(request):
         ticket.assigned_to = None
         ticket.save()
         ticket.collaborators.clear()
-        _notify_whatsapp(ticket, event_label="Status atualizado", extra_line="Status atual: Pendente")
+        _notify_whatsapp(ticket, event_type="status", event_label="Status atualizado", extra_line="Status atual: Pendente")
         _notify_ticket_email(ticket, event_label="Status atualizado", extra_line="Status atual: Pendente")
         return JsonResponse({'ok': True})
     if target == 'fechado':
@@ -379,7 +472,7 @@ def move_ticket(request):
         ticket.resolution = resolution
         ticket.save()
         ticket.collaborators.clear()
-        _notify_whatsapp(ticket, event_label="Status atualizado", extra_line="Status atual: Fechado")
+        _notify_whatsapp(ticket, event_type="status", event_label="Status atualizado", extra_line="Status atual: Fechado")
         _notify_ticket_email(ticket, event_label="Status atualizado", extra_line="Status atual: Fechado")
         return JsonResponse({'ok': True})
     if target.startswith('user_'):
@@ -397,6 +490,7 @@ def move_ticket(request):
             ticket.collaborators.clear()
         _notify_whatsapp(
             ticket,
+            event_type="assignment",
             event_label="Status atualizado",
             extra_line=f"Status atual: Em atendimento | Responsável: {assignee.full_name}",
         )
@@ -544,7 +638,7 @@ def ticket_message(request):
     extra = f"Mensagem de {author_name}: {preview}"
     if internal:
         extra = f"(Interno) {extra}"
-    _notify_whatsapp(ticket, event_label="Nova mensagem no chamado", extra_line=extra)
+    _notify_whatsapp(ticket, event_type="message", event_label="Nova mensagem no chamado", extra_line=extra)
     if not internal:
         _notify_ticket_email(ticket, event_label="Nova mensagem no chamado", extra_line=extra)
     return JsonResponse({'ok': True})
@@ -562,6 +656,43 @@ def whatsapp_templates_update(request):
     template.new_message = (request.POST.get('template_new_message') or '').strip() or DEFAULT_WA_TEMPLATES['new_message']
     template.save()
     messages.success(request, 'Templates de WhatsApp atualizados.')
+    return redirect('chamados')
+
+
+@login_required
+@require_POST
+def whatsapp_settings_update(request):
+    if not is_ti_user(request):
+        return JsonResponse({'ok': False, 'error': 'forbidden'}, status=403)
+
+    settings_obj = _get_whatsapp_settings()
+    settings_obj.send_group_on_new_ticket = bool(request.POST.get('send_group_on_new_ticket'))
+    settings_obj.send_group_on_assignment = bool(request.POST.get('send_group_on_assignment'))
+    settings_obj.send_group_on_status = bool(request.POST.get('send_group_on_status'))
+    settings_obj.send_group_on_message = bool(request.POST.get('send_group_on_message'))
+    settings_obj.send_individual_on_new_ticket = bool(request.POST.get('send_individual_on_new_ticket'))
+    settings_obj.send_individual_on_assignment = bool(request.POST.get('send_individual_on_assignment'))
+    settings_obj.send_individual_on_status = bool(request.POST.get('send_individual_on_status'))
+    settings_obj.send_individual_on_message = bool(request.POST.get('send_individual_on_message'))
+    settings_obj.save()
+    messages.success(request, 'Regras de notificação WhatsApp atualizadas.')
+    return redirect('chamados')
+
+
+@login_required
+@require_POST
+def whatsapp_optout_update(request):
+    if not is_ti_user(request):
+        return JsonResponse({'ok': False, 'error': 'forbidden'}, status=403)
+
+    selected = set(request.POST.getlist('optout_users'))
+    selected_ids = {int(value) for value in selected if value.isdigit()}
+
+    WhatsAppOptOut.objects.exclude(user_id__in=selected_ids).delete()
+    for user_id in selected_ids:
+        WhatsAppOptOut.objects.get_or_create(user_id=user_id)
+
+    messages.success(request, 'Lista de exceções atualizada.')
     return redirect('chamados')
 
 

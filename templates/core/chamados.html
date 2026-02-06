@@ -308,6 +308,30 @@
                     Placeholders disponíveis: {id}, {title}, {description}, {status}, {responsavel}, {message}
                 </div>
             </div>
+            <form method="post" action="{% url 'chamados_whatsapp_settings' %}">
+                {% csrf_token %}
+                <div class="form-row">
+                    <div>
+                        <label>Enviar para grupo</label>
+                        <div class="ticket-legend">
+                            <label><input type="checkbox" name="send_group_on_new_ticket" {% if wa_settings.send_group_on_new_ticket %}checked{% endif %} /> Novo chamado</label><br />
+                            <label><input type="checkbox" name="send_group_on_assignment" {% if wa_settings.send_group_on_assignment %}checked{% endif %} /> Atribuição / Em atendimento</label><br />
+                            <label><input type="checkbox" name="send_group_on_status" {% if wa_settings.send_group_on_status %}checked{% endif %} /> Atualização de status</label><br />
+                            <label><input type="checkbox" name="send_group_on_message" {% if wa_settings.send_group_on_message %}checked{% endif %} /> Nova mensagem</label>
+                        </div>
+                    </div>
+                    <div>
+                        <label>Enviar para atendentes</label>
+                        <div class="ticket-legend">
+                            <label><input type="checkbox" name="send_individual_on_new_ticket" {% if wa_settings.send_individual_on_new_ticket %}checked{% endif %} /> Novo chamado</label><br />
+                            <label><input type="checkbox" name="send_individual_on_assignment" {% if wa_settings.send_individual_on_assignment %}checked{% endif %} /> Atribuição / Em atendimento</label><br />
+                            <label><input type="checkbox" name="send_individual_on_status" {% if wa_settings.send_individual_on_status %}checked{% endif %} /> Atualização de status</label><br />
+                            <label><input type="checkbox" name="send_individual_on_message" {% if wa_settings.send_individual_on_message %}checked{% endif %} /> Nova mensagem</label>
+                        </div>
+                    </div>
+                </div>
+                <button type="submit">Salvar regras</button>
+            </form>
             <form method="post" action="{% url 'chamados_whatsapp_templates' %}">
                 {% csrf_token %}
                 <div class="form-row">
@@ -329,6 +353,26 @@
                     </div>
                 </div>
                 <button type="submit">Salvar templates</button>
+            </form>
+            <form method="post" action="{% url 'chamados_whatsapp_optout' %}">
+                {% csrf_token %}
+                <div class="ticket-legend" style="margin-top: 12px;">
+                    <strong>Atendentes TI (WhatsApp)</strong>
+                    <div class="muted" style="margin-top: 6px;">Marque para não receber notificações particulares.</div>
+                </div>
+                <div class="form-row">
+                    <div style="flex: 1; min-width: 260px;">
+                        {% for contact in wa_contacts %}
+                            <label style="display:block; margin-bottom:6px;">
+                                <input type="checkbox" name="optout_users" value="{{ contact.id }}" {% if contact.opt_out %}checked{% endif %} />
+                                {{ contact.name }}{% if contact.department %} - {{ contact.department }}{% endif %}{% if contact.phone %} - {{ contact.phone }}{% endif %}
+                            </label>
+                        {% empty %}
+                            <div class="muted">Nenhum atendente TI encontrado.</div>
+                        {% endfor %}
+                    </div>
+                </div>
+                <button type="submit">Salvar exceções</button>
             </form>
         </div>
     </div>

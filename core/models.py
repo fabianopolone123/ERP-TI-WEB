@@ -116,3 +116,26 @@ class EmailTemplate(models.Model):
 
     def __str__(self) -> str:
         return f'EmailTemplate #{self.id}'
+
+
+class WhatsAppNotificationSettings(models.Model):
+    send_group_on_new_ticket = models.BooleanField(default=False)
+    send_group_on_assignment = models.BooleanField(default=True)
+    send_group_on_status = models.BooleanField(default=False)
+    send_group_on_message = models.BooleanField(default=False)
+    send_individual_on_new_ticket = models.BooleanField(default=False)
+    send_individual_on_assignment = models.BooleanField(default=True)
+    send_individual_on_status = models.BooleanField(default=True)
+    send_individual_on_message = models.BooleanField(default=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self) -> str:
+        return f'WhatsAppNotificationSettings #{self.id}'
+
+
+class WhatsAppOptOut(models.Model):
+    user = models.OneToOneField(ERPUser, on_delete=models.CASCADE, related_name='whatsapp_optout')
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self) -> str:
+        return f'WhatsAppOptOut {self.user_id}'

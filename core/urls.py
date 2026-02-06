@@ -12,6 +12,8 @@ from .views import (
     ticket_message,
     email_templates_update,
     whatsapp_templates_update,
+    whatsapp_settings_update,
+    whatsapp_optout_update,
 )
 
 urlpatterns = [
@@ -25,5 +27,7 @@ urlpatterns = [
     path('chamados/mensagem/', ticket_message, name='chamados_mensagem'),
     path('chamados/email-templates/', email_templates_update, name='chamados_email_templates'),
     path('chamados/whatsapp-templates/', whatsapp_templates_update, name='chamados_whatsapp_templates'),
+    path('chamados/whatsapp-settings/', whatsapp_settings_update, name='chamados_whatsapp_settings'),
+    path('chamados/whatsapp-optout/', whatsapp_optout_update, name='chamados_whatsapp_optout'),
     path('', DashboardView.as_view(), name='dashboard'),
 ]
