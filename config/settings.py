@@ -19,12 +19,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 ENV_PATH = BASE_DIR / '.env'
 if ENV_PATH.exists():
-    for line in ENV_PATH.read_text(encoding='utf-8').splitlines():
+    for line in ENV_PATH.read_text(encoding='utf-8-sig').splitlines():
         raw = line.strip()
         if not raw or raw.startswith('#') or '=' not in raw:
             continue
         key, value = raw.split('=', 1)
-        key = key.strip()
+        key = key.strip().lstrip('\ufeff')
         value = value.strip().strip('"').strip("'")
         if key:
             os.environ[key] = value
