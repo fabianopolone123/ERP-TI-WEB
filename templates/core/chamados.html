@@ -336,22 +336,26 @@
                         <label>Enviar para grupo</label>
                         <div class="ticket-legend">
                             <label><input type="checkbox" name="send_group_on_new_ticket" {% if wa_settings.send_group_on_new_ticket %}checked{% endif %} /> Novo chamado</label><br />
-                            <label><input type="checkbox" name="send_group_on_assignment" {% if wa_settings.send_group_on_assignment %}checked{% endif %} /> Atribuição</label><br />
                             <label><input type="checkbox" name="send_group_on_status_pending" {% if wa_settings.send_group_on_status_pending %}checked{% endif %} /> Status pendente</label><br />
+                            <label><input type="checkbox" name="send_group_on_assignment_changed" {% if wa_settings.send_group_on_assignment_changed %}checked{% endif %} /> Transferido para outro atendente</label><br />
+                            <label><input type="checkbox" name="send_group_on_assignment_new" {% if wa_settings.send_group_on_assignment_new %}checked{% endif %} /> Responsável definido (em atendimento)</label><br />
                             <label><input type="checkbox" name="send_group_on_status_in_progress" {% if wa_settings.send_group_on_status_in_progress %}checked{% endif %} /> Status em atendimento</label><br />
                             <label><input type="checkbox" name="send_group_on_status_closed" {% if wa_settings.send_group_on_status_closed %}checked{% endif %} /> Status fechado</label><br />
-                            <label><input type="checkbox" name="send_group_on_message" {% if wa_settings.send_group_on_message %}checked{% endif %} /> Nova mensagem</label>
+                            <label><input type="checkbox" name="send_group_on_message_internal" {% if wa_settings.send_group_on_message_internal %}checked{% endif %} /> Nova mensagem interna TI</label><br />
+                            <label><input type="checkbox" name="send_group_on_message_user" {% if wa_settings.send_group_on_message_user %}checked{% endif %} /> Nova mensagem do usuário</label>
                         </div>
                     </div>
                     <div>
                         <label>Enviar para atendentes</label>
                         <div class="ticket-legend">
                             <label><input type="checkbox" name="send_individual_on_new_ticket" {% if wa_settings.send_individual_on_new_ticket %}checked{% endif %} /> Novo chamado</label><br />
-                            <label><input type="checkbox" name="send_individual_on_assignment" {% if wa_settings.send_individual_on_assignment %}checked{% endif %} /> Atribuição</label><br />
                             <label><input type="checkbox" name="send_individual_on_status_pending" {% if wa_settings.send_individual_on_status_pending %}checked{% endif %} /> Status pendente</label><br />
+                            <label><input type="checkbox" name="send_individual_on_assignment_changed" {% if wa_settings.send_individual_on_assignment_changed %}checked{% endif %} /> Transferido para outro atendente</label><br />
+                            <label><input type="checkbox" name="send_individual_on_assignment_new" {% if wa_settings.send_individual_on_assignment_new %}checked{% endif %} /> Responsável definido (em atendimento)</label><br />
                             <label><input type="checkbox" name="send_individual_on_status_in_progress" {% if wa_settings.send_individual_on_status_in_progress %}checked{% endif %} /> Status em atendimento</label><br />
                             <label><input type="checkbox" name="send_individual_on_status_closed" {% if wa_settings.send_individual_on_status_closed %}checked{% endif %} /> Status fechado</label><br />
-                            <label><input type="checkbox" name="send_individual_on_message" {% if wa_settings.send_individual_on_message %}checked{% endif %} /> Nova mensagem</label>
+                            <label><input type="checkbox" name="send_individual_on_message_internal" {% if wa_settings.send_individual_on_message_internal %}checked{% endif %} /> Nova mensagem interna TI</label><br />
+                            <label><input type="checkbox" name="send_individual_on_message_user" {% if wa_settings.send_individual_on_message_user %}checked{% endif %} /> Nova mensagem do usuário</label>
                         </div>
                     </div>
                 </div>

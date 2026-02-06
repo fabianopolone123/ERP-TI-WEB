@@ -120,17 +120,21 @@ class EmailTemplate(models.Model):
 
 class WhatsAppNotificationSettings(models.Model):
     send_group_on_new_ticket = models.BooleanField(default=False)
-    send_group_on_assignment = models.BooleanField(default=True)
+    send_group_on_assignment_new = models.BooleanField(default=True)
+    send_group_on_assignment_changed = models.BooleanField(default=True)
     send_group_on_status_pending = models.BooleanField(default=False)
     send_group_on_status_in_progress = models.BooleanField(default=False)
     send_group_on_status_closed = models.BooleanField(default=False)
-    send_group_on_message = models.BooleanField(default=False)
+    send_group_on_message_internal = models.BooleanField(default=False)
+    send_group_on_message_user = models.BooleanField(default=False)
     send_individual_on_new_ticket = models.BooleanField(default=False)
-    send_individual_on_assignment = models.BooleanField(default=True)
+    send_individual_on_assignment_new = models.BooleanField(default=True)
+    send_individual_on_assignment_changed = models.BooleanField(default=True)
     send_individual_on_status_pending = models.BooleanField(default=True)
     send_individual_on_status_in_progress = models.BooleanField(default=True)
     send_individual_on_status_closed = models.BooleanField(default=True)
-    send_individual_on_message = models.BooleanField(default=True)
+    send_individual_on_message_internal = models.BooleanField(default=True)
+    send_individual_on_message_user = models.BooleanField(default=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self) -> str:
