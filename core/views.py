@@ -504,6 +504,7 @@ def move_ticket(request):
         if not assignee:
             return JsonResponse({'ok': False, 'error': 'user_not_found'}, status=404)
         ticket.status = Ticket.Status.EM_ATENDIMENTO
+        sent_assignment = False
         if multi and ticket.assigned_to_id and ticket.assigned_to_id != assignee.id:
             ticket.save()
             ticket.collaborators.add(assignee)
@@ -519,6 +520,7 @@ def move_ticket(request):
                     event_label="Status atualizado",
                     extra_line=f"Responsável definido: {assignee.full_name}",
                 )
+                sent_assignment = True
             elif previous_assignee_id != assignee.id:
                 _notify_whatsapp(
                     ticket,
@@ -526,7 +528,8 @@ def move_ticket(request):
                     event_label="Status atualizado",
                     extra_line=f"Responsável alterado: {assignee.full_name}",
                 )
-        if previous_status != Ticket.Status.EM_ATENDIMENTO:
+                sent_assignment = True
+        if previous_status != Ticket.Status.EM_ATENDIMENTO and not sent_assignment:
             _notify_whatsapp(
                 ticket,
                 event_type="status_in_progress",
