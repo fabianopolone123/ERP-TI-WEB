@@ -50,6 +50,17 @@
                                 <span class="urgency-dot urgency-{{ ticket.urgency }}"></span>
                                 #{{ ticket.id }} - {{ ticket.title }}
                             </div>
+                            {% if is_ti_group %}
+                                <div class="ticket-meta">
+                                    {{ ticket_meta|get_item:ticket.id|default:{}|get_item:'requester' }}
+                                    {% if ticket_meta|get_item:ticket.id|default:{}|get_item:'department' %}
+                                        - {{ ticket_meta|get_item:ticket.id|default:{}|get_item:'department' }}
+                                    {% endif %}
+                                    {% if ticket_meta|get_item:ticket.id|default:{}|get_item:'description' %}
+                                        - {{ ticket_meta|get_item:ticket.id|default:{}|get_item:'description' }}
+                                    {% endif %}
+                                </div>
+                            {% endif %}
                         </div>
                     {% endfor %}
                 </div>
@@ -88,6 +99,15 @@
                                 <span class="urgency-dot urgency-{{ ticket.urgency }}"></span>
                                 #{{ ticket.id }} - {{ ticket.title }}
                             </div>
+                            <div class="ticket-meta">
+                                {{ ticket_meta|get_item:ticket.id|default:{}|get_item:'requester' }}
+                                {% if ticket_meta|get_item:ticket.id|default:{}|get_item:'department' %}
+                                    - {{ ticket_meta|get_item:ticket.id|default:{}|get_item:'department' }}
+                                {% endif %}
+                                {% if ticket_meta|get_item:ticket.id|default:{}|get_item:'description' %}
+                                    - {{ ticket_meta|get_item:ticket.id|default:{}|get_item:'description' }}
+                                {% endif %}
+                            </div>
                         </div>
                     {% endfor %}
                 </div>
@@ -108,6 +128,15 @@
                             <div class="ticket-title">
                                 <span class="urgency-dot urgency-{{ ticket.urgency }}"></span>
                                 #{{ ticket.id }} - {{ ticket.title }}
+                            </div>
+                            <div class="ticket-meta">
+                                {{ ticket_meta|get_item:ticket.id|default:{}|get_item:'requester' }}
+                                {% if ticket_meta|get_item:ticket.id|default:{}|get_item:'department' %}
+                                    - {{ ticket_meta|get_item:ticket.id|default:{}|get_item:'department' }}
+                                {% endif %}
+                                {% if ticket_meta|get_item:ticket.id|default:{}|get_item:'description' %}
+                                    - {{ ticket_meta|get_item:ticket.id|default:{}|get_item:'description' }}
+                                {% endif %}
                             </div>
                         </div>
                     {% endfor %}

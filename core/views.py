@@ -310,9 +310,9 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
 
         ti_users = list(ERPUser.objects.filter(department__iexact='TI', is_active=True).order_by('full_name'))
         context['ti_users'] = ti_users
-        context['pending_tickets'] = Ticket.objects.filter(status=Ticket.Status.PENDENTE).order_by('-created_at')
-        context['closed_tickets'] = Ticket.objects.filter(status=Ticket.Status.FECHADO).order_by('-created_at')
-        in_progress_tickets = Ticket.objects.filter(status=Ticket.Status.EM_ATENDIMENTO).prefetch_related(
+        context['pending_tickets'] = Ticket.objects.filter(status=Ticket.Status.PENDENTE).select_related('created_by').order_by('-created_at')
+        context['closed_tickets'] = Ticket.objects.filter(status=Ticket.Status.FECHADO).select_related('created_by').order_by('-created_at')
+        in_progress_tickets = Ticket.objects.filter(status=Ticket.Status.EM_ATENDIMENTO).select_related('created_by').prefetch_related(
             'collaborators'
         )
         ticket_map = {user.id: [] for user in ti_users}
@@ -324,6 +324,24 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
             for uid in ids:
                 if uid in ticket_map:
                     ticket_map[uid].append(ticket)
+
+        all_tickets = list(context['pending_tickets']) + list(context['closed_tickets']) + list(in_progress_tickets)
+        usernames = {t.created_by.username for t in all_tickets if t.created_by}
+        erp_users = ERPUser.objects.filter(username__in=list(usernames))
+        erp_map = {u.username.lower(): u for u in erp_users}
+        ticket_meta = {}
+        for ticket in all_tickets:
+            username = ticket.created_by.username if ticket.created_by else ''
+            erp = erp_map.get(username.lower()) if username else None
+            name = erp.full_name if erp and erp.full_name else username
+            dept = erp.department if erp else ''
+            ticket_meta[ticket.id] = {
+                'requester': name or '- ',
+                'department': dept or '',
+                'description': ticket.description or '',
+            }
+        context['ticket_meta'] = ticket_meta
+
         context['user_tickets'] = ticket_map
         return context
 
