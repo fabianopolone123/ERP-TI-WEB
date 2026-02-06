@@ -353,8 +353,12 @@ def move_ticket(request):
         _notify_ticket_email(ticket, event_label="Status atualizado", extra_line="Status atual: Pendente")
         return JsonResponse({'ok': True})
     if target == 'fechado':
+        resolution = (request.POST.get('resolution') or '').strip()
+        if not resolution:
+            return JsonResponse({'ok': False, 'error': 'resolution_required'}, status=400)
         ticket.status = Ticket.Status.FECHADO
         ticket.assigned_to = None
+        ticket.resolution = resolution
         ticket.save()
         ticket.collaborators.clear()
         _notify_whatsapp(ticket, event_label="Status atualizado", extra_line="Status atual: Fechado")
@@ -435,6 +439,7 @@ def ticket_detail(request, ticket_id: int):
             'urgency_value': ticket.urgency,
             'status': ticket.get_status_display(),
             'created_by': ticket.created_by.username if ticket.created_by else '-',
+            'resolution': ticket.resolution,
             'assignees': ', '.join(
                 [
                     name

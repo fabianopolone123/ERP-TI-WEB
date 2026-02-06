@@ -212,6 +212,7 @@
             <div><strong>Status:</strong> <span data-detail-status></span></div>
             <div><strong>Solicitante:</strong> <span data-detail-created-by></span></div>
             <div><strong>Responsáveis:</strong> <span data-detail-assignees></span></div>
+            <div><strong>Resolução:</strong> <span data-detail-resolution></span></div>
             <div>
                 <strong>Anexo:</strong>
                 <a href="#" data-detail-attachment target="_blank" rel="noreferrer">abrir</a>
@@ -425,7 +426,8 @@
 
                 const isUserTarget = target.startsWith('user_');
                 const isUserSource = sourceColumn && sourceColumn.dataset.target.startsWith('user_');
-                const shouldClone = draggingMulti && isUserTarget && isUserSource;
+                const isClosing = target === 'fechado';
+                const shouldClone = !isClosing && draggingMulti && isUserTarget && isUserSource;
 
                 if (targetBody.querySelector(`.ticket-card[data-ticket-id="${draggingId}"]`)) {
                     draggingId = null;
@@ -434,6 +436,16 @@
 
                 const previousParent = draggingCard.parentElement;
                 let movedCard = draggingCard;
+                let resolutionText = '';
+
+                if (isClosing) {
+                    resolutionText = prompt('Informe a resolução do chamado:');
+                    if (!resolutionText || !resolutionText.trim()) {
+                        draggingId = null;
+                        return;
+                    }
+                    resolutionText = resolutionText.trim();
+                }
 
                 if (shouldClone) {
                     movedCard = draggingCard.cloneNode(true);
@@ -453,6 +465,7 @@
                         ticket_id: draggingId,
                         target: target,
                         multi: draggingMulti ? '1' : '0',
+                        resolution: resolutionText,
                     }),
                 });
 
@@ -611,6 +624,7 @@
             setText('[data-detail-status]', data.ticket.status);
             setText('[data-detail-created-by]', data.ticket.created_by);
             setText('[data-detail-assignees]', data.ticket.assignees);
+            setText('[data-detail-resolution]', data.ticket.resolution);
 
             const attachLink = detailsModal.querySelector('[data-detail-attachment]');
             const noAttach = detailsModal.querySelector('[data-detail-no-attachment]');

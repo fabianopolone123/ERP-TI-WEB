@@ -69,6 +69,7 @@ class Ticket(models.Model):
         related_name='collaborating_tickets',
     )
     attachment = models.FileField(upload_to='tickets/', null=True, blank=True)
+    resolution = models.TextField(blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
