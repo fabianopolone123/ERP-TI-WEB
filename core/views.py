@@ -113,12 +113,9 @@ def _get_attendant_numbers(ticket: Ticket) -> list[str]:
     if not users:
         return []
 
-    opt_out_ids = set(WhatsAppOptOut.objects.values_list('user_id', flat=True))
     numbers = []
     seen = set()
     for user in users:
-        if user.id in opt_out_ids:
-            continue
         phone = user.mobile or user.phone or ''
         phone = _clean_phone(phone)
         if not phone:
@@ -381,7 +378,6 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
                 'new_message_body': email_templates.new_message_body,
             }
             ti_users_list = list(ERPUser.objects.filter(department__iexact='TI', is_active=True).order_by('full_name'))
-            opt_out_ids = set(WhatsAppOptOut.objects.values_list('user_id', flat=True))
             contacts = []
             for user in ti_users_list:
                 phone = user.mobile or user.phone or ''
@@ -391,7 +387,6 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
                         'name': user.full_name,
                         'department': user.department,
                         'phone': phone,
-                        'opt_out': user.id in opt_out_ids,
                     }
                 )
             context['wa_contacts'] = contacts
@@ -679,21 +674,6 @@ def whatsapp_settings_update(request):
     return redirect('chamados')
 
 
-@login_required
-@require_POST
-def whatsapp_optout_update(request):
-    if not is_ti_user(request):
-        return JsonResponse({'ok': False, 'error': 'forbidden'}, status=403)
-
-    selected = set(request.POST.getlist('optout_users'))
-    selected_ids = {int(value) for value in selected if value.isdigit()}
-
-    WhatsAppOptOut.objects.exclude(user_id__in=selected_ids).delete()
-    for user_id in selected_ids:
-        WhatsAppOptOut.objects.get_or_create(user_id=user_id)
-
-    messages.success(request, 'Lista de exceções atualizada.')
-    return redirect('chamados')
 
 
 @login_required

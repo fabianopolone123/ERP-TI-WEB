@@ -354,26 +354,6 @@
                 </div>
                 <button type="submit">Salvar templates</button>
             </form>
-            <form method="post" action="{% url 'chamados_whatsapp_optout' %}">
-                {% csrf_token %}
-                <div class="ticket-legend" style="margin-top: 12px;">
-                    <strong>Atendentes TI (WhatsApp)</strong>
-                    <div class="muted" style="margin-top: 6px;">Marque para não receber notificações particulares.</div>
-                </div>
-                <div class="form-row">
-                    <div style="flex: 1; min-width: 260px;">
-                        {% for contact in wa_contacts %}
-                            <label style="display:block; margin-bottom:6px;">
-                                <input type="checkbox" name="optout_users" value="{{ contact.id }}" {% if contact.opt_out %}checked{% endif %} />
-                                {{ contact.name }}{% if contact.department %} - {{ contact.department }}{% endif %}{% if contact.phone %} - {{ contact.phone }}{% endif %}
-                            </label>
-                        {% empty %}
-                            <div class="muted">Nenhum atendente TI encontrado.</div>
-                        {% endfor %}
-                    </div>
-                </div>
-                <button type="submit">Salvar exceções</button>
-            </form>
         </div>
     </div>
 {% endif %}
