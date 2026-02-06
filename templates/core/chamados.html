@@ -27,6 +27,11 @@
                         WhatsApp
                     </button>
                 {% endif %}
+                {% if is_ti_group %}
+                    <button type="button" data-open-email>
+                        E-mail
+                    </button>
+                {% endif %}
                 <button type="button" data-open-modal>Abrir chamado</button>
             </div>
         </div>
@@ -117,14 +122,7 @@
     <div class="modal-content">
         <div class="topbar" style="margin-bottom: 8px;">
             <h3>Abrir chamado</h3>
-            <div style="display: flex; gap: 8px; align-items: center;">
-                {% if is_ti_group and whatsapp_group %}
-                    <button type="button" class="whatsapp-chip" title="Grupo configurado para notificações">
-                        WhatsApp: {{ whatsapp_group }}
-                    </button>
-                {% endif %}
-                <button type="button" data-close-modal>Fechar</button>
-            </div>
+            <button type="button" data-close-modal>Fechar</button>
         </div>
         <form method="post" enctype="multipart/form-data">
             {% csrf_token %}
@@ -310,6 +308,55 @@
                     <div style="flex: 2;">
                         <label for="id_wa_msg">Nova mensagem</label>
                         <textarea id="id_wa_msg" name="template_new_message" rows="2" placeholder="Nova mensagem no chamado #{id}: {message}">{{ wa_templates.new_message }}</textarea>
+                    </div>
+                </div>
+                <button type="submit">Salvar templates</button>
+            </form>
+        </div>
+    </div>
+{% endif %}
+
+{% if is_ti_group %}
+    <div class="modal" data-email-modal hidden>
+        <div class="modal-backdrop" data-close-email></div>
+        <div class="modal-content">
+            <div class="topbar" style="margin-bottom: 8px;">
+                <h3>E-mail (notificações)</h3>
+                <button type="button" data-close-email>Fechar</button>
+            </div>
+            <div class="ticket-legend">
+                <strong>Placeholders disponíveis:</strong> {id}, {title}, {description}, {status}, {responsavel}, {message}
+            </div>
+            <form method="post" action="{% url 'chamados_email_templates' %}">
+                {% csrf_token %}
+                <div class="form-row">
+                    <div style="flex: 2;">
+                        <label for="id_email_new_subject">Assunto - Novo chamado</label>
+                        <input id="id_email_new_subject" name="email_new_ticket_subject" type="text" placeholder="[Chamado #{id}] Novo chamado" value="{{ email_templates.new_ticket_subject }}" />
+                    </div>
+                    <div style="flex: 3;">
+                        <label for="id_email_new_body">Corpo - Novo chamado</label>
+                        <textarea id="id_email_new_body" name="email_new_ticket_body" rows="2" placeholder="Novo chamado #{id}: {title}\n{description}">{{ email_templates.new_ticket_body }}</textarea>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div style="flex: 2;">
+                        <label for="id_email_status_subject">Assunto - Status atualizado</label>
+                        <input id="id_email_status_subject" name="email_status_update_subject" type="text" placeholder="[Chamado #{id}] Status atualizado" value="{{ email_templates.status_update_subject }}" />
+                    </div>
+                    <div style="flex: 3;">
+                        <label for="id_email_status_body">Corpo - Status atualizado</label>
+                        <textarea id="id_email_status_body" name="email_status_update_body" rows="2" placeholder="Status atual: {status}\nResponsável: {responsavel}">{{ email_templates.status_update_body }}</textarea>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div style="flex: 2;">
+                        <label for="id_email_msg_subject">Assunto - Nova mensagem</label>
+                        <input id="id_email_msg_subject" name="email_new_message_subject" type="text" placeholder="[Chamado #{id}] Nova mensagem" value="{{ email_templates.new_message_subject }}" />
+                    </div>
+                    <div style="flex: 3;">
+                        <label for="id_email_msg_body">Corpo - Nova mensagem</label>
+                        <textarea id="id_email_msg_body" name="email_new_message_body" rows="2" placeholder="Nova mensagem: {message}">{{ email_templates.new_message_body }}</textarea>
                     </div>
                 </div>
                 <button type="submit">Salvar templates</button>
@@ -658,6 +705,24 @@
                 }
             });
         }
+    })();
+</script>
+<script>
+    (function () {
+        const modal = document.querySelector('[data-email-modal]');
+        const openBtn = document.querySelector('[data-open-email]');
+        const closeEls = document.querySelectorAll('[data-close-email]');
+        if (!modal || !openBtn) return;
+
+        const open = () => {
+            modal.hidden = false;
+        };
+        const close = () => {
+            modal.hidden = true;
+        };
+
+        openBtn.addEventListener('click', open);
+        closeEls.forEach((el) => el.addEventListener('click', close));
     })();
 </script>
 {% endblock %}

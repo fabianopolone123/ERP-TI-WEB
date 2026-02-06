@@ -10,6 +10,7 @@ from .views import (
     ticket_detail,
     ticket_reclassify,
     ticket_message,
+    email_templates_update,
     whatsapp_templates_update,
 )
 
@@ -22,6 +23,7 @@ urlpatterns = [
     path('chamados/detalhe/<int:ticket_id>/', ticket_detail, name='chamados_detalhe'),
     path('chamados/reclassificar/', ticket_reclassify, name='chamados_reclassificar'),
     path('chamados/mensagem/', ticket_message, name='chamados_mensagem'),
+    path('chamados/email-templates/', email_templates_update, name='chamados_email_templates'),
     path('chamados/whatsapp-templates/', whatsapp_templates_update, name='chamados_whatsapp_templates'),
     path('', DashboardView.as_view(), name='dashboard'),
 ]

@@ -15,11 +15,19 @@ from django.views.generic import TemplateView
 from django.contrib.auth import views as auth_views
 
 from .ldap_importer import import_ad_users
-from .models import ERPUser, Ticket, TicketMessage, WhatsAppTemplate
+from .models import ERPUser, Ticket, TicketMessage, WhatsAppTemplate, EmailTemplate
 from .wapi import send_whatsapp_message
 
 logger = logging.getLogger(__name__)
 TI_CHAMADOS_GROUP_JID = getattr(settings, "WAPI_DEFAULT_GROUP_JID", "")
+DEFAULT_EMAIL_TEMPLATES = {
+    'new_ticket_subject': '[Chamado #{id}] Novo chamado',
+    'new_ticket_body': 'Novo chamado #{id}: {title}\n{description}',
+    'status_update_subject': '[Chamado #{id}] Status atualizado',
+    'status_update_body': 'Status atual: {status}\nResponsável: {responsavel}',
+    'new_message_subject': '[Chamado #{id}] Nova mensagem',
+    'new_message_body': 'Nova mensagem: {message}',
+}
 DEFAULT_WA_TEMPLATES = {
     'new_ticket': 'Novo chamado #{id}: {title} | {description}',
     'status_update': 'Chamado #{id} atualizado: {status} | {responsavel}',
@@ -70,6 +78,14 @@ def _get_whatsapp_templates() -> WhatsAppTemplate:
     return template
 
 
+def _get_email_templates() -> EmailTemplate:
+    template, _ = EmailTemplate.objects.get_or_create(
+        pk=1,
+        defaults=DEFAULT_EMAIL_TEMPLATES,
+    )
+    return template
+
+
 def _build_whatsapp_summary(ticket, event_label="Novo chamado", extra_line=None):
     label = (event_label or "").strip().lower()
     title = shorten((ticket.title or "").strip(), width=120, placeholder='...')
@@ -105,10 +121,34 @@ def _notify_whatsapp(ticket, event_label="Novo chamado", extra_line=None):
         logger.exception("Nao foi possivel notificar o grupo WhatsApp %s", TI_CHAMADOS_GROUP_JID)
 
 
-def _notify_ticket_email(ticket, subject: str, body: str):
+def _notify_ticket_email(ticket, event_label="Novo chamado", extra_line=None):
     recipient = getattr(ticket.created_by, 'email', '')
     if not recipient:
         return
+    templates = _get_email_templates()
+    title = shorten((ticket.title or "").strip(), width=120, placeholder='...')
+    description = shorten((ticket.description or "").strip(), width=200, placeholder='...')
+    detail = shorten(((extra_line or "").replace('\n', ' ')).strip(), width=200, placeholder='...')
+    payload = _SafeDict(
+        {
+            'id': ticket.id,
+            'title': title,
+            'description': description,
+            'status': ticket.get_status_display(),
+            'responsavel': ticket.assigned_to.full_name if ticket.assigned_to else '',
+            'message': detail or description or title,
+        }
+    )
+    label = (event_label or '').strip().lower()
+    if 'nova mensagem' in label:
+        subject = (templates.new_message_subject or DEFAULT_EMAIL_TEMPLATES['new_message_subject']).format_map(payload)
+        body = (templates.new_message_body or DEFAULT_EMAIL_TEMPLATES['new_message_body']).format_map(payload)
+    elif 'status atualizado' in label or 'atualizado' in label or 'em atendimento' in label:
+        subject = (templates.status_update_subject or DEFAULT_EMAIL_TEMPLATES['status_update_subject']).format_map(payload)
+        body = (templates.status_update_body or DEFAULT_EMAIL_TEMPLATES['status_update_body']).format_map(payload)
+    else:
+        subject = (templates.new_ticket_subject or DEFAULT_EMAIL_TEMPLATES['new_ticket_subject']).format_map(payload)
+        body = (templates.new_ticket_body or DEFAULT_EMAIL_TEMPLATES['new_ticket_body']).format_map(payload)
     try:
         send_mail(
             subject,
@@ -224,7 +264,7 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
             created_at__gte=recent_cutoff,
         ).exists()
         if duplicate:
-            messages.info(request, 'Chamado id?ntico detectado recentemente. N?o foi criado novamente.')
+            messages.info(request, 'Chamado idêntico detectado recentemente. Não foi criado novamente.')
             return redirect('chamados')
 
         ticket = Ticket.objects.create(
@@ -252,6 +292,15 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
                 'new_ticket': templates.new_ticket,
                 'status_update': templates.status_update,
                 'new_message': templates.new_message,
+            }
+            email_templates = _get_email_templates()
+            context['email_templates'] = {
+                'new_ticket_subject': email_templates.new_ticket_subject,
+                'new_ticket_body': email_templates.new_ticket_body,
+                'status_update_subject': email_templates.status_update_subject,
+                'status_update_body': email_templates.status_update_body,
+                'new_message_subject': email_templates.new_message_subject,
+                'new_message_body': email_templates.new_message_body,
             }
         if not is_ti:
             context['own_tickets'] = (
@@ -301,11 +350,7 @@ def move_ticket(request):
         ticket.save()
         ticket.collaborators.clear()
         _notify_whatsapp(ticket, event_label="Status atualizado", extra_line="Status atual: Pendente")
-        _notify_ticket_email(
-            ticket,
-            f"[Chamado #{ticket.id}] Status atualizado",
-            "Status atual: Pendente",
-        )
+        _notify_ticket_email(ticket, event_label="Status atualizado", extra_line="Status atual: Pendente")
         return JsonResponse({'ok': True})
     if target == 'fechado':
         ticket.status = Ticket.Status.FECHADO
@@ -313,11 +358,7 @@ def move_ticket(request):
         ticket.save()
         ticket.collaborators.clear()
         _notify_whatsapp(ticket, event_label="Status atualizado", extra_line="Status atual: Fechado")
-        _notify_ticket_email(
-            ticket,
-            f"[Chamado #{ticket.id}] Status atualizado",
-            "Status atual: Fechado",
-        )
+        _notify_ticket_email(ticket, event_label="Status atualizado", extra_line="Status atual: Fechado")
         return JsonResponse({'ok': True})
     if target.startswith('user_'):
         user_id = target.replace('user_', '')
@@ -335,12 +376,12 @@ def move_ticket(request):
         _notify_whatsapp(
             ticket,
             event_label="Status atualizado",
-            extra_line=f"Status atual: Em atendimento | Responsavel: {assignee.full_name}",
+            extra_line=f"Status atual: Em atendimento | Responsável: {assignee.full_name}",
         )
         _notify_ticket_email(
             ticket,
-            f"[Chamado #{ticket.id}] Em atendimento",
-            f"Status atual: Em atendimento\nResponsável: {assignee.full_name}",
+            event_label="Status atualizado",
+            extra_line=f"Status atual: Em atendimento | Responsável: {assignee.full_name}",
         )
         return JsonResponse({'ok': True})
 
@@ -482,11 +523,7 @@ def ticket_message(request):
         extra = f"(Interno) {extra}"
     _notify_whatsapp(ticket, event_label="Nova mensagem no chamado", extra_line=extra)
     if not internal:
-        _notify_ticket_email(
-            ticket,
-            f"[Chamado #{ticket.id}] Nova mensagem",
-            extra,
-        )
+        _notify_ticket_email(ticket, event_label="Nova mensagem no chamado", extra_line=extra)
     return JsonResponse({'ok': True})
 
 
@@ -502,4 +539,22 @@ def whatsapp_templates_update(request):
     template.new_message = (request.POST.get('template_new_message') or '').strip() or DEFAULT_WA_TEMPLATES['new_message']
     template.save()
     messages.success(request, 'Templates de WhatsApp atualizados.')
+    return redirect('chamados')
+
+
+@login_required
+@require_POST
+def email_templates_update(request):
+    if not is_ti_user(request):
+        return JsonResponse({'ok': False, 'error': 'forbidden'}, status=403)
+
+    template = _get_email_templates()
+    template.new_ticket_subject = (request.POST.get('email_new_ticket_subject') or '').strip() or DEFAULT_EMAIL_TEMPLATES['new_ticket_subject']
+    template.new_ticket_body = (request.POST.get('email_new_ticket_body') or '').strip() or DEFAULT_EMAIL_TEMPLATES['new_ticket_body']
+    template.status_update_subject = (request.POST.get('email_status_update_subject') or '').strip() or DEFAULT_EMAIL_TEMPLATES['status_update_subject']
+    template.status_update_body = (request.POST.get('email_status_update_body') or '').strip() or DEFAULT_EMAIL_TEMPLATES['status_update_body']
+    template.new_message_subject = (request.POST.get('email_new_message_subject') or '').strip() or DEFAULT_EMAIL_TEMPLATES['new_message_subject']
+    template.new_message_body = (request.POST.get('email_new_message_body') or '').strip() or DEFAULT_EMAIL_TEMPLATES['new_message_body']
+    template.save()
+    messages.success(request, 'Templates de e-mail atualizados.')
     return redirect('chamados')

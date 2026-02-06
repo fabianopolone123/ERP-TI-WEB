@@ -102,3 +102,16 @@ class WhatsAppTemplate(models.Model):
 
     def __str__(self) -> str:
         return f'WhatsAppTemplate #{self.id}'
+
+
+class EmailTemplate(models.Model):
+    new_ticket_subject = models.CharField(max_length=200, default='[Chamado #{id}] Novo chamado')
+    new_ticket_body = models.TextField(default='Novo chamado #{id}: {title}\n{description}')
+    status_update_subject = models.CharField(max_length=200, default='[Chamado #{id}] Status atualizado')
+    status_update_body = models.TextField(default='Status atual: {status}\nResponsável: {responsavel}')
+    new_message_subject = models.CharField(max_length=200, default='[Chamado #{id}] Nova mensagem')
+    new_message_body = models.TextField(default='Nova mensagem: {message}')
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self) -> str:
+        return f'EmailTemplate #{self.id}'
