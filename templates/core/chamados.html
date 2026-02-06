@@ -21,7 +21,14 @@
 
         <div class="topbar" style="margin-top: 16px;">
             <h3>Chamados</h3>
-            <button type="button" data-open-modal>Abrir chamado</button>
+            <div style="display: flex; gap: 8px; align-items: center;">
+                {% if is_ti_group and whatsapp_group %}
+                    <button type="button" class="whatsapp-chip" title="Grupo configurado para notificações">
+                        WhatsApp: {{ whatsapp_group }}
+                    </button>
+                {% endif %}
+                <button type="button" data-open-modal>Abrir chamado</button>
+            </div>
         </div>
 
         <div class="kanban" data-board>
