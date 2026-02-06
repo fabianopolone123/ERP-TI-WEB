@@ -92,3 +92,13 @@ class TicketMessage(models.Model):
 
     def __str__(self) -> str:
         return f'Mensagem #{self.id} ({self.ticket_id})'
+
+
+class WhatsAppTemplate(models.Model):
+    new_ticket = models.TextField(default='Novo chamado #{id}: {title} | {description}')
+    status_update = models.TextField(default='Chamado #{id} atualizado: {status} | {responsavel}')
+    new_message = models.TextField(default='Nova mensagem no chamado #{id}: {message}')
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self) -> str:
+        return f'WhatsAppTemplate #{self.id}'

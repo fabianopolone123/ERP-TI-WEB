@@ -23,8 +23,8 @@
             <h3>Chamados</h3>
             <div style="display: flex; gap: 8px; align-items: center;">
                 {% if is_ti_group and whatsapp_group %}
-                    <button type="button" class="whatsapp-chip" title="Grupo configurado para notificações">
-                        WhatsApp: {{ whatsapp_group }}
+                    <button type="button" class="whatsapp-chip" data-open-whatsapp>
+                        WhatsApp
                     </button>
                 {% endif %}
                 <button type="button" data-open-modal>Abrir chamado</button>
@@ -278,6 +278,46 @@
     </div>
 </div>
 
+{% if is_ti_group and whatsapp_group %}
+    <div class="modal" data-whatsapp-modal hidden>
+        <div class="modal-backdrop" data-close-whatsapp></div>
+        <div class="modal-content">
+            <div class="topbar" style="margin-bottom: 8px;">
+                <h3>WhatsApp (notificações)</h3>
+                <button type="button" data-close-whatsapp>Fechar</button>
+            </div>
+            <div class="ticket-legend">
+                <strong>Grupo atual:</strong> {{ whatsapp_group }}
+                <div class="muted" style="margin-top: 6px;">
+                    Placeholders disponíveis: {id}, {title}, {description}, {status}, {responsavel}, {message}
+                </div>
+            </div>
+            <form method="post" action="{% url 'chamados_whatsapp_templates' %}">
+                {% csrf_token %}
+                <div class="form-row">
+                    <div style="flex: 2;">
+                        <label for="id_wa_new">Novo chamado</label>
+                        <textarea id="id_wa_new" name="template_new_ticket" rows="2" placeholder="Novo chamado #{id}: {title} | {description}">{{ wa_templates.new_ticket }}</textarea>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div style="flex: 2;">
+                        <label for="id_wa_status">Status atualizado</label>
+                        <textarea id="id_wa_status" name="template_status_update" rows="2" placeholder="Chamado #{id} atualizado: {status} | {responsavel}">{{ wa_templates.status_update }}</textarea>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div style="flex: 2;">
+                        <label for="id_wa_msg">Nova mensagem</label>
+                        <textarea id="id_wa_msg" name="template_new_message" rows="2" placeholder="Nova mensagem no chamado #{id}: {message}">{{ wa_templates.new_message }}</textarea>
+                    </div>
+                </div>
+                <button type="submit">Salvar templates</button>
+            </form>
+        </div>
+    </div>
+{% endif %}
+
 <script>
     (function () {
         const board = document.querySelector('[data-board]');
@@ -397,6 +437,25 @@
         const modal = document.querySelector('[data-modal]');
         const openBtn = document.querySelector('[data-open-modal]');
         const closeEls = document.querySelectorAll('[data-close-modal]');
+        if (!modal || !openBtn) return;
+
+        const open = () => {
+            modal.hidden = false;
+        };
+        const close = () => {
+            modal.hidden = true;
+        };
+
+        openBtn.addEventListener('click', open);
+        closeEls.forEach((el) => el.addEventListener('click', close));
+    })();
+</script>
+
+<script>
+    (function () {
+        const modal = document.querySelector('[data-whatsapp-modal]');
+        const openBtn = document.querySelector('[data-open-whatsapp]');
+        const closeEls = document.querySelectorAll('[data-close-whatsapp]');
         if (!modal || !openBtn) return;
 
         const open = () => {

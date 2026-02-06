@@ -14,11 +14,16 @@ from django.views.generic import TemplateView
 from django.contrib.auth import views as auth_views
 
 from .ldap_importer import import_ad_users
-from .models import ERPUser, Ticket, TicketMessage
+from .models import ERPUser, Ticket, TicketMessage, WhatsAppTemplate
 from .wapi import send_whatsapp_message
 
 logger = logging.getLogger(__name__)
 TI_CHAMADOS_GROUP_JID = getattr(settings, "WAPI_DEFAULT_GROUP_JID", "")
+DEFAULT_WA_TEMPLATES = {
+    'new_ticket': 'Novo chamado #{id}: {title} | {description}',
+    'status_update': 'Chamado #{id} atualizado: {status} | {responsavel}',
+    'new_message': 'Nova mensagem no chamado #{id}: {message}',
+}
 
 ERP_MODULES = [
     {'slug': 'usuarios', 'label': 'Usuários', 'url_name': 'usuarios'},
@@ -51,17 +56,42 @@ def build_modules(active_slug: str | None) -> list[dict[str, str | bool]]:
     return modules
 
 
+class _SafeDict(dict):
+    def __missing__(self, key):
+        return ''
+
+
+def _get_whatsapp_templates() -> WhatsAppTemplate:
+    template, _ = WhatsAppTemplate.objects.get_or_create(
+        pk=1,
+        defaults=DEFAULT_WA_TEMPLATES,
+    )
+    return template
+
+
 def _build_whatsapp_summary(ticket, event_label="Novo chamado", extra_line=None):
     label = (event_label or "").strip().lower()
     title = shorten((ticket.title or "").strip(), width=120, placeholder='...')
     description = shorten((ticket.description or "").strip(), width=160, placeholder='...')
     detail = shorten(((extra_line or "").replace('\n', ' ')).strip(), width=180, placeholder='...')
 
+    templates = _get_whatsapp_templates()
+    payload = _SafeDict(
+        {
+            'id': ticket.id,
+            'title': title,
+            'description': description,
+            'status': ticket.get_status_display(),
+            'responsavel': ticket.assigned_to.full_name if ticket.assigned_to else '',
+            'message': detail or description or title,
+        }
+    )
+
     if 'nova mensagem' in label:
-        return f"Nova mensagem no chamado: {detail or description or title}"
+        return (templates.new_message or DEFAULT_WA_TEMPLATES['new_message']).format_map(payload)
     if 'status atualizado' in label or 'atualizado' in label:
-        return f"Status atualizado: {detail or ticket.get_status_display()}"
-    return f"Novo chamado: {title} | Mensagem: {description or '-'}"
+        return (templates.status_update or DEFAULT_WA_TEMPLATES['status_update']).format_map(payload)
+    return (templates.new_ticket or DEFAULT_WA_TEMPLATES['new_ticket']).format_map(payload)
 
 
 def _notify_whatsapp(ticket, event_label="Novo chamado", extra_line=None):
@@ -200,6 +230,13 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
         context['is_ti_group'] = is_ti
         context['modules'] = build_modules('chamados') if is_ti else []
         context['whatsapp_group'] = TI_CHAMADOS_GROUP_JID
+        if is_ti:
+            templates = _get_whatsapp_templates()
+            context['wa_templates'] = {
+                'new_ticket': templates.new_ticket,
+                'status_update': templates.status_update,
+                'new_message': templates.new_message,
+            }
         if not is_ti:
             context['own_tickets'] = (
                 Ticket.objects.filter(created_by=self.request.user).order_by('-created_at')
@@ -414,3 +451,18 @@ def ticket_message(request):
         extra = f"(Interno) {extra}"
     _notify_whatsapp(ticket, event_label="Nova mensagem no chamado", extra_line=extra)
     return JsonResponse({'ok': True})
+
+
+@login_required
+@require_POST
+def whatsapp_templates_update(request):
+    if not is_ti_user(request):
+        return JsonResponse({'ok': False, 'error': 'forbidden'}, status=403)
+
+    template = _get_whatsapp_templates()
+    template.new_ticket = (request.POST.get('template_new_ticket') or '').strip() or DEFAULT_WA_TEMPLATES['new_ticket']
+    template.status_update = (request.POST.get('template_status_update') or '').strip() or DEFAULT_WA_TEMPLATES['status_update']
+    template.new_message = (request.POST.get('template_new_message') or '').strip() or DEFAULT_WA_TEMPLATES['new_message']
+    template.save()
+    messages.success(request, 'Templates de WhatsApp atualizados.')
+    return redirect('chamados')
