@@ -354,6 +354,21 @@
                 </div>
                 <button type="submit">Salvar templates</button>
             </form>
+            <div class="ticket-legend" style="margin-top: 12px;">
+                <strong>Atendentes TI (WhatsApp)</strong>
+                <div class="muted" style="margin-top: 6px;">Somente visualização para validar nome e telefone.</div>
+            </div>
+            <div class="form-row">
+                <div style="flex: 1; min-width: 260px;">
+                    {% for contact in wa_contacts %}
+                        <div style="margin-bottom:6px;">
+                            {{ contact.name }}{% if contact.phone %} - {{ contact.phone }}{% endif %}
+                        </div>
+                    {% empty %}
+                        <div class="muted">Nenhum atendente TI encontrado.</div>
+                    {% endfor %}
+                </div>
+            </div>
         </div>
     </div>
 {% endif %}
