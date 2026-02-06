@@ -2,6 +2,7 @@
 from textwrap import shorten
 from django.conf import settings
 from django.contrib import messages
+from django.core.mail import send_mail
 from django.shortcuts import redirect
 from django.utils import timezone
 from datetime import timedelta
@@ -103,6 +104,21 @@ def _notify_whatsapp(ticket, event_label="Novo chamado", extra_line=None):
     except Exception:
         logger.exception("Nao foi possivel notificar o grupo WhatsApp %s", TI_CHAMADOS_GROUP_JID)
 
+
+def _notify_ticket_email(ticket, subject: str, body: str):
+    recipient = getattr(ticket.created_by, 'email', '')
+    if not recipient:
+        return
+    try:
+        send_mail(
+            subject,
+            body,
+            settings.DEFAULT_FROM_EMAIL,
+            [recipient],
+            fail_silently=False,
+        )
+    except Exception:
+        logger.exception("Erro ao enviar e-mail para %s", recipient)
 
 
 def is_ti_user(request) -> bool:
@@ -285,6 +301,11 @@ def move_ticket(request):
         ticket.save()
         ticket.collaborators.clear()
         _notify_whatsapp(ticket, event_label="Status atualizado", extra_line="Status atual: Pendente")
+        _notify_ticket_email(
+            ticket,
+            f"[Chamado #{ticket.id}] Status atualizado",
+            "Status atual: Pendente",
+        )
         return JsonResponse({'ok': True})
     if target == 'fechado':
         ticket.status = Ticket.Status.FECHADO
@@ -292,6 +313,11 @@ def move_ticket(request):
         ticket.save()
         ticket.collaborators.clear()
         _notify_whatsapp(ticket, event_label="Status atualizado", extra_line="Status atual: Fechado")
+        _notify_ticket_email(
+            ticket,
+            f"[Chamado #{ticket.id}] Status atualizado",
+            "Status atual: Fechado",
+        )
         return JsonResponse({'ok': True})
     if target.startswith('user_'):
         user_id = target.replace('user_', '')
@@ -310,6 +336,11 @@ def move_ticket(request):
             ticket,
             event_label="Status atualizado",
             extra_line=f"Status atual: Em atendimento | Responsavel: {assignee.full_name}",
+        )
+        _notify_ticket_email(
+            ticket,
+            f"[Chamado #{ticket.id}] Em atendimento",
+            f"Status atual: Em atendimento\nResponsável: {assignee.full_name}",
         )
         return JsonResponse({'ok': True})
 
@@ -450,6 +481,12 @@ def ticket_message(request):
     if internal:
         extra = f"(Interno) {extra}"
     _notify_whatsapp(ticket, event_label="Nova mensagem no chamado", extra_line=extra)
+    if not internal:
+        _notify_ticket_email(
+            ticket,
+            f"[Chamado #{ticket.id}] Nova mensagem",
+            extra,
+        )
     return JsonResponse({'ok': True})
 
 
