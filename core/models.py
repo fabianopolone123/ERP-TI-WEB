@@ -35,6 +35,32 @@ class Equipment(models.Model):
         return f'{self.equipment} - {self.user}'
 
 
+class AccessFolder(models.Model):
+    name = models.CharField(max_length=200)
+    path = models.CharField(max_length=500)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self) -> str:
+        return self.name
+
+
+class AccessGroup(models.Model):
+    folder = models.ForeignKey(AccessFolder, on_delete=models.CASCADE, related_name='groups')
+    name = models.CharField(max_length=200)
+
+    def __str__(self) -> str:
+        return f'{self.folder.name} - {self.name}'
+
+
+class AccessMember(models.Model):
+    group = models.ForeignKey(AccessGroup, on_delete=models.CASCADE, related_name='members')
+    name = models.CharField(max_length=200)
+    username = models.CharField(max_length=150, blank=True, default='')
+
+    def __str__(self) -> str:
+        return f'{self.group.name} - {self.name}'
+
+
 class Ticket(models.Model):
     class TicketType(models.TextChoices):
         NAO_CLASSIFICADO = 'nao_classificado', 'Não classificado'

@@ -18,6 +18,7 @@ from .ldap_importer import import_ad_users
 from .models import (
     ERPUser,
     Equipment,
+    AccessFolder,
     Ticket,
     TicketMessage,
     WhatsAppTemplate,
@@ -26,6 +27,7 @@ from .models import (
     WhatsAppOptOut,
 )
 from .wapi import send_whatsapp_message
+from .access_importer import refresh_access_snapshot
 
 logger = logging.getLogger(__name__)
 TI_CHAMADOS_GROUP_JID = getattr(settings, "WAPI_DEFAULT_GROUP_JID", "")
@@ -45,7 +47,7 @@ DEFAULT_WA_TEMPLATES = {
 
 ERP_MODULES = [
     {'slug': 'usuarios', 'label': 'Usuários', 'url_name': 'usuarios'},
-    {'slug': 'acessos', 'label': 'Acessos', 'url_name': None},
+    {'slug': 'acessos', 'label': 'Acessos', 'url_name': 'acessos'},
     {'slug': 'equipamentos', 'label': 'Equipamentos', 'url_name': 'equipamentos'},
     {'slug': 'ips', 'label': 'IPs', 'url_name': None},
     {'slug': 'emails', 'label': 'Emails', 'url_name': None},
@@ -336,6 +338,32 @@ class EquipamentosView(LoginRequiredMixin, TemplateView):
         context['is_ti_group'] = is_ti
         context['modules'] = build_modules('equipamentos') if is_ti else []
         context['equipments'] = Equipment.objects.all().order_by('-created_at')
+        return context
+
+
+class AcessosView(LoginRequiredMixin, TemplateView):
+    template_name = 'core/acessos.html'
+
+    def post(self, request, *args, **kwargs):
+        if not is_ti_user(request):
+            messages.error(request, 'Apenas usuários do departamento TI podem atualizar acessos.')
+            return self.get(request, *args, **kwargs)
+
+        root_path = getattr(settings, 'ACCESS_ROOT_PATH', '')
+        try:
+            folders, groups, members = refresh_access_snapshot(root_path)
+            messages.success(request, f'Atualização concluída: {folders} pastas, {groups} grupos, {members} membros.')
+        except Exception as exc:
+            messages.error(request, f'Falha ao atualizar acessos: {exc}')
+        return self.get(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        is_ti = is_ti_user(self.request)
+        context['is_ti_group'] = is_ti
+        context['modules'] = build_modules('acessos') if is_ti else []
+        folders = AccessFolder.objects.prefetch_related('groups__members').order_by('name')
+        context['folders'] = folders
         return context
 
 

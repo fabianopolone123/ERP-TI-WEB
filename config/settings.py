@@ -180,6 +180,9 @@ DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'ERP TI <no-reply@side
 # WhatsApp (WAPI)
 WAPI_DEFAULT_GROUP_JID = os.environ.get('WAPI_DEFAULT_GROUP_JID', '')
 
+# Acessos
+ACCESS_ROOT_PATH = os.environ.get('ACCESS_ROOT_PATH', r'\\SRV-FS\\Sidertec')
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
