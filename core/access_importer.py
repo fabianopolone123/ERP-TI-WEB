@@ -5,6 +5,7 @@ import subprocess
 
 from django.conf import settings
 from ldap3 import Connection, Server, SUBTREE
+from ldap3.utils.conv import escape_filter_chars
 
 from .models import AccessFolder, AccessGroup, AccessMember
 
@@ -79,7 +80,8 @@ def _filter_group(identity: str) -> str | None:
 
 def _resolve_group_members(conn: Connection, group_name: str) -> list[tuple[str, str]]:
     base_dn = getattr(settings, 'AD_LDAP_BASE_DN', '')
-    group_filter = f'(&(objectCategory=group)(cn={group_name}))'
+    safe_group = escape_filter_chars(group_name)
+    group_filter = f'(&(objectCategory=group)(cn={safe_group}))'
     conn.search(search_base=base_dn, search_filter=group_filter, search_scope=SUBTREE, attributes=['distinguishedName'])
     if not conn.entries:
         return []
