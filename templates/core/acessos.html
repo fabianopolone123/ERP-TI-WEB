@@ -30,6 +30,20 @@
             </form>
         </div>
         <div class="topbar" style="margin-bottom: 10px;">
+            <form method="get" class="inline-form">
+                <label class="muted" style="margin-right: 8px;">Usuário</label>
+                <select name="user" style="min-width: 240px;">
+                    <option value="">Selecione um usuário</option>
+                    {% for user in access_users %}
+                        <option value="{{ user.id }}" {% if selected_user_id|default:'' == user.id|stringformat:"s" %}selected{% endif %}>
+                            {{ user.full_name }}{% if user.username %} ({{ user.username }}){% endif %}
+                        </option>
+                    {% endfor %}
+                </select>
+                <button type="submit">Ver acessos</button>
+            </form>
+        </div>
+        <div class="topbar" style="margin-bottom: 10px;">
             <input
                 type="text"
                 class="table-search"
@@ -61,6 +75,34 @@
                 </div>
             </div>
         </div>
+
+        <div class="ticket-legend" style="margin-top: 16px;">
+            <strong>Acessos do usuário selecionado</strong>
+            <div style="margin-top: 8px; overflow-x: auto;">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Pasta</th>
+                            <th>Acesso</th>
+                            <th>Grupos</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in user_access %}
+                            <tr>
+                                <td>{{ item.folder }}</td>
+                                <td>{% if item.level == 'leitura_escrita' %}Leitura e escrita{% else %}Somente leitura{% endif %}</td>
+                                <td>{{ item.groups }}</td>
+                            </tr>
+                        {% empty %}
+                            <tr>
+                                <td colspan="3" class="muted">Selecione um usuário para listar os acessos.</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
     {% else %}
         <p>Solicite ao administrador a inclusão no departamento <strong>TI</strong>.</p>
     {% endif %}
@@ -77,6 +119,7 @@
                     {% for group in folder.groups.all %}
                     {
                         "name": "{{ group.name|escapejs }}",
+                        "level": "{{ group.access_level|escapejs }}",
                         "members": [
                             {% for member in group.members.all %}
                             {
@@ -109,7 +152,8 @@
                 return;
             }
             folder.groups.forEach((group) => {
-                html += `<div style="margin-top:12px;"><strong>${group.name}</strong></div>`;
+                const levelLabel = group.level === 'leitura_escrita' ? 'Leitura e escrita' : 'Somente leitura';
+                html += `<div style="margin-top:12px;"><strong>${group.name}</strong> <span class="muted">(${levelLabel})</span></div>`;
                 if (!group.members.length) {
                     html += '<div class="muted">Sem membros no grupo.</div>';
                     return;

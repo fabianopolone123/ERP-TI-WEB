@@ -47,6 +47,11 @@ class AccessFolder(models.Model):
 class AccessGroup(models.Model):
     folder = models.ForeignKey(AccessFolder, on_delete=models.CASCADE, related_name='groups')
     name = models.CharField(max_length=200)
+    access_level = models.CharField(
+        max_length=20,
+        choices=[('leitura', 'Leitura'), ('leitura_escrita', 'Leitura e escrita')],
+        default='leitura',
+    )
 
     def __str__(self) -> str:
         return f'{self.folder.name} - {self.name}'

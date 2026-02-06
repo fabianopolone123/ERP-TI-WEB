@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 
 from django.conf import settings
@@ -41,7 +42,7 @@ def _list_folders(root_path: str) -> list[tuple[str, str]]:
     return folders
 
 
-def _parse_icacls(path: str) -> list[str]:
+def _parse_icacls(path: str) -> list[tuple[str, str]]:
     result = subprocess.run(
         ['icacls', path],
         capture_output=True,
@@ -50,7 +51,7 @@ def _parse_icacls(path: str) -> list[str]:
         errors='ignore',
         check=False,
     )
-    identities: list[str] = []
+    identities: list[tuple[str, str]] = []
     for raw in result.stdout.splitlines():
         line = raw.strip()
         if not line:
@@ -59,11 +60,23 @@ def _parse_icacls(path: str) -> list[str]:
             line = line[len(path):].strip()
         if ':' not in line:
             continue
-        identity = line.split(':', 1)[0].strip()
+        identity, rights = line.split(':', 1)
+        identity = identity.strip()
+        rights = rights.strip()
         if not identity:
             continue
-        identities.append(identity)
+        identities.append((identity, rights))
     return identities
+
+
+def _rights_to_level(rights: str) -> str:
+    tokens = re.findall(r'\(([^)]+)\)', rights or '')
+    joined = ''.join(tokens).upper()
+    if any(flag in joined for flag in ('F', 'M', 'W', 'D', 'C')):
+        return 'leitura_escrita'
+    if 'R' in joined:
+        return 'leitura'
+    return 'leitura'
 
 
 def _filter_group(identity: str) -> str | None:
@@ -124,13 +137,20 @@ def refresh_access_snapshot(root_path: str) -> tuple[int, int, int]:
     for folder_name, folder_path in folders:
         folder = AccessFolder.objects.create(name=folder_name, path=folder_path)
         identities = _parse_icacls(folder_path)
-        seen_groups: set[str] = set()
-        for identity in identities:
+        group_levels: dict[str, str] = {}
+        for identity, rights in identities:
             group_name = _filter_group(identity)
-            if not group_name or group_name in seen_groups:
+            if not group_name:
                 continue
-            seen_groups.add(group_name)
-            group = AccessGroup.objects.create(folder=folder, name=group_name)
+            level = _rights_to_level(rights)
+            current = group_levels.get(group_name)
+            if current == 'leitura_escrita':
+                continue
+            if level == 'leitura_escrita' or current is None:
+                group_levels[group_name] = level
+
+        for group_name, level in group_levels.items():
+            group = AccessGroup.objects.create(folder=folder, name=group_name, access_level=level)
             group_count += 1
             members = _resolve_group_members(conn, group_name)
             member_objs = [AccessMember(group=group, name=name, username=username) for name, username in members]

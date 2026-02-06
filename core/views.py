@@ -19,6 +19,7 @@ from .models import (
     ERPUser,
     Equipment,
     AccessFolder,
+    AccessMember,
     Ticket,
     TicketMessage,
     WhatsAppTemplate,
@@ -364,6 +365,43 @@ class AcessosView(LoginRequiredMixin, TemplateView):
         context['modules'] = build_modules('acessos') if is_ti else []
         folders = AccessFolder.objects.prefetch_related('groups__members').order_by('name')
         context['folders'] = folders
+        users = ERPUser.objects.filter(is_active=True).order_by('full_name')
+        context['access_users'] = users
+        selected_user_id = self.request.GET.get('user') or ''
+        context['selected_user_id'] = selected_user_id
+        context['user_access'] = []
+        if selected_user_id:
+            selected_user = ERPUser.objects.filter(id=selected_user_id).first()
+            if selected_user and selected_user.username:
+                memberships = (
+                    AccessMember.objects.select_related('group__folder')
+                    .filter(username__iexact=selected_user.username)
+                )
+                access_map: dict[int, dict[str, str | set[str]]] = {}
+                for member in memberships:
+                    folder = member.group.folder
+                    entry = access_map.setdefault(
+                        folder.id,
+                        {
+                            'folder': folder.name,
+                            'level': 'leitura',
+                            'groups': set(),
+                        },
+                    )
+                    entry['groups'].add(member.group.name)
+                    if member.group.access_level == 'leitura_escrita':
+                        entry['level'] = 'leitura_escrita'
+                context['user_access'] = sorted(
+                    [
+                        {
+                            'folder': value['folder'],
+                            'level': value['level'],
+                            'groups': ', '.join(sorted(value['groups'])),
+                        }
+                        for value in access_map.values()
+                    ],
+                    key=lambda item: item['folder'].lower(),
+                )
         return context
 
 
