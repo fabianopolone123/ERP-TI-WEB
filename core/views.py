@@ -1,4 +1,7 @@
 ﻿from django.contrib import messages
+from django.shortcuts import redirect
+from django.utils import timezone
+from datetime import timedelta
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import JsonResponse
@@ -136,6 +139,17 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
             messages.error(request, 'Preencha tipo e urgência.')
             return self.get(request, *args, **kwargs)
 
+        recent_cutoff = timezone.now() - timedelta(seconds=30)
+        duplicate = Ticket.objects.filter(
+            created_by=request.user,
+            title=title,
+            description=description,
+            created_at__gte=recent_cutoff,
+        ).exists()
+        if duplicate:
+            messages.info(request, 'Chamado id?ntico detectado recentemente. N?o foi criado novamente.')
+            return redirect('chamados')
+
         Ticket.objects.create(
             title=title,
             description=description,
@@ -146,7 +160,7 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
             attachment=attachment,
         )
         messages.success(request, 'Chamado aberto com sucesso.')
-        return self.get(request, *args, **kwargs)
+        return redirect('chamados')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
