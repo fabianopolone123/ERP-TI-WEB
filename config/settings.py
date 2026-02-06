@@ -27,7 +27,7 @@ if ENV_PATH.exists():
         key = key.strip()
         value = value.strip().strip('"').strip("'")
         if key:
-            os.environ.setdefault(key, value)
+            os.environ[key] = value
 
 
 # Quick-start development settings - unsuitable for production
