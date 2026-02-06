@@ -469,10 +469,8 @@ def move_ticket(request):
         if not resolution:
             return JsonResponse({'ok': False, 'error': 'resolution_required'}, status=400)
         ticket.status = Ticket.Status.FECHADO
-        ticket.assigned_to = None
         ticket.resolution = resolution
         ticket.save()
-        ticket.collaborators.clear()
         _notify_whatsapp(ticket, event_type="status", event_label="Status atualizado", extra_line="Status atual: Fechado")
         _notify_ticket_email(ticket, event_label="Status atualizado", extra_line="Status atual: Fechado")
         return JsonResponse({'ok': True})
