@@ -305,7 +305,7 @@
                             <option value="alta">Alta</option>
                         </select>
                     </div>
-                    <div style="align-self: flex-end;">
+                    <div style="align-self: flex-end; display: flex; gap: 8px;">
                         <button type="submit">Reclassificar</button>
                     </div>
                 </div>
@@ -965,7 +965,18 @@
 
                 if (response.ok) {
                     await loadDetails(currentTicketId);
+                    return;
                 }
+                let errorMsg = 'Não foi possível reclassificar.';
+                try {
+                    const data = await response.json();
+                    if (data && data.error) {
+                        errorMsg += ` (${data.error})`;
+                    }
+                } catch (err) {
+                    // ignore parse errors
+                }
+                alert(errorMsg);
             });
         }
 
