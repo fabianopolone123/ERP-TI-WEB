@@ -795,8 +795,6 @@
                 if (typeSelect) typeSelect.value = data.ticket.ticket_type_value || 'nao_classificado';
                 if (urgencySelect) urgencySelect.value = data.ticket.urgency_value || 'nao_classificado';
             }
-        };
-
 
             const detailReopen = detailsModal.querySelector('[data-detail-reopen]');
             if (detailReopen) {
@@ -818,6 +816,7 @@
                     }
                 };
             }
+        };
 
         const openDetails = async (ticketId) => {
             currentTicketId = ticketId;
@@ -832,7 +831,7 @@
 
         clickRoot.addEventListener('click', (event) => {
             if (dragging) return;
-                        const card = event.target.closest('.ticket-card');
+            const card = event.target.closest('.ticket-card');
             if (!card) return;
             openDetails(card.dataset.ticketId);
         });
