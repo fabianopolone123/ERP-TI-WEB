@@ -170,9 +170,15 @@ def _notify_whatsapp(ticket, event_type="new_ticket", event_label="Novo chamado"
     elif event_type == "assignment":
         send_group = settings_obj.send_group_on_assignment
         send_individual = settings_obj.send_individual_on_assignment
-    elif event_type == "status":
-        send_group = settings_obj.send_group_on_status
-        send_individual = settings_obj.send_individual_on_status
+    elif event_type == "status_pending":
+        send_group = settings_obj.send_group_on_status_pending
+        send_individual = settings_obj.send_individual_on_status_pending
+    elif event_type == "status_in_progress":
+        send_group = settings_obj.send_group_on_status_in_progress
+        send_individual = settings_obj.send_individual_on_status_in_progress
+    elif event_type == "status_closed":
+        send_group = settings_obj.send_group_on_status_closed
+        send_individual = settings_obj.send_individual_on_status_closed
     elif event_type == "message":
         send_group = settings_obj.send_group_on_message
         send_individual = settings_obj.send_individual_on_message
@@ -367,11 +373,15 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
             context['wa_settings'] = {
                 'send_group_on_new_ticket': wa_settings.send_group_on_new_ticket,
                 'send_group_on_assignment': wa_settings.send_group_on_assignment,
-                'send_group_on_status': wa_settings.send_group_on_status,
+                'send_group_on_status_pending': wa_settings.send_group_on_status_pending,
+                'send_group_on_status_in_progress': wa_settings.send_group_on_status_in_progress,
+                'send_group_on_status_closed': wa_settings.send_group_on_status_closed,
                 'send_group_on_message': wa_settings.send_group_on_message,
                 'send_individual_on_new_ticket': wa_settings.send_individual_on_new_ticket,
                 'send_individual_on_assignment': wa_settings.send_individual_on_assignment,
-                'send_individual_on_status': wa_settings.send_individual_on_status,
+                'send_individual_on_status_pending': wa_settings.send_individual_on_status_pending,
+                'send_individual_on_status_in_progress': wa_settings.send_individual_on_status_in_progress,
+                'send_individual_on_status_closed': wa_settings.send_individual_on_status_closed,
                 'send_individual_on_message': wa_settings.send_individual_on_message,
             }
             email_templates = _get_email_templates()
@@ -461,7 +471,7 @@ def move_ticket(request):
         ticket.assigned_to = None
         ticket.save()
         ticket.collaborators.clear()
-        _notify_whatsapp(ticket, event_type="status", event_label="Status atualizado", extra_line="Status atual: Pendente")
+        _notify_whatsapp(ticket, event_type="status_pending", event_label="Status atualizado", extra_line="Status atual: Pendente")
         _notify_ticket_email(ticket, event_label="Status atualizado", extra_line="Status atual: Pendente")
         return JsonResponse({'ok': True})
     if target == 'fechado':
@@ -471,7 +481,7 @@ def move_ticket(request):
         ticket.status = Ticket.Status.FECHADO
         ticket.resolution = resolution
         ticket.save()
-        _notify_whatsapp(ticket, event_type="status", event_label="Status atualizado", extra_line="Status atual: Fechado")
+        _notify_whatsapp(ticket, event_type="status_closed", event_label="Status atualizado", extra_line="Status atual: Fechado")
         _notify_ticket_email(ticket, event_label="Status atualizado", extra_line="Status atual: Fechado")
         return JsonResponse({'ok': True})
     if target.startswith('user_'):
@@ -489,7 +499,7 @@ def move_ticket(request):
             ticket.collaborators.clear()
         _notify_whatsapp(
             ticket,
-            event_type="assignment",
+            event_type="status_in_progress",
             event_label="Status atualizado",
             extra_line=f"Status atual: Em atendimento | Responsável: {assignee.full_name}",
         )
@@ -662,7 +672,7 @@ def ticket_reopen(request):
     if ticket.status == Ticket.Status.FECHADO:
         ticket.status = Ticket.Status.PENDENTE
         ticket.save(update_fields=['status', 'updated_at'])
-        _notify_whatsapp(ticket, event_type="status", event_label="Status atualizado", extra_line="Status atual: Pendente")
+        _notify_whatsapp(ticket, event_type="status_pending", event_label="Status atualizado", extra_line="Status atual: Pendente")
         _notify_ticket_email(ticket, event_label="Status atualizado", extra_line="Status atual: Pendente")
     return JsonResponse({'ok': True})
 
@@ -690,11 +700,15 @@ def whatsapp_settings_update(request):
     settings_obj = _get_whatsapp_settings()
     settings_obj.send_group_on_new_ticket = bool(request.POST.get('send_group_on_new_ticket'))
     settings_obj.send_group_on_assignment = bool(request.POST.get('send_group_on_assignment'))
-    settings_obj.send_group_on_status = bool(request.POST.get('send_group_on_status'))
+    settings_obj.send_group_on_status_pending = bool(request.POST.get('send_group_on_status_pending'))
+    settings_obj.send_group_on_status_in_progress = bool(request.POST.get('send_group_on_status_in_progress'))
+    settings_obj.send_group_on_status_closed = bool(request.POST.get('send_group_on_status_closed'))
     settings_obj.send_group_on_message = bool(request.POST.get('send_group_on_message'))
     settings_obj.send_individual_on_new_ticket = bool(request.POST.get('send_individual_on_new_ticket'))
     settings_obj.send_individual_on_assignment = bool(request.POST.get('send_individual_on_assignment'))
-    settings_obj.send_individual_on_status = bool(request.POST.get('send_individual_on_status'))
+    settings_obj.send_individual_on_status_pending = bool(request.POST.get('send_individual_on_status_pending'))
+    settings_obj.send_individual_on_status_in_progress = bool(request.POST.get('send_individual_on_status_in_progress'))
+    settings_obj.send_individual_on_status_closed = bool(request.POST.get('send_individual_on_status_closed'))
     settings_obj.send_individual_on_message = bool(request.POST.get('send_individual_on_message'))
     settings_obj.save()
     messages.success(request, 'Regras de notificação WhatsApp atualizadas.')
