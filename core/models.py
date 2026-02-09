@@ -75,6 +75,13 @@ class Requisition(models.Model):
 
 class RequisitionQuote(models.Model):
     requisition = models.ForeignKey(Requisition, on_delete=models.CASCADE, related_name='quotes')
+    parent = models.ForeignKey(
+        'self',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='subquotes',
+    )
     name = models.CharField(max_length=300)
     value = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     photo = models.ImageField(upload_to='requisitions/quotes/', null=True, blank=True)

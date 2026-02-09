@@ -444,6 +444,7 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
         if update_mode:
             existing_quotes = {str(item.id): item for item in requisition.quotes.all()}
         kept_ids: set[int] = set()
+        idx_to_quote: dict[str, RequisitionQuote] = {}
         saved_count = 0
 
         for idx in request.POST.getlist('budget_index'):
@@ -473,27 +474,45 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
                 quote.name = name
                 quote.value = value
                 quote.link = link
+                quote.parent = None
                 if photo:
                     quote.photo = photo
                     quote.save()
                 else:
-                    quote.save(update_fields=['name', 'value', 'link'])
+                    quote.save(update_fields=['name', 'value', 'link', 'parent'])
                 kept_ids.add(quote.id)
+                idx_to_quote[idx] = quote
                 saved_count += 1
                 continue
 
             created = RequisitionQuote.objects.create(
                 requisition=requisition,
+                parent=None,
                 name=name,
                 value=value,
                 link=link,
                 photo=photo,
             )
             kept_ids.add(created.id)
+            idx_to_quote[idx] = created
             saved_count += 1
 
         if saved_count == 0:
             return 0, 'Cadastre pelo menos um orçamento.'
+
+        id_to_quote = {str(item.id): item for item in idx_to_quote.values()}
+        for idx, quote in idx_to_quote.items():
+            parent_idx = (request.POST.get(f'budget_parent_idx_{idx}') or '').strip()
+            parent_quote_id = (request.POST.get(f'budget_parent_quote_id_{idx}') or '').strip()
+            parent_quote = None
+            if parent_quote_id and parent_quote_id in id_to_quote:
+                parent_quote = id_to_quote[parent_quote_id]
+            elif parent_idx and parent_idx in idx_to_quote:
+                parent_quote = idx_to_quote[parent_idx]
+            if parent_quote and parent_quote.id != quote.id and quote.parent_id != parent_quote.id:
+                quote.parent = parent_quote
+                quote.save(update_fields=['parent'])
+
         if update_mode:
             requisition.quotes.exclude(id__in=kept_ids).delete()
         return saved_count, None
