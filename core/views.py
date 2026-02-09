@@ -107,16 +107,32 @@ def _get_user_ad_groups(username: str) -> list[str]:
             search_base=base_dn,
             search_filter=user_filter,
             search_scope=SUBTREE,
-            attributes=['memberOf'],
+            attributes=['memberOf', 'primaryGroupID'],
         )
         if not conn.entries:
             return []
-        member_of = conn.entries[0].memberOf.values if 'memberOf' in conn.entries[0] else []
-        groups = []
+        entry = conn.entries[0]
+        member_of = entry.memberOf.values if 'memberOf' in entry else []
+        groups: list[str] = []
         for dn in member_of:
             part = str(dn).split(',', 1)[0]
             if part.upper().startswith('CN='):
                 groups.append(part[3:])
+
+        # AD can omit the primary group from memberOf, so resolve it via primaryGroupID.
+        primary_group_id = entry.primaryGroupID.value if 'primaryGroupID' in entry else None
+        if primary_group_id:
+            primary_filter = f'(&(objectCategory=group)(primaryGroupToken={primary_group_id}))'
+            conn.search(
+                search_base=base_dn,
+                search_filter=primary_filter,
+                search_scope=SUBTREE,
+                attributes=['cn'],
+            )
+            if conn.entries:
+                primary_cn = conn.entries[0].cn.value if 'cn' in conn.entries[0] else ''
+                if primary_cn:
+                    groups.append(str(primary_cn))
         return sorted(set(groups), key=lambda v: v.lower())
     except Exception:
         logger.exception('Falha ao consultar grupos AD do usuario %s', username)
@@ -427,6 +443,12 @@ class AcessosView(LoginRequiredMixin, TemplateView):
                 context['user_groups'] = sorted({m.group.name for m in memberships}, key=lambda v: v.lower())
                 access_map: dict[int, dict[str, str | set[str]]] = {}
                 admin_group_names: set[str] = set()
+
+                for ad_group in context['user_ad_groups']:
+                    normalized_ad = _normalize_text(ad_group)
+                    if 'admin' in normalized_ad or 'administrador' in normalized_ad:
+                        admin_group_names.add(ad_group)
+
                 for member in memberships:
                     folder = member.group.folder
                     entry = access_map.setdefault(
