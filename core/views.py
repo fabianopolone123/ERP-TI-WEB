@@ -5,7 +5,6 @@ from decimal import Decimal, InvalidOperation
 from django.conf import settings
 from django.contrib import messages
 from django.core.mail import send_mail
-from django.db.models import Count
 from django.shortcuts import redirect
 from django.utils import timezone
 from datetime import timedelta
@@ -481,11 +480,12 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
                 quote.freight = freight
                 quote.link = link
                 quote.parent = None
+                quote.is_selected = False
                 if photo:
                     quote.photo = photo
                     quote.save()
                 else:
-                    quote.save(update_fields=['name', 'value', 'freight', 'link', 'parent'])
+                    quote.save(update_fields=['name', 'value', 'freight', 'link', 'parent', 'is_selected'])
                 kept_ids.add(quote.id)
                 idx_to_quote[idx] = quote
                 saved_count += 1
@@ -497,6 +497,7 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
                 name=name,
                 value=value,
                 freight=freight,
+                is_selected=False,
                 link=link,
                 photo=photo,
             )
@@ -519,6 +520,16 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
             if parent_quote and parent_quote.id != quote.id and quote.parent_id != parent_quote.id:
                 quote.parent = parent_quote
                 quote.save(update_fields=['parent'])
+
+        selected_idx = (request.POST.get('approved_budget_idx') or '').strip()
+        selected_quote = idx_to_quote.get(selected_idx) if selected_idx else None
+        if selected_quote and selected_quote.parent_id:
+            return 0, 'Selecione como aprovado apenas um orçamento principal.'
+
+        requisition.quotes.update(is_selected=False)
+        if selected_quote:
+            selected_quote.is_selected = True
+            selected_quote.save(update_fields=['is_selected'])
 
         if update_mode:
             requisition.quotes.exclude(id__in=kept_ids).delete()
@@ -588,15 +599,38 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
         context['modules'] = build_modules('requisicoes') if is_ti else []
         requisitions = (
             Requisition.objects
-            .prefetch_related('quotes')
-            .annotate(quotes_count=Count('quotes'))
+            .prefetch_related('quotes__subquotes')
             .order_by('-created_at', '-id')
         )
         for req in requisitions:
-            total = Decimal('0')
-            for quote in req.quotes.all():
-                total += (quote.value or Decimal('0')) + (quote.freight or Decimal('0'))
-            req.quotes_total = total
+            all_quotes = list(req.quotes.all())
+            subs_by_parent: dict[int, list[RequisitionQuote]] = {}
+            main_quotes: list[RequisitionQuote] = []
+            selected_main: RequisitionQuote | None = None
+            for quote in all_quotes:
+                if quote.parent_id:
+                    subs_by_parent.setdefault(quote.parent_id, []).append(quote)
+                    continue
+                main_quotes.append(quote)
+                if quote.is_selected:
+                    selected_main = quote
+
+            for quote in main_quotes:
+                quote.sub_items = subs_by_parent.get(quote.id, [])
+                quote.sub_items_count = len(quote.sub_items)
+
+            req.main_quotes = main_quotes
+            req.main_quotes_count = len(main_quotes)
+            req.sub_quotes_count = max(0, len(all_quotes) - len(main_quotes))
+            req.approved_quote_id = selected_main.id if selected_main else None
+
+            if selected_main:
+                total = (selected_main.value or Decimal('0')) + (selected_main.freight or Decimal('0'))
+                for sub_item in getattr(selected_main, 'sub_items', []):
+                    total += (sub_item.value or Decimal('0')) + (sub_item.freight or Decimal('0'))
+                req.quotes_total = total
+            else:
+                req.quotes_total = None
         context['requisitions'] = requisitions
         return context
 

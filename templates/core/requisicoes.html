@@ -65,10 +65,25 @@
                             <td>{{ item.title }}</td>
                             <td>
                                 <div>{{ item.request }}</div>
-                                {% if item.quotes.all %}
+                                {% if item.main_quotes %}
                                     <div class="muted" style="margin-top: 4px;">
-                                        {% for quote in item.quotes.all %}
-                                             {{ quote.name }} (R$ {{ quote.value|br_money }}{% if quote.freight %} + frete R$ {{ quote.freight|br_money }}{% endif %}){% if not forloop.last %}<br />{% endif %}
+                                        {% for quote in item.main_quotes %}
+                                            <div style="margin-bottom: 6px;">
+                                                {{ quote.name }} (R$ {{ quote.value|br_money }}{% if quote.freight %} + frete R$ {{ quote.freight|br_money }}{% endif %})
+                                                {% if item.approved_quote_id == quote.id %}
+                                                    <span class="status-pill status-approved" style="margin-left: 6px;">Aprovado</span>
+                                                {% endif %}
+                                                {% if quote.sub_items_count %}
+                                                    <details style="margin-top: 4px;">
+                                                        <summary>Suborçamentos ({{ quote.sub_items_count }})</summary>
+                                                        <div style="margin-top: 4px; padding-left: 8px;">
+                                                            {% for sub in quote.sub_items %}
+                                                                <div>{{ sub.name }} (R$ {{ sub.value|br_money }}{% if sub.freight %} + frete R$ {{ sub.freight|br_money }}{% endif %})</div>
+                                                            {% endfor %}
+                                                        </div>
+                                                    </details>
+                                                {% endif %}
+                                            </div>
                                         {% endfor %}
                                     </div>
                                 {% endif %}
@@ -76,9 +91,18 @@
                             <td>
                                 <span class="status-pill status-{{ item.status }}">{{ item.get_status_display }}</span>
                             </td>
-                            <td data-sort-value="{{ item.quotes_count|default:0 }}">{{ item.quotes_count|default:0 }}</td>
-                            <td data-sort-value="{{ item.quotes_total|default_if_none:item.total_value|floatformat:2 }}">
-                                R$ {{ item.quotes_total|default_if_none:item.total_value|br_money }}
+                            <td data-sort-value="{{ item.main_quotes_count|default:0 }}">
+                                {{ item.main_quotes_count|default:0 }}
+                                {% if item.sub_quotes_count %}
+                                    <div class="muted" style="font-size: 0.78rem;">{{ item.sub_quotes_count }} sub</div>
+                                {% endif %}
+                            </td>
+                            <td data-sort-value="{% if item.quotes_total is not None %}{{ item.quotes_total|floatformat:2 }}{% else %}-1{% endif %}">
+                                {% if item.quotes_total is not None %}
+                                    R$ {{ item.quotes_total|br_money }}
+                                {% else %}
+                                    <span class="muted">Aguardando aprovação</span>
+                                {% endif %}
                             </td>
                             <td data-sort-value="{{ item.created_at|date:'YmdHis' }}">{{ item.created_at|date:'d/m/Y H:i' }}</td>
                         </tr>
@@ -201,6 +225,10 @@
                 <input type="text" data-field="freight" placeholder="Ex.: 120,00" />
             </div>
             <div style="align-self: flex-end; display: flex; gap: 8px; flex-wrap: wrap;">
+                <label style="display: inline-flex; align-items: center; gap: 6px;">
+                    <input type="radio" data-field="approved" />
+                    Aprovar
+                </label>
                 <button type="button" data-add-sub-budget>Sub orçamento</button>
                 <button type="button" data-remove-budget>Remover</button>
             </div>
@@ -246,6 +274,7 @@
                         name: "{{ quote.name|escapejs }}",
                         value: "{{ quote.value|floatformat:2|escapejs }}",
                         freight: "{{ quote.freight|floatformat:2|escapejs }}",
+                        is_selected: {% if quote.is_selected %}true{% else %}false{% endif %},
                         link: "{{ quote.link|escapejs }}",
                         created_at: "{{ quote.created_at|date:'d/m/Y H:i'|escapejs }}",
                         photo_url: "{% if quote.photo %}{{ quote.photo.url|escapejs }}{% endif %}",
@@ -336,6 +365,8 @@
             item.querySelector('[data-field="freight"]').name = `budget_freight_${idx}`;
             item.querySelector('[data-field="link"]').name = `budget_link_${idx}`;
             item.querySelector('[data-field="photo"]').name = `budget_photo_${idx}`;
+            item.querySelector('[data-field="approved"]').name = 'approved_budget_idx';
+            item.querySelector('[data-field="approved"]').value = String(idx);
         };
 
         const addBudgetItem = (initialData = null, parentMeta = null) => {
@@ -355,6 +386,7 @@
             const createdAtEl = item.querySelector('[data-budget-created-at]');
             const removeBtn = item.querySelector('[data-remove-budget]');
             const addSubBtn = item.querySelector('[data-add-sub-budget]');
+            const approvedInput = item.querySelector('[data-field="approved"]');
             const captureBtn = item.querySelector('[data-capture-budget]');
             const photoInput = item.querySelector('[data-field="photo"]');
             const preview = item.querySelector('[data-photo-preview]');
@@ -407,9 +439,16 @@
                 }
                 item.style.marginLeft = '28px';
                 item.style.borderLeft = '3px solid #334155';
+                if (approvedInput) {
+                    approvedInput.checked = false;
+                    approvedInput.disabled = true;
+                }
             } else {
                 parentIdxInput.value = '';
                 parentQuoteIdInput.value = '';
+                if (approvedInput) {
+                    approvedInput.disabled = false;
+                }
             }
 
             if (initialData) {
@@ -418,6 +457,9 @@
                 valueInput.value = toBrValue(initialData.value || '');
                 freightInput.value = toBrValue(initialData.freight || '');
                 linkInput.value = initialData.link || '';
+                if (approvedInput) {
+                    approvedInput.checked = !!initialData.is_selected && !initialData.parent_id;
+                }
                 if (createdAtEl) {
                     createdAtEl.textContent = `Cadastrado em: ${initialData.created_at || 'data indisponível'}`;
                 }
@@ -730,3 +772,4 @@
 </script>
 {% endif %}
 {% endblock %}
+
