@@ -36,7 +36,14 @@ class Equipment(models.Model):
 
 
 class Requisition(models.Model):
+    class Status(models.TextChoices):
+        PENDING_APPROVAL = 'pending_approval', 'Pendente de aprovação'
+        APPROVED = 'approved', 'Aprovado'
+        REJECTED = 'rejected', 'Reprovado'
+        RECEIVED = 'received', 'Recebido'
+
     request = models.CharField(max_length=300)
+    status = models.CharField(max_length=30, choices=Status.choices, default=Status.PENDING_APPROVAL)
     quantity = models.PositiveIntegerField(default=1)
     unit_value = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     total_value = models.DecimalField(max_digits=12, decimal_places=2, default=0)
@@ -57,6 +64,18 @@ class Requisition(models.Model):
 
     def __str__(self) -> str:
         return f'#{self.id} - {self.request}'
+
+
+class RequisitionQuote(models.Model):
+    requisition = models.ForeignKey(Requisition, on_delete=models.CASCADE, related_name='quotes')
+    name = models.CharField(max_length=300)
+    value = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    photo = models.ImageField(upload_to='requisitions/quotes/', null=True, blank=True)
+    link = models.URLField(blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self) -> str:
+        return f'{self.requisition_id} - {self.name}'
 
 
 class AccessFolder(models.Model):

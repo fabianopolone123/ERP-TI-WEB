@@ -5,6 +5,7 @@ from decimal import Decimal, InvalidOperation
 from django.conf import settings
 from django.contrib import messages
 from django.core.mail import send_mail
+from django.db.models import Count, Sum
 from django.shortcuts import redirect
 from django.utils import timezone
 from datetime import timedelta
@@ -23,6 +24,7 @@ from .models import (
     ERPUser,
     Equipment,
     Requisition,
+    RequisitionQuote,
     AccessFolder,
     AccessMember,
     Ticket,
@@ -420,57 +422,77 @@ class EquipamentosView(LoginRequiredMixin, TemplateView):
 class RequisicoesView(LoginRequiredMixin, TemplateView):
     template_name = 'core/requisicoes.html'
 
+    @staticmethod
+    def _parse_decimal_br(raw_value: str) -> Decimal:
+        normalized_value = (raw_value or '').strip().replace(' ', '')
+        if ',' in normalized_value and '.' in normalized_value:
+            if normalized_value.rfind(',') > normalized_value.rfind('.'):
+                normalized_value = normalized_value.replace('.', '').replace(',', '.')
+            else:
+                normalized_value = normalized_value.replace(',', '')
+        elif ',' in normalized_value:
+            normalized_value = normalized_value.replace('.', '').replace(',', '.')
+        elif normalized_value.count('.') > 1:
+            normalized_value = normalized_value.replace('.', '')
+        value = Decimal(normalized_value or '0')
+        if value < 0:
+            raise InvalidOperation
+        return value
+
     def post(self, request, *args, **kwargs):
         if not is_ti_user(request):
             messages.error(request, 'Apenas usuários do departamento TI podem cadastrar requisições.')
             return self.get(request, *args, **kwargs)
 
-        request_text = (request.POST.get('request') or '').strip()
+        request_text = (request.POST.get('request_text') or '').strip()
         if not request_text:
-            messages.error(request, 'Informe a solicitação.')
+            messages.error(request, 'Informe o texto da requisição.')
             return self.get(request, *args, **kwargs)
 
-        quantity_raw = (request.POST.get('quantity') or '').strip()
-        unit_value_raw = (request.POST.get('unit_value') or '').strip()
-        try:
-            quantity = int(quantity_raw or '1')
-            if quantity < 1:
-                raise ValueError
-        except ValueError:
-            messages.error(request, 'Quantidade inválida.')
-            return self.get(request, *args, **kwargs)
-
-        try:
-            normalized_value = unit_value_raw.replace(' ', '')
-            if ',' in normalized_value and '.' in normalized_value:
-                if normalized_value.rfind(',') > normalized_value.rfind('.'):
-                    normalized_value = normalized_value.replace('.', '').replace(',', '.')
-                else:
-                    normalized_value = normalized_value.replace(',', '')
-            elif ',' in normalized_value:
-                normalized_value = normalized_value.replace('.', '').replace(',', '.')
-            elif normalized_value.count('.') > 1:
-                normalized_value = normalized_value.replace('.', '')
-
-            unit_value = Decimal(normalized_value or '0')
-            if unit_value < 0:
-                raise InvalidOperation
-        except (InvalidOperation, ValueError):
-            messages.error(request, 'Valor unitário inválido.')
-            return self.get(request, *args, **kwargs)
-
-        Requisition.objects.create(
+        requisition = Requisition.objects.create(
             request=request_text,
-            quantity=quantity,
-            unit_value=unit_value,
-            requested_at=(request.POST.get('requested_at') or '').strip() or None,
-            approved_at=(request.POST.get('approved_at') or '').strip() or None,
-            received_at=(request.POST.get('received_at') or '').strip() or None,
-            invoice=(request.POST.get('invoice') or '').strip(),
-            req_type=(request.POST.get('req_type') or '').strip(),
-            link=(request.POST.get('link') or '').strip(),
+            requested_at=timezone.localdate(),
+            status=Requisition.Status.PENDING_APPROVAL,
         )
-        messages.success(request, 'Requisição cadastrada com sucesso.')
+
+        created_quotes = 0
+        for idx in request.POST.getlist('budget_index'):
+            idx = (idx or '').strip()
+            if not idx:
+                continue
+            name = (request.POST.get(f'budget_name_{idx}') or '').strip()
+            value_raw = (request.POST.get(f'budget_value_{idx}') or '').strip()
+            link = (request.POST.get(f'budget_link_{idx}') or '').strip()
+            photo = request.FILES.get(f'budget_photo_{idx}')
+
+            if not name and not value_raw and not link and not photo:
+                continue
+            if not name:
+                messages.error(request, f'Orçamento #{idx}: informe o nome.')
+                requisition.delete()
+                return self.get(request, *args, **kwargs)
+            try:
+                value = self._parse_decimal_br(value_raw)
+            except (InvalidOperation, ValueError):
+                messages.error(request, f'Orçamento #{idx}: valor inválido.')
+                requisition.delete()
+                return self.get(request, *args, **kwargs)
+
+            RequisitionQuote.objects.create(
+                requisition=requisition,
+                name=name,
+                value=value,
+                link=link,
+                photo=photo,
+            )
+            created_quotes += 1
+
+        if created_quotes == 0:
+            requisition.delete()
+            messages.error(request, 'Cadastre pelo menos um orçamento.')
+            return self.get(request, *args, **kwargs)
+
+        messages.success(request, f'Requisição cadastrada com sucesso com {created_quotes} orçamento(s).')
         return redirect('requisicoes')
 
     def get_context_data(self, **kwargs):
@@ -478,9 +500,14 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
         is_ti = is_ti_user(self.request)
         context['is_ti_group'] = is_ti
         context['modules'] = build_modules('requisicoes') if is_ti else []
-        requisitions = Requisition.objects.all().order_by('-requested_at', '-id')
+        requisitions = (
+            Requisition.objects
+            .prefetch_related('quotes')
+            .annotate(quotes_count=Count('quotes'))
+            .annotate(quotes_total=Sum('quotes__value'))
+            .order_by('-created_at', '-id')
+        )
         context['requisitions'] = requisitions
-        context['types'] = sorted({(item.req_type or '').strip() for item in requisitions if (item.req_type or '').strip()})
         return context
 
 

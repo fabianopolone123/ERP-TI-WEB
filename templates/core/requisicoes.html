@@ -9,7 +9,7 @@
         <div>
             <h2>Requisições</h2>
             {% if is_ti_group %}
-            <p class="muted">Controle de solicitações, aprovações e recebimentos.</p>
+            <p class="muted">Cadastro de requisição com múltiplos orçamentos.</p>
             {% else %}
             <p class="muted">Seu usuário não está no departamento TI.</p>
             {% endif %}
@@ -24,32 +24,23 @@
         {% include "core/_tabs.html" %}
 
         <div class="topbar" style="margin-top: 16px;">
-            <h3>Lista de requisições</h3>
-            <button type="button" data-open-requisition>Novo registro</button>
+            <h3>Requisições</h3>
+            <button type="button" data-open-requisition>Nova requisição</button>
         </div>
 
         <div class="form-row" style="margin-bottom: 10px;">
             <div>
                 <label for="id_req_search">Busca</label>
-                <input id="id_req_search" type="text" placeholder="Pesquisar por solicitação, NF e tipo..." data-req-search />
-            </div>
-            <div>
-                <label for="id_req_type_filter">Tipo</label>
-                <select id="id_req_type_filter" data-req-type-filter>
-                    <option value="">Todos</option>
-                    {% for item_type in types %}
-                        <option value="{{ item_type }}">{{ item_type }}</option>
-                    {% endfor %}
-                </select>
+                <input id="id_req_search" type="text" placeholder="Pesquisar por requisição, orçamento ou status..." data-req-search />
             </div>
             <div>
                 <label for="id_req_status_filter">Status</label>
                 <select id="id_req_status_filter" data-req-status-filter>
                     <option value="">Todos</option>
-                    <option value="aberto">Aberto</option>
-                    <option value="requisitado">Requisitado</option>
-                    <option value="aprovado">Aprovado</option>
-                    <option value="recebido">Recebido</option>
+                    <option value="pending_approval">Pendente de aprovação</option>
+                    <option value="approved">Aprovado</option>
+                    <option value="rejected">Reprovado</option>
+                    <option value="received">Recebido</option>
                 </select>
             </div>
         </div>
@@ -59,46 +50,39 @@
                 <thead>
                     <tr>
                         <th>ID</th>
-                        <th>Solicitação</th>
-                        <th>Qtd</th>
-                        <th>Valor</th>
+                        <th>Requisição</th>
+                        <th>Status</th>
+                        <th>Orçamentos</th>
                         <th>Total</th>
-                        <th>Requisitado</th>
-                        <th>Aprovado</th>
-                        <th>Recebido</th>
-                        <th>NF</th>
-                        <th>Tipo</th>
-                        <th>Link</th>
+                        <th>Criado em</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for item in requisitions %}
-                        <tr
-                            data-req-row
-                            data-type="{{ item.req_type|lower }}"
-                            data-status="{% if item.received_at %}recebido{% elif item.approved_at %}aprovado{% elif item.requested_at %}requisitado{% else %}aberto{% endif %}"
-                        >
+                        <tr data-req-row data-status="{{ item.status }}">
                             <td data-sort-value="{{ item.id }}">{{ item.id }}</td>
-                            <td>{{ item.request }}</td>
-                            <td data-sort-value="{{ item.quantity }}">{{ item.quantity }}</td>
-                            <td data-sort-value="{{ item.unit_value|floatformat:2 }}">R$ {{ item.unit_value|br_money }}</td>
-                            <td data-sort-value="{{ item.total_value|floatformat:2 }}">R$ {{ item.total_value|br_money }}</td>
-                            <td data-sort-value="{{ item.requested_at|date:'Ymd' }}">{{ item.requested_at|date:'d/m/Y' }}</td>
-                            <td data-sort-value="{{ item.approved_at|date:'Ymd' }}">{{ item.approved_at|date:'d/m/Y' }}</td>
-                            <td data-sort-value="{{ item.received_at|date:'Ymd' }}">{{ item.received_at|date:'d/m/Y' }}</td>
-                            <td>{{ item.invoice }}</td>
-                            <td>{{ item.req_type }}</td>
                             <td>
-                                {% if item.link %}
-                                    <a href="{{ item.link }}" target="_blank" rel="noreferrer">Abrir</a>
-                                {% else %}
-                                    <span class="muted">-</span>
+                                <div>{{ item.request }}</div>
+                                {% if item.quotes.all %}
+                                    <div class="muted" style="margin-top: 4px;">
+                                        {% for quote in item.quotes.all %}
+                                            • {{ quote.name }} (R$ {{ quote.value|br_money }}){% if not forloop.last %}<br />{% endif %}
+                                        {% endfor %}
+                                    </div>
                                 {% endif %}
                             </td>
+                            <td>
+                                <span class="status-pill status-{{ item.status }}">{{ item.get_status_display }}</span>
+                            </td>
+                            <td data-sort-value="{{ item.quotes_count|default:0 }}">{{ item.quotes_count|default:0 }}</td>
+                            <td data-sort-value="{{ item.quotes_total|default_if_none:item.total_value|floatformat:2 }}">
+                                R$ {{ item.quotes_total|default_if_none:item.total_value|br_money }}
+                            </td>
+                            <td data-sort-value="{{ item.created_at|date:'YmdHis' }}">{{ item.created_at|date:'d/m/Y H:i' }}</td>
                         </tr>
                     {% empty %}
                         <tr>
-                            <td colspan="11" class="muted">Nenhuma requisição cadastrada.</td>
+                            <td colspan="6" class="muted">Nenhuma requisição cadastrada.</td>
                         </tr>
                     {% endfor %}
                 </tbody>
@@ -110,107 +94,357 @@
 </div>
 
 {% if is_ti_group %}
-    <div class="modal" data-requisition-modal hidden>
-        <div class="modal-backdrop" data-close-requisition></div>
-        <div class="modal-content">
-            <div class="topbar" style="margin-bottom: 8px;">
-                <h3>Nova requisição</h3>
-                <button type="button" data-close-requisition>Fechar</button>
+<div class="modal" data-requisition-modal hidden>
+    <div class="modal-backdrop" data-close-requisition></div>
+    <div class="modal-content">
+        <div class="topbar" style="margin-bottom: 8px;">
+            <h3>Nova requisição</h3>
+            <button type="button" data-close-requisition>Fechar</button>
+        </div>
+        <form method="post" enctype="multipart/form-data" data-requisition-form>
+            {% csrf_token %}
+            <div class="form-row">
+                <div style="flex: 1;">
+                    <label for="id_request_text">Requisição</label>
+                    <textarea id="id_request_text" name="request_text" rows="3" required placeholder="Descreva a necessidade da requisição..."></textarea>
+                </div>
             </div>
-            <form method="post">
-                {% csrf_token %}
-                <div class="form-row">
-                    <div style="flex: 2;">
-                        <label for="id_request">Solicitação</label>
-                        <input id="id_request" name="request" type="text" required />
-                    </div>
-                    <div>
-                        <label for="id_quantity">Qtd</label>
-                        <input id="id_quantity" name="quantity" type="number" min="1" step="1" value="1" required />
-                    </div>
-                    <div>
-                        <label for="id_unit_value">Valor</label>
-                        <input id="id_unit_value" name="unit_value" type="text" value="0,00" placeholder="Ex.: 18.652,22" required />
-                    </div>
+
+            <div class="topbar" style="margin-top: 8px; margin-bottom: 8px;">
+                <h4 style="margin: 0;">Orçamentos</h4>
+                <div style="display: flex; gap: 8px;">
+                    <button type="button" data-copy-budgets>Copiar orçamentos</button>
+                    <button type="button" data-add-budget>Adicionar orçamento</button>
                 </div>
-                <div class="form-row">
-                    <div>
-                        <label for="id_requested_at">Requisitado</label>
-                        <input id="id_requested_at" name="requested_at" type="date" />
-                    </div>
-                    <div>
-                        <label for="id_approved_at">Aprovado</label>
-                        <input id="id_approved_at" name="approved_at" type="date" />
-                    </div>
-                    <div>
-                        <label for="id_received_at">Recebido</label>
-                        <input id="id_received_at" name="received_at" type="date" />
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div>
-                        <label for="id_invoice">NF</label>
-                        <input id="id_invoice" name="invoice" type="text" />
-                    </div>
-                    <div>
-                        <label for="id_req_type">Tipo</label>
-                        <input id="id_req_type" name="req_type" type="text" />
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div style="flex: 2;">
-                        <label for="id_link">Link</label>
-                        <input id="id_link" name="link" type="url" placeholder="https://..." />
-                    </div>
-                </div>
-                <button type="submit">Salvar</button>
-            </form>
+            </div>
+
+            <div data-budget-list style="display: grid; gap: 10px;"></div>
+
+            <div style="margin-top: 14px;">
+                <button type="submit">Salvar requisição</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="modal" data-capture-modal hidden>
+    <div class="modal-backdrop" data-capture-cancel></div>
+    <div class="modal-content" style="width: min(1100px, 96vw);">
+        <div class="topbar" style="margin-bottom: 8px;">
+            <h3>Capturar orçamento (selecione uma área)</h3>
+            <div style="display: flex; gap: 8px;">
+                <button type="button" data-capture-confirm>Usar captura</button>
+                <button type="button" data-capture-cancel>Cancelar</button>
+            </div>
+        </div>
+        <div class="muted" style="margin-bottom: 8px;">
+            Clique e arraste para selecionar a área desejada da imagem capturada.
+        </div>
+        <div style="position: relative; border: 1px solid #1f2a44; border-radius: 10px; overflow: auto; max-height: 70vh;">
+            <canvas data-capture-canvas style="display: block; max-width: 100%; height: auto;"></canvas>
         </div>
     </div>
+</div>
 
-    <script>
-        (function () {
-            const modal = document.querySelector('[data-requisition-modal]');
-            const openBtn = document.querySelector('[data-open-requisition]');
-            const closeEls = document.querySelectorAll('[data-close-requisition]');
-            if (!modal || !openBtn) return;
+<template id="budget-item-template">
+    <div class="ticket-legend" data-budget-item>
+        <input type="hidden" name="budget_index" data-budget-index />
+        <div class="form-row">
+            <div style="flex: 2;">
+                <label>Nome do orçamento</label>
+                <input type="text" data-field="name" required />
+            </div>
+            <div>
+                <label>Valor</label>
+                <input type="text" data-field="value" placeholder="Ex.: 18.652,22" required />
+            </div>
+            <div style="align-self: flex-end;">
+                <button type="button" data-remove-budget>Remover</button>
+            </div>
+        </div>
+        <div class="form-row">
+            <div style="flex: 2;">
+                <label>Link</label>
+                <input type="url" data-field="link" placeholder="https://..." />
+            </div>
+            <div style="flex: 2;">
+                <label>Foto</label>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <input type="file" accept="image/*" data-field="photo" />
+                    <button type="button" data-capture-budget>Capturar</button>
+                </div>
+                <div style="margin-top: 8px;">
+                    <img data-photo-preview alt="Preview" style="max-height: 90px; display: none; border: 1px solid #1f2a44; border-radius: 6px;" />
+                </div>
+            </div>
+        </div>
+    </div>
+</template>
 
-            openBtn.addEventListener('click', () => { modal.hidden = false; });
-            closeEls.forEach((el) => el.addEventListener('click', () => { modal.hidden = true; }));
-        })();
-    </script>
+<script>
+    (function () {
+        const modal = document.querySelector('[data-requisition-modal]');
+        const openBtn = document.querySelector('[data-open-requisition]');
+        const closeEls = document.querySelectorAll('[data-close-requisition]');
+        const addBtn = document.querySelector('[data-add-budget]');
+        const copyBtn = document.querySelector('[data-copy-budgets]');
+        const budgetList = document.querySelector('[data-budget-list]');
+        const form = document.querySelector('[data-requisition-form]');
+        const requestInput = document.querySelector('#id_request_text');
+        const template = document.querySelector('#budget-item-template');
 
-    <script>
-        (function () {
-            const searchInput = document.querySelector('[data-req-search]');
-            const typeSelect = document.querySelector('[data-req-type-filter]');
-            const statusSelect = document.querySelector('[data-req-status-filter]');
-            const rows = Array.from(document.querySelectorAll('[data-req-row]'));
-            if (!rows.length || !searchInput || !typeSelect || !statusSelect) return;
+        const captureModal = document.querySelector('[data-capture-modal]');
+        const captureCanvas = document.querySelector('[data-capture-canvas]');
+        const captureConfirmBtn = document.querySelector('[data-capture-confirm]');
+        const captureCancelEls = document.querySelectorAll('[data-capture-cancel]');
 
-            const normalize = (value) => (value || '').toString().trim().toLowerCase();
+        if (!modal || !openBtn || !budgetList || !template || !form) return;
 
-            const applyFilters = () => {
-                const q = normalize(searchInput.value);
-                const type = normalize(typeSelect.value);
-                const status = normalize(statusSelect.value);
+        let budgetIndex = 0;
+        let captureTargetInput = null;
+        let captureTargetPreview = null;
+        let captureImage = null;
+        let selection = null;
+        let dragging = false;
+        let startX = 0;
+        let startY = 0;
 
-                rows.forEach((row) => {
-                    const text = normalize(row.textContent);
-                    const rowType = normalize(row.dataset.type);
-                    const rowStatus = normalize(row.dataset.status);
-                    const show =
-                        (!q || text.includes(q)) &&
-                        (!type || rowType === type) &&
-                        (!status || rowStatus === status);
-                    row.style.display = show ? '' : 'none';
-                });
+        const setBudgetFieldNames = (item, idx) => {
+            item.querySelector('[data-budget-index]').value = String(idx);
+            item.querySelector('[data-field="name"]').name = `budget_name_${idx}`;
+            item.querySelector('[data-field="value"]').name = `budget_value_${idx}`;
+            item.querySelector('[data-field="link"]').name = `budget_link_${idx}`;
+            item.querySelector('[data-field="photo"]').name = `budget_photo_${idx}`;
+        };
+
+        const addBudgetItem = () => {
+            const fragment = template.content.cloneNode(true);
+            const item = fragment.querySelector('[data-budget-item]');
+            const idx = ++budgetIndex;
+            setBudgetFieldNames(item, idx);
+
+            const removeBtn = item.querySelector('[data-remove-budget]');
+            const captureBtn = item.querySelector('[data-capture-budget]');
+            const photoInput = item.querySelector('[data-field="photo"]');
+            const preview = item.querySelector('[data-photo-preview]');
+
+            removeBtn.addEventListener('click', () => {
+                if (budgetList.querySelectorAll('[data-budget-item]').length <= 1) return;
+                item.remove();
+            });
+
+            photoInput.addEventListener('change', () => {
+                const file = photoInput.files && photoInput.files[0];
+                if (!file) {
+                    preview.style.display = 'none';
+                    preview.removeAttribute('src');
+                    return;
+                }
+                preview.src = URL.createObjectURL(file);
+                preview.style.display = 'block';
+            });
+
+            captureBtn.addEventListener('click', async () => {
+                try {
+                    const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+                    const video = document.createElement('video');
+                    video.srcObject = stream;
+                    await video.play();
+
+                    const w = video.videoWidth || 1280;
+                    const h = video.videoHeight || 720;
+                    const tmpCanvas = document.createElement('canvas');
+                    tmpCanvas.width = w;
+                    tmpCanvas.height = h;
+                    const tmpCtx = tmpCanvas.getContext('2d');
+                    tmpCtx.drawImage(video, 0, 0, w, h);
+
+                    stream.getTracks().forEach((t) => t.stop());
+                    video.srcObject = null;
+
+                    captureImage = new Image();
+                    captureImage.onload = () => {
+                        captureCanvas.width = captureImage.width;
+                        captureCanvas.height = captureImage.height;
+                        const ctx = captureCanvas.getContext('2d');
+                        ctx.drawImage(captureImage, 0, 0);
+                        selection = null;
+                        captureTargetInput = photoInput;
+                        captureTargetPreview = preview;
+                        captureModal.hidden = false;
+                    };
+                    captureImage.src = tmpCanvas.toDataURL('image/png');
+                } catch (err) {
+                    alert(`Não foi possível capturar a tela: ${err}`);
+                }
+            });
+
+            budgetList.appendChild(item);
+        };
+
+        const drawCapture = () => {
+            if (!captureImage) return;
+            const ctx = captureCanvas.getContext('2d');
+            ctx.clearRect(0, 0, captureCanvas.width, captureCanvas.height);
+            ctx.drawImage(captureImage, 0, 0);
+
+            if (selection && selection.w > 0 && selection.h > 0) {
+                ctx.save();
+                ctx.strokeStyle = '#22c55e';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([8, 4]);
+                ctx.strokeRect(selection.x, selection.y, selection.w, selection.h);
+                ctx.fillStyle = 'rgba(34, 197, 94, 0.15)';
+                ctx.fillRect(selection.x, selection.y, selection.w, selection.h);
+                ctx.restore();
+            }
+        };
+
+        const toCanvasCoordinates = (event) => {
+            const rect = captureCanvas.getBoundingClientRect();
+            const scaleX = captureCanvas.width / rect.width;
+            const scaleY = captureCanvas.height / rect.height;
+            return {
+                x: Math.max(0, Math.min(captureCanvas.width, (event.clientX - rect.left) * scaleX)),
+                y: Math.max(0, Math.min(captureCanvas.height, (event.clientY - rect.top) * scaleY)),
             };
+        };
 
-            searchInput.addEventListener('input', applyFilters);
-            typeSelect.addEventListener('change', applyFilters);
-            statusSelect.addEventListener('change', applyFilters);
-        })();
-    </script>
+        captureCanvas.addEventListener('mousedown', (event) => {
+            if (!captureImage) return;
+            dragging = true;
+            const p = toCanvasCoordinates(event);
+            startX = p.x;
+            startY = p.y;
+            selection = { x: p.x, y: p.y, w: 0, h: 0 };
+            drawCapture();
+        });
+
+        captureCanvas.addEventListener('mousemove', (event) => {
+            if (!dragging || !captureImage) return;
+            const p = toCanvasCoordinates(event);
+            const x = Math.min(startX, p.x);
+            const y = Math.min(startY, p.y);
+            const w = Math.abs(p.x - startX);
+            const h = Math.abs(p.y - startY);
+            selection = { x, y, w, h };
+            drawCapture();
+        });
+
+        window.addEventListener('mouseup', () => {
+            dragging = false;
+        });
+
+        const closeCapture = () => {
+            captureModal.hidden = true;
+            captureImage = null;
+            selection = null;
+            captureTargetInput = null;
+            captureTargetPreview = null;
+        };
+
+        captureCancelEls.forEach((el) => el.addEventListener('click', closeCapture));
+
+        captureConfirmBtn.addEventListener('click', () => {
+            if (!captureImage || !captureTargetInput) return;
+            let crop = selection;
+            if (!crop || crop.w < 4 || crop.h < 4) {
+                crop = { x: 0, y: 0, w: captureCanvas.width, h: captureCanvas.height };
+            }
+            const out = document.createElement('canvas');
+            out.width = Math.floor(crop.w);
+            out.height = Math.floor(crop.h);
+            const outCtx = out.getContext('2d');
+            outCtx.drawImage(
+                captureCanvas,
+                crop.x,
+                crop.y,
+                crop.w,
+                crop.h,
+                0,
+                0,
+                out.width,
+                out.height
+            );
+            out.toBlob((blob) => {
+                if (!blob) return;
+                const file = new File([blob], `captura-${Date.now()}.png`, { type: 'image/png' });
+                const dt = new DataTransfer();
+                dt.items.add(file);
+                captureTargetInput.files = dt.files;
+                captureTargetPreview.src = URL.createObjectURL(file);
+                captureTargetPreview.style.display = 'block';
+                closeCapture();
+            }, 'image/png');
+        });
+
+        const open = () => {
+            modal.hidden = false;
+            if (!budgetList.querySelector('[data-budget-item]')) addBudgetItem();
+        };
+
+        const close = () => {
+            modal.hidden = true;
+        };
+
+        openBtn.addEventListener('click', open);
+        closeEls.forEach((el) => el.addEventListener('click', close));
+        addBtn.addEventListener('click', addBudgetItem);
+
+        copyBtn.addEventListener('click', async () => {
+            const reqText = (requestInput.value || '').trim();
+            const lines = [];
+            lines.push(`Requisição: ${reqText || '(sem texto)'}`);
+            lines.push('');
+            lines.push('Orçamentos:');
+            const items = Array.from(budgetList.querySelectorAll('[data-budget-item]'));
+            items.forEach((item, i) => {
+                const name = (item.querySelector('[data-field="name"]').value || '').trim();
+                const value = (item.querySelector('[data-field="value"]').value || '').trim();
+                const link = (item.querySelector('[data-field="link"]').value || '').trim();
+                if (!name && !value && !link) return;
+                lines.push(`${i + 1}. ${name || '(sem nome)'} - R$ ${value || '0,00'}`);
+                if (link) lines.push(`   Link: ${link}`);
+            });
+            const payload = lines.join('\n').trim();
+            if (!payload) return;
+            try {
+                await navigator.clipboard.writeText(payload);
+                alert('Orçamentos copiados para a área de transferência.');
+            } catch (err) {
+                alert(`Falha ao copiar: ${err}`);
+            }
+        });
+
+        form.addEventListener('submit', () => {
+            if (!budgetList.querySelector('[data-budget-item]')) addBudgetItem();
+        });
+    })();
+</script>
+
+<script>
+    (function () {
+        const searchInput = document.querySelector('[data-req-search]');
+        const statusSelect = document.querySelector('[data-req-status-filter]');
+        const rows = Array.from(document.querySelectorAll('[data-req-row]'));
+        if (!searchInput || !statusSelect || !rows.length) return;
+
+        const normalize = (value) => (value || '').toString().trim().toLowerCase();
+
+        const applyFilters = () => {
+            const query = normalize(searchInput.value);
+            const status = normalize(statusSelect.value);
+            rows.forEach((row) => {
+                const text = normalize(row.textContent);
+                const rowStatus = normalize(row.dataset.status);
+                const show = (!query || text.includes(query)) && (!status || rowStatus === status);
+                row.style.display = show ? '' : 'none';
+            });
+        };
+
+        searchInput.addEventListener('input', applyFilters);
+        statusSelect.addEventListener('change', applyFilters);
+    })();
+</script>
 {% endif %}
 {% endblock %}
