@@ -209,6 +209,17 @@
         let startX = 0;
         let startY = 0;
 
+        const getDisplayStream = async () => {
+            const constraints = { video: true, audio: false };
+            if (navigator.mediaDevices && typeof navigator.mediaDevices.getDisplayMedia === 'function') {
+                return navigator.mediaDevices.getDisplayMedia(constraints);
+            }
+            if (typeof navigator.getDisplayMedia === 'function') {
+                return navigator.getDisplayMedia(constraints);
+            }
+            throw new Error('API de captura indisponível neste navegador/contexto.');
+        };
+
         const setBudgetFieldNames = (item, idx) => {
             item.querySelector('[data-budget-index]').value = String(idx);
             item.querySelector('[data-field="name"]').name = `budget_name_${idx}`;
@@ -246,7 +257,7 @@
 
             captureBtn.addEventListener('click', async () => {
                 try {
-                    const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+                    const stream = await getDisplayStream();
                     const video = document.createElement('video');
                     video.srcObject = stream;
                     await video.play();
@@ -275,7 +286,11 @@
                     };
                     captureImage.src = tmpCanvas.toDataURL('image/png');
                 } catch (err) {
-                    alert(`Não foi possível capturar a tela: ${err}`);
+                    const secureHint = window.isSecureContext
+                        ? ''
+                        : ' Abra por https:// ou http://localhost para permitir captura.';
+                    alert(`Não foi possível capturar a tela: ${err}.${secureHint} Vou abrir seleção de arquivo como alternativa.`);
+                    photoInput.click();
                 }
             });
 
