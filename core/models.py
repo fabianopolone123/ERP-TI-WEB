@@ -42,6 +42,7 @@ class Requisition(models.Model):
         REJECTED = 'rejected', 'Reprovado'
         RECEIVED = 'received', 'Recebido'
 
+    title = models.CharField(max_length=200, blank=True, default='')
     request = models.CharField(max_length=300)
     status = models.CharField(max_length=30, choices=Status.choices, default=Status.PENDING_APPROVAL)
     quantity = models.PositiveIntegerField(default=1)

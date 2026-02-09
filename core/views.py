@@ -504,6 +504,11 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
             return self.get(request, *args, **kwargs)
 
         mode = (request.POST.get('mode') or 'create').strip().lower()
+        title_text = (request.POST.get('title') or '').strip()
+        if not title_text:
+            messages.error(request, 'Informe o título da requisição.')
+            return self.get(request, *args, **kwargs)
+
         request_text = (request.POST.get('request_text') or '').strip()
         if not request_text:
             messages.error(request, 'Informe o texto da requisição.')
@@ -521,9 +526,10 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
             if status_value not in valid_statuses:
                 status_value = Requisition.Status.PENDING_APPROVAL
 
+            requisition.title = title_text
             requisition.request = request_text
             requisition.status = status_value
-            requisition.save(update_fields=['request', 'status', 'updated_at'])
+            requisition.save(update_fields=['title', 'request', 'status', 'updated_at'])
 
             saved_count, error = self._save_quotes(request, requisition, update_mode=True)
             if error:
@@ -534,6 +540,7 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
             return redirect('requisicoes')
 
         requisition = Requisition.objects.create(
+            title=title_text,
             request=request_text,
             requested_at=timezone.localdate(),
             status=Requisition.Status.PENDING_APPROVAL,
