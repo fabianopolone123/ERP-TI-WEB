@@ -30,6 +30,7 @@ _GLOBAL_IDENTITY_NAMES = {
     'todos',
     'usuarios autenticados',
     'usuarios do dominio',
+    'usurios do domnio',
 }
 
 
@@ -102,7 +103,12 @@ def _rights_to_level(rights: str) -> str:
 def _filter_group(identity: str) -> str | None:
     base = identity.split('\\', 1)[1] if '\\' in identity else identity
     normalized = _normalize_identity_name(base)
+    compact = _normalize_compact(base)
     if normalized in _IGNORE_IDENTITY_NAMES:
+        return None
+    if 'propriet' in compact and 'criador' in compact:
+        return None
+    if compact in {'system', 'sistema'}:
         return None
     if base.endswith('$'):
         return None
@@ -117,9 +123,21 @@ def _normalize_identity_name(value: str) -> str:
     return no_accent
 
 
+def _normalize_compact(value: str) -> str:
+    return re.sub(r'[^a-z]', '', _normalize_identity_name(value))
+
+
 def _is_global_identity(identity: str) -> bool:
     base = identity.split('\\', 1)[1] if '\\' in identity else identity
-    return _normalize_identity_name(base) in _GLOBAL_IDENTITY_NAMES
+    normalized = _normalize_identity_name(base)
+    if normalized in _GLOBAL_IDENTITY_NAMES:
+        return True
+    compact = _normalize_compact(base)
+    if ('dom' in compact and ('user' in compact or 'usuario' in compact or 'usurio' in compact)):
+        return True
+    if ('auth' in compact and ('user' in compact or 'usuario' in compact)):
+        return True
+    return False
 
 
 def _resolve_group_members(conn: Connection, group_name: str) -> list[tuple[str, str]]:
@@ -172,11 +190,10 @@ def refresh_access_snapshot(root_path: str) -> tuple[int, int, int]:
         group_levels: dict[str, str] = {}
         group_is_global: dict[str, bool] = {}
         for identity, rights in identities:
+            is_global = _is_global_identity(identity)
             group_name = _filter_group(identity)
-            is_global = False
-            if not group_name and _is_global_identity(identity):
+            if is_global:
                 group_name = 'Todos os usuarios'
-                is_global = True
             if not group_name:
                 continue
             level = _rights_to_level(rights)
