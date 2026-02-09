@@ -169,6 +169,7 @@ class EmailTemplate(models.Model):
 
 
 class WhatsAppNotificationSettings(models.Model):
+    group_jid = models.CharField(max_length=200, blank=True, default='')
     send_group_on_new_ticket = models.BooleanField(default=False)
     send_group_on_assignment_new = models.BooleanField(default=True)
     send_group_on_assignment_changed = models.BooleanField(default=True)

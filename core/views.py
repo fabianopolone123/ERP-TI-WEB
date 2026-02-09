@@ -30,11 +30,10 @@ from .models import (
     WhatsAppNotificationSettings,
     WhatsAppOptOut,
 )
-from .wapi import send_whatsapp_message
+from .wapi import find_whatsapp_groups_by_name, send_whatsapp_message
 from .access_importer import refresh_access_snapshot
 
 logger = logging.getLogger(__name__)
-TI_CHAMADOS_GROUP_JID = getattr(settings, "WAPI_DEFAULT_GROUP_JID", "")
 DEFAULT_EMAIL_TEMPLATES = {
     'new_ticket_subject': '[Chamado #{id}] Novo chamado',
     'new_ticket_body': 'Novo chamado #{id}: {title}\n{description}',
@@ -170,6 +169,12 @@ def _get_whatsapp_settings() -> WhatsAppNotificationSettings:
     return settings_obj
 
 
+def _get_whatsapp_group_jid(settings_obj: WhatsAppNotificationSettings | None = None) -> str:
+    if settings_obj is None:
+        settings_obj = _get_whatsapp_settings()
+    return (settings_obj.group_jid or '').strip() or getattr(settings, "WAPI_DEFAULT_GROUP_JID", "").strip()
+
+
 def _clean_phone(value: str) -> str:
     digits = ''.join(ch for ch in (value or '') if ch.isdigit())
     if not digits:
@@ -231,6 +236,7 @@ def _build_whatsapp_summary(ticket, event_label="Novo chamado", extra_line=None)
 
 def _notify_whatsapp(ticket, event_type="new_ticket", event_label="Novo chamado", extra_line=None):
     settings_obj = _get_whatsapp_settings()
+    group_jid = _get_whatsapp_group_jid(settings_obj)
     summary = _build_whatsapp_summary(ticket, event_label=event_label, extra_line=extra_line)
 
     send_group = False
@@ -260,11 +266,11 @@ def _notify_whatsapp(ticket, event_type="new_ticket", event_label="Novo chamado"
         send_group = settings_obj.send_group_on_message_user
         send_individual = settings_obj.send_individual_on_message_user
 
-    if send_group and TI_CHAMADOS_GROUP_JID:
+    if send_group and group_jid:
         try:
-            send_whatsapp_message(TI_CHAMADOS_GROUP_JID, summary)
+            send_whatsapp_message(group_jid, summary)
         except Exception:
-            logger.exception("Nao foi possivel notificar o grupo WhatsApp %s", TI_CHAMADOS_GROUP_JID)
+            logger.exception("Nao foi possivel notificar o grupo WhatsApp %s", group_jid)
 
     if send_individual:
         for phone in _get_attendant_numbers(ticket):
@@ -564,16 +570,17 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
         is_ti = is_ti_user(self.request)
         context['is_ti_group'] = is_ti
         context['modules'] = build_modules('chamados') if is_ti else []
-        context['whatsapp_group'] = TI_CHAMADOS_GROUP_JID
         if is_ti:
+            wa_settings = _get_whatsapp_settings()
+            context['whatsapp_group'] = _get_whatsapp_group_jid(wa_settings)
             templates = _get_whatsapp_templates()
             context['wa_templates'] = {
                 'new_ticket': templates.new_ticket,
                 'status_update': templates.status_update,
                 'new_message': templates.new_message,
             }
-            wa_settings = _get_whatsapp_settings()
             context['wa_settings'] = {
+                'group_jid': wa_settings.group_jid,
                 'send_group_on_new_ticket': wa_settings.send_group_on_new_ticket,
                 'send_group_on_assignment_new': wa_settings.send_group_on_assignment_new,
                 'send_group_on_assignment_changed': wa_settings.send_group_on_assignment_changed,
@@ -954,11 +961,42 @@ def whatsapp_templates_update(request):
 
 @login_required
 @require_POST
+def whatsapp_group_lookup(request):
+    if not is_ti_user(request):
+        return JsonResponse({'ok': False, 'error': 'forbidden'}, status=403)
+
+    group_name = (request.POST.get('group_name') or '').strip()
+    if not group_name:
+        return JsonResponse({'ok': False, 'error': 'missing_group_name'}, status=400)
+
+    try:
+        matches = find_whatsapp_groups_by_name(group_name)
+    except Exception as exc:
+        return JsonResponse({'ok': False, 'error': 'lookup_failed', 'detail': str(exc)}, status=502)
+
+    if not matches:
+        return JsonResponse({'ok': True, 'found': False, 'matches': []})
+
+    selected = matches[0]
+    return JsonResponse(
+        {
+            'ok': True,
+            'found': True,
+            'jid': selected['jid'],
+            'name': selected['name'],
+            'matches': matches[:20],
+        }
+    )
+
+
+@login_required
+@require_POST
 def whatsapp_settings_update(request):
     if not is_ti_user(request):
         return JsonResponse({'ok': False, 'error': 'forbidden'}, status=403)
 
     settings_obj = _get_whatsapp_settings()
+    settings_obj.group_jid = (request.POST.get('group_jid') or '').strip()
     settings_obj.send_group_on_new_ticket = bool(request.POST.get('send_group_on_new_ticket'))
     settings_obj.send_group_on_assignment_new = bool(request.POST.get('send_group_on_assignment_new'))
     settings_obj.send_group_on_assignment_changed = bool(request.POST.get('send_group_on_assignment_changed'))

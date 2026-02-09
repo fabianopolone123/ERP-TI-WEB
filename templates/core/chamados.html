@@ -357,6 +357,26 @@
             <form method="post" action="{% url 'chamados_whatsapp_settings' %}">
                 {% csrf_token %}
                 <div class="form-row">
+                    <div style="flex: 2;">
+                        <label for="id_wa_group_name">Nome do grupo (buscar ID)</label>
+                        <div style="display:flex; gap:8px; align-items:flex-end;">
+                            <input id="id_wa_group_name" type="text" placeholder="Ex.: TI-chamados" style="flex:1;" />
+                            <button type="button" data-wa-group-lookup>Buscar grupo</button>
+                        </div>
+                        <div class="muted" style="margin-top: 6px;" data-wa-group-result></div>
+                    </div>
+                    <div style="flex: 2;">
+                        <label for="id_wa_group_jid">ID do grupo (JID)</label>
+                        <input
+                            id="id_wa_group_jid"
+                            name="group_jid"
+                            type="text"
+                            placeholder="1203XXXXXXXXXXXX@g.us"
+                            value="{{ wa_settings.group_jid|default:whatsapp_group }}"
+                        />
+                    </div>
+                </div>
+                <div class="form-row">
                     <div style="flex: 1;">
                         <label>Notificações</label>
                         <div class="ticket-legend" style="margin-top: 8px;">
@@ -1030,6 +1050,56 @@
 
         openBtn.addEventListener('click', open);
         closeEls.forEach((el) => el.addEventListener('click', close));
+    })();
+</script>
+<script>
+    (function () {
+        const lookupBtn = document.querySelector('[data-wa-group-lookup]');
+        const nameInput = document.querySelector('#id_wa_group_name');
+        const jidInput = document.querySelector('#id_wa_group_jid');
+        const resultEl = document.querySelector('[data-wa-group-result]');
+        if (!lookupBtn || !nameInput || !jidInput || !resultEl) return;
+
+        const getCookie = (name) => {
+            const value = `; ${document.cookie}`;
+            const parts = value.split(`; ${name}=`);
+            if (parts.length === 2) return parts.pop().split(';').shift();
+            return '';
+        };
+
+        lookupBtn.addEventListener('click', async () => {
+            const groupName = (nameInput.value || '').trim();
+            if (!groupName) {
+                resultEl.textContent = 'Informe o nome do grupo para buscar.';
+                return;
+            }
+
+            resultEl.textContent = 'Buscando grupo...';
+            try {
+                const response = await fetch('{% url "chamados_whatsapp_group_lookup" %}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'X-CSRFToken': getCookie('csrftoken'),
+                    },
+                    body: new URLSearchParams({ group_name: groupName }),
+                });
+                const data = await response.json();
+                if (!response.ok || !data.ok) {
+                    resultEl.textContent = `Falha ao buscar grupo: ${data.detail || data.error || 'erro desconhecido'}`;
+                    return;
+                }
+                if (!data.found) {
+                    resultEl.textContent = 'Nenhum grupo encontrado com esse nome.';
+                    return;
+                }
+                jidInput.value = data.jid || '';
+                const total = Array.isArray(data.matches) ? data.matches.length : 0;
+                resultEl.textContent = `Grupo selecionado: ${data.name} (${data.jid})` + (total > 1 ? ` | ${total} correspondencias` : '');
+            } catch (error) {
+                resultEl.textContent = `Erro de rede ao buscar grupo: ${error}`;
+            }
+        });
     })();
 </script>
 {% if is_ti_group %}
