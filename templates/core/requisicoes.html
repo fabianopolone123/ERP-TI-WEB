@@ -225,10 +225,11 @@
                 <input type="text" data-field="freight" placeholder="Ex.: 120,00" />
             </div>
             <div style="align-self: flex-end; display: flex; gap: 8px; flex-wrap: wrap;">
-                <label style="display: inline-flex; align-items: center; gap: 6px;">
+                <label style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid #166534; border-radius: 999px; background: rgba(34, 197, 94, 0.18); font-weight: 700; min-height: 40px;">
                     <input type="radio" data-field="approved" />
                     Aprovar
                 </label>
+                <button type="button" data-toggle-sub style="display: none;">Suborçamentos (0)</button>
                 <button type="button" data-add-sub-budget>Sub orçamento</button>
                 <button type="button" data-remove-budget>Remover</button>
             </div>
@@ -251,6 +252,9 @@
         </div>
         <div class="muted" data-budget-created-at style="margin-top: 6px; font-size: 0.82rem;">
             Cadastrado em: novo (data/hora atual ao salvar)
+        </div>
+        <div class="muted" data-budget-package-total style="margin-top: 4px; font-size: 0.82rem; font-weight: 700;">
+            Total deste orçamento: R$ 0,00
         </div>
     </div>
 </template>
@@ -355,6 +359,91 @@
             return n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         };
 
+        const parseBrNumber = (value) => {
+            const raw = (value || '').toString().trim().replace(/\s/g, '');
+            if (!raw) return 0;
+            let normalized = raw;
+            if (normalized.includes(',') && normalized.includes('.')) {
+                if (normalized.lastIndexOf(',') > normalized.lastIndexOf('.')) {
+                    normalized = normalized.replace(/\./g, '').replace(',', '.');
+                } else {
+                    normalized = normalized.replace(/,/g, '');
+                }
+            } else if (normalized.includes(',')) {
+                normalized = normalized.replace(/\./g, '').replace(',', '.');
+            }
+            const n = Number(normalized);
+            return Number.isFinite(n) ? n : 0;
+        };
+
+        const toBrMoney = (value) => value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+        const allBudgetItems = () => Array.from(budgetList.querySelectorAll('[data-budget-item]'));
+        const itemIdx = (item) => (item.querySelector('[data-budget-index]')?.value || '').trim();
+        const itemParentIdx = (item) => (item.querySelector('[data-field="parent-idx"]')?.value || '').trim();
+
+        const recalculateBudgetPackages = () => {
+            const items = allBudgetItems();
+            const subsByParent = new Map();
+            items.forEach((item) => {
+                const p = itemParentIdx(item);
+                if (!p) return;
+                if (!subsByParent.has(p)) subsByParent.set(p, []);
+                subsByParent.get(p).push(item);
+            });
+
+            items.forEach((mainItem) => {
+                const mainIdx = itemIdx(mainItem);
+                if (!mainIdx || itemParentIdx(mainItem)) return;
+                const packageEl = mainItem.querySelector('[data-budget-package-total]');
+                if (!packageEl) return;
+
+                let total = 0;
+                const mainValue = parseBrNumber(mainItem.querySelector('[data-field="value"]')?.value || '');
+                const mainFreight = parseBrNumber(mainItem.querySelector('[data-field="freight"]')?.value || '');
+                total += mainValue + mainFreight;
+
+                const subItems = subsByParent.get(mainIdx) || [];
+                subItems.forEach((subItem) => {
+                    total += parseBrNumber(subItem.querySelector('[data-field="value"]')?.value || '');
+                    total += parseBrNumber(subItem.querySelector('[data-field="freight"]')?.value || '');
+                });
+                packageEl.textContent = `Total deste orçamento: R$ ${toBrMoney(total)}`;
+            });
+        };
+
+        const applySubBudgetVisibility = () => {
+            const items = allBudgetItems();
+            const subsByParent = new Map();
+            items.forEach((item) => {
+                const p = itemParentIdx(item);
+                if (!p) return;
+                if (!subsByParent.has(p)) subsByParent.set(p, []);
+                subsByParent.get(p).push(item);
+            });
+
+            items.forEach((mainItem) => {
+                const mainIdx = itemIdx(mainItem);
+                if (!mainIdx || itemParentIdx(mainItem)) return;
+                const toggleBtn = mainItem.querySelector('[data-toggle-sub]');
+                if (!toggleBtn) return;
+                const subItems = subsByParent.get(mainIdx) || [];
+                if (!subItems.length) {
+                    toggleBtn.style.display = 'none';
+                    toggleBtn.removeAttribute('data-open');
+                    return;
+                }
+                const isOpen = toggleBtn.getAttribute('data-open') === '1';
+                toggleBtn.style.display = '';
+                toggleBtn.textContent = isOpen ? `Ocultar suborçamentos (${subItems.length})` : `Suborçamentos (${subItems.length})`;
+                subItems.forEach((subItem) => {
+                    subItem.style.display = isOpen ? '' : 'none';
+                });
+            });
+
+            recalculateBudgetPackages();
+        };
+
         const setBudgetFieldNames = (item, idx) => {
             item.querySelector('[data-budget-index]').value = String(idx);
             item.querySelector('[data-field="quote-id"]').name = `budget_quote_id_${idx}`;
@@ -384,8 +473,10 @@
             const freightInput = item.querySelector('[data-field="freight"]');
             const linkInput = item.querySelector('[data-field="link"]');
             const createdAtEl = item.querySelector('[data-budget-created-at]');
+            const packageTotalEl = item.querySelector('[data-budget-package-total]');
             const removeBtn = item.querySelector('[data-remove-budget]');
             const addSubBtn = item.querySelector('[data-add-sub-budget]');
+            const toggleSubBtn = item.querySelector('[data-toggle-sub]');
             const approvedInput = item.querySelector('[data-field="approved"]');
             const captureBtn = item.querySelector('[data-capture-budget]');
             const photoInput = item.querySelector('[data-field="photo"]');
@@ -396,6 +487,9 @@
                     const otherParentIdx = other.querySelector('[data-field="parent-idx"]');
                     const otherParentQuoteId = other.querySelector('[data-field="parent-quote-id"]');
                     const otherLabel = other.querySelector('[data-parent-label]');
+                    const otherApproved = other.querySelector('[data-field="approved"]');
+                    const otherPackageTotal = other.querySelector('[data-budget-package-total]');
+                    const otherToggleSub = other.querySelector('[data-toggle-sub]');
                     if (!otherParentIdx || !otherParentQuoteId || !otherLabel) return;
                     if (otherParentIdx.value === String(removedIdx)) {
                         otherParentIdx.value = '';
@@ -404,6 +498,17 @@
                         otherLabel.textContent = '';
                         other.style.marginLeft = '';
                         other.style.borderLeft = '';
+                        other.style.display = '';
+                        if (otherApproved) {
+                            otherApproved.disabled = false;
+                        }
+                        if (otherPackageTotal) {
+                            otherPackageTotal.style.display = '';
+                        }
+                        if (otherToggleSub) {
+                            otherToggleSub.style.display = 'none';
+                            otherToggleSub.removeAttribute('data-open');
+                        }
                     }
                 });
             };
@@ -419,6 +524,7 @@
                 if (budgetList.querySelectorAll('[data-budget-item]').length <= 1) return;
                 clearAsParent(idx);
                 item.remove();
+                applySubBudgetVisibility();
             });
 
             addSubBtn.addEventListener('click', () => {
@@ -428,7 +534,19 @@
                     quoteId: quoteIdInput.value || '',
                     name: parentName,
                 });
+                if (toggleSubBtn) {
+                    toggleSubBtn.setAttribute('data-open', '1');
+                }
+                applySubBudgetVisibility();
             });
+
+            if (toggleSubBtn) {
+                toggleSubBtn.addEventListener('click', () => {
+                    const isOpen = toggleSubBtn.getAttribute('data-open') === '1';
+                    toggleSubBtn.setAttribute('data-open', isOpen ? '0' : '1');
+                    applySubBudgetVisibility();
+                });
+            }
 
             if (parentMeta) {
                 parentIdxInput.value = String(parentMeta.idx || '');
@@ -443,11 +561,20 @@
                     approvedInput.checked = false;
                     approvedInput.disabled = true;
                 }
+                if (toggleSubBtn) {
+                    toggleSubBtn.style.display = 'none';
+                }
+                if (packageTotalEl) {
+                    packageTotalEl.style.display = 'none';
+                }
             } else {
                 parentIdxInput.value = '';
                 parentQuoteIdInput.value = '';
                 if (approvedInput) {
                     approvedInput.disabled = false;
+                }
+                if (packageTotalEl) {
+                    packageTotalEl.style.display = '';
                 }
             }
 
@@ -480,6 +607,12 @@
                 }
                 preview.src = URL.createObjectURL(file);
                 preview.style.display = 'block';
+            });
+
+            [valueInput, freightInput].forEach((el) => {
+                if (!el) return;
+                el.addEventListener('input', recalculateBudgetPackages);
+                el.addEventListener('change', recalculateBudgetPackages);
             });
 
             captureBtn.addEventListener('click', async () => {
@@ -522,6 +655,7 @@
             });
 
             budgetList.appendChild(item);
+            applySubBudgetVisibility();
             return { idx, item };
         };
 
