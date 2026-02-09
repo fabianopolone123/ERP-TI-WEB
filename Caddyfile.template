@@ -1,0 +1,9 @@
+{
+    auto_https disable_redirects
+}
+
+# Troque "erp-ti.local" pelo hostname interno que voce quer usar na rede.
+erp-ti.local {
+    tls internal
+    reverse_proxy 127.0.0.1:8000
+}

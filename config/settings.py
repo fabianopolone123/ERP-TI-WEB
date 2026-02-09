@@ -40,6 +40,12 @@ SECRET_KEY = 'django-insecure-0_@z3ayq+ia$467tp90s#4bxdg5zhd@e&4vaf(glre_t@#f=nq
 DEBUG = True
 
 ALLOWED_HOSTS = ['127.0.0.1', 'localhost', '0.0.0.0', socket.gethostname()]
+extra_hosts = os.environ.get('EXTRA_ALLOWED_HOSTS', '')
+if extra_hosts:
+    for host in extra_hosts.split(','):
+        normalized = host.strip()
+        if normalized and normalized not in ALLOWED_HOSTS:
+            ALLOWED_HOSTS.append(normalized)
 
 
 # Application definition
