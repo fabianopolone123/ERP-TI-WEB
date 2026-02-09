@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load core_extras %}
 
 {% block title %}Requisições | ERP TI{% endblock %}
 
@@ -80,8 +81,8 @@
                             <td data-sort-value="{{ item.id }}">{{ item.id }}</td>
                             <td>{{ item.request }}</td>
                             <td data-sort-value="{{ item.quantity }}">{{ item.quantity }}</td>
-                            <td data-sort-value="{{ item.unit_value|floatformat:2 }}">R$ {{ item.unit_value|floatformat:2 }}</td>
-                            <td data-sort-value="{{ item.total_value|floatformat:2 }}">R$ {{ item.total_value|floatformat:2 }}</td>
+                            <td data-sort-value="{{ item.unit_value|floatformat:2 }}">R$ {{ item.unit_value|br_money }}</td>
+                            <td data-sort-value="{{ item.total_value|floatformat:2 }}">R$ {{ item.total_value|br_money }}</td>
                             <td data-sort-value="{{ item.requested_at|date:'Ymd' }}">{{ item.requested_at|date:'d/m/Y' }}</td>
                             <td data-sort-value="{{ item.approved_at|date:'Ymd' }}">{{ item.approved_at|date:'d/m/Y' }}</td>
                             <td data-sort-value="{{ item.received_at|date:'Ymd' }}">{{ item.received_at|date:'d/m/Y' }}</td>
