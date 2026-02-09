@@ -213,6 +213,9 @@
                 </div>
             </div>
         </div>
+        <div class="muted" data-budget-created-at style="margin-top: 6px; font-size: 0.82rem;">
+            Cadastrado em: novo (data/hora atual ao salvar)
+        </div>
     </div>
 </template>
 
@@ -233,6 +236,7 @@
                         name: "{{ quote.name|escapejs }}",
                         value: "{{ quote.value|floatformat:2|escapejs }}",
                         link: "{{ quote.link|escapejs }}",
+                        created_at: "{{ quote.created_at|date:'d/m/Y H:i'|escapejs }}",
                         photo_url: "{% if quote.photo %}{{ quote.photo.url|escapejs }}{% endif %}",
                     }{% if not forloop.last %},{% endif %}
                     {% endfor %}
@@ -330,6 +334,7 @@
             const nameInput = item.querySelector('[data-field="name"]');
             const valueInput = item.querySelector('[data-field="value"]');
             const linkInput = item.querySelector('[data-field="link"]');
+            const createdAtEl = item.querySelector('[data-budget-created-at]');
             const removeBtn = item.querySelector('[data-remove-budget]');
             const captureBtn = item.querySelector('[data-capture-budget]');
             const photoInput = item.querySelector('[data-field="photo"]');
@@ -352,6 +357,9 @@
                 nameInput.value = initialData.name || '';
                 valueInput.value = toBrValue(initialData.value || '');
                 linkInput.value = initialData.link || '';
+                if (createdAtEl) {
+                    createdAtEl.textContent = `Cadastrado em: ${initialData.created_at || 'data indisponível'}`;
+                }
                 if (initialData.photo_url) {
                     preview.src = initialData.photo_url;
                     preview.style.display = 'block';
@@ -574,8 +582,10 @@
                 const name = (item.querySelector('[data-field="name"]').value || '').trim();
                 const value = (item.querySelector('[data-field="value"]').value || '').trim();
                 const link = (item.querySelector('[data-field="link"]').value || '').trim();
+                const createdAt = (item.querySelector('[data-budget-created-at]')?.textContent || '').trim();
                 if (!name && !value && !link) return;
                 lines.push(`${i + 1}. ${name || '(sem nome)'} - R$ ${value || '0,00'}`);
+                if (createdAt) lines.push(`   ${createdAt}`);
                 if (link) lines.push(`   Link: ${link}`);
             });
             const payload = lines.join('\n').trim();
