@@ -79,6 +79,14 @@
         <div class="ticket-legend" style="margin-top: 16px;">
             <strong>Acessos do usuário selecionado</strong>
             <div style="margin-top: 8px;">
+                <strong>Grupos no AD:</strong>
+                {% if user_ad_groups %}
+                    {{ user_ad_groups|join:", " }}
+                {% else %}
+                    <span class="muted">Nenhum grupo AD encontrado.</span>
+                {% endif %}
+            </div>
+            <div style="margin-top: 8px;">
                 <strong>Grupos do usuário:</strong>
                 {% if user_groups %}
                     {{ user_groups|join:", " }}

@@ -14,6 +14,8 @@ from django.urls import reverse
 from django.views.decorators.http import require_GET, require_POST
 from django.views.generic import TemplateView
 from django.contrib.auth import views as auth_views
+from ldap3 import Connection, Server, SUBTREE
+from ldap3.utils.conv import escape_filter_chars
 
 from .ldap_importer import import_ad_users
 from .models import (
@@ -85,6 +87,43 @@ class _SafeDict(dict):
 def _normalize_text(value: str) -> str:
     raw = (value or '').strip().lower()
     return unicodedata.normalize('NFKD', raw).encode('ascii', 'ignore').decode('ascii')
+
+
+def _get_user_ad_groups(username: str) -> list[str]:
+    server_uri = getattr(settings, 'AD_LDAP_SERVER_URI', '')
+    base_dn = getattr(settings, 'AD_LDAP_BASE_DN', '')
+    bind_dn = getattr(settings, 'AD_LDAP_BIND_DN', '')
+    bind_password = getattr(settings, 'AD_LDAP_BIND_PASSWORD', '')
+    if not server_uri or not base_dn or not username:
+        return []
+
+    conn = None
+    try:
+        server = Server(server_uri, get_info=None)
+        conn = Connection(server, user=bind_dn, password=bind_password, auto_bind=True)
+        safe_username = escape_filter_chars(username)
+        user_filter = f'(&(objectCategory=person)(objectClass=user)(sAMAccountName={safe_username}))'
+        conn.search(
+            search_base=base_dn,
+            search_filter=user_filter,
+            search_scope=SUBTREE,
+            attributes=['memberOf'],
+        )
+        if not conn.entries:
+            return []
+        member_of = conn.entries[0].memberOf.values if 'memberOf' in conn.entries[0] else []
+        groups = []
+        for dn in member_of:
+            part = str(dn).split(',', 1)[0]
+            if part.upper().startswith('CN='):
+                groups.append(part[3:])
+        return sorted(set(groups), key=lambda v: v.lower())
+    except Exception:
+        logger.exception('Falha ao consultar grupos AD do usuario %s', username)
+        return []
+    finally:
+        if conn is not None:
+            conn.unbind()
 
 
 def _get_whatsapp_templates() -> WhatsAppTemplate:
@@ -376,9 +415,11 @@ class AcessosView(LoginRequiredMixin, TemplateView):
         context['selected_user_id'] = selected_user_id
         context['user_access'] = []
         context['user_groups'] = []
+        context['user_ad_groups'] = []
         if selected_user_id:
             selected_user = ERPUser.objects.filter(id=selected_user_id).first()
             if selected_user and selected_user.username:
+                context['user_ad_groups'] = _get_user_ad_groups(selected_user.username)
                 memberships = (
                     AccessMember.objects.select_related('group__folder')
                     .filter(username__iexact=selected_user.username)
