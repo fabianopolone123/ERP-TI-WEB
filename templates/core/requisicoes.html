@@ -337,6 +337,7 @@
                     Aprovar
                 </label>
                 <button type="button" data-add-sub-budget>Suborçamentos (0)</button>
+                <button type="button" data-copy-sub-budget style="display: none;">Copiar para...</button>
                 <button type="button" data-remove-budget>Remover</button>
             </div>
         </div>
@@ -687,6 +688,76 @@
             recalculateBudgetPackages();
         };
 
+        const getMainBudgetTargets = (excludeMainIdx = '') => {
+            const exclude = String(excludeMainIdx || '').trim();
+            return allBudgetItems()
+                .filter((item) => !itemParentIdx(item))
+                .filter((item) => itemIdx(item) !== exclude);
+        };
+
+        const askTargetMainBudget = (targets) => {
+            if (!targets.length) return null;
+            const lines = targets.map((item, i) => {
+                const name = (item.querySelector('[data-field="name"]')?.value || '').trim() || `Orçamento ${i + 1}`;
+                return `${i + 1} - ${name}`;
+            });
+            const answer = window.prompt(
+                `Copiar suborçamento para qual orçamento principal?\n${lines.join('\n')}`,
+                '1'
+            );
+            if (answer === null) return null;
+            const choice = Number(String(answer).trim());
+            if (!Number.isFinite(choice) || choice < 1 || choice > targets.length) return null;
+            return targets[choice - 1];
+        };
+
+        const cloneSubBudgetToMain = (sourceItem, targetMainItem) => {
+            const targetMainIdx = itemIdx(targetMainItem);
+            const targetMainQuoteId = (targetMainItem.querySelector('[data-field="quote-id"]')?.value || '').trim();
+            const targetMainName = (targetMainItem.querySelector('[data-field="name"]')?.value || '').trim() || `Orçamento ${targetMainIdx}`;
+            const created = addBudgetItem(null, {
+                idx: targetMainIdx,
+                quoteId: targetMainQuoteId,
+                name: targetMainName,
+            });
+            if (!created?.item) return null;
+
+            const srcName = sourceItem.querySelector('[data-field="name"]');
+            const srcValue = sourceItem.querySelector('[data-field="value"]');
+            const srcFreight = sourceItem.querySelector('[data-field="freight"]');
+            const srcLink = sourceItem.querySelector('[data-field="link"]');
+            const srcPreview = sourceItem.querySelector('[data-photo-preview]');
+            const srcPhoto = sourceItem.querySelector('[data-field="photo"]');
+
+            const dstName = created.item.querySelector('[data-field="name"]');
+            const dstValue = created.item.querySelector('[data-field="value"]');
+            const dstFreight = created.item.querySelector('[data-field="freight"]');
+            const dstLink = created.item.querySelector('[data-field="link"]');
+            const dstPreview = created.item.querySelector('[data-photo-preview]');
+            const dstPhoto = created.item.querySelector('[data-field="photo"]');
+
+            if (dstName && srcName) dstName.value = srcName.value || '';
+            if (dstValue && srcValue) dstValue.value = srcValue.value || '';
+            if (dstFreight && srcFreight) dstFreight.value = srcFreight.value || '';
+            if (dstLink && srcLink) dstLink.value = srcLink.value || '';
+
+            // Best-effort clone for local files (unsaved captures/uploads).
+            const srcFile = srcPhoto?.files?.[0];
+            if (srcFile && dstPhoto) {
+                const dt = new DataTransfer();
+                dt.items.add(srcFile);
+                dstPhoto.files = dt.files;
+            } else if (srcPreview && dstPreview) {
+                const src = (srcPreview.getAttribute('src') || '').trim();
+                if (src) {
+                    dstPreview.setAttribute('src', src);
+                    dstPreview.style.display = srcPreview.style.display || 'block';
+                }
+            }
+
+            return created.item;
+        };
+
         const collectBudgetData = () => {
             const allItems = Array.from(form.querySelectorAll('[data-budget-item]'));
             const parsed = allItems.map((item) => {
@@ -758,6 +829,7 @@
             const packageTotalEl = item.querySelector('[data-budget-package-total]');
             const removeBtn = item.querySelector('[data-remove-budget]');
             const addSubBtn = item.querySelector('[data-add-sub-budget]');
+            const copySubBtn = item.querySelector('[data-copy-sub-budget]');
             const approvedInput = item.querySelector('[data-field="approved"]');
             const openLinkBtn = item.querySelector('[data-open-budget-link]');
             const captureBtn = item.querySelector('[data-capture-budget]');
@@ -800,6 +872,27 @@
                 openSubBudgetModal(item);
             });
 
+            if (copySubBtn) {
+                copySubBtn.addEventListener('click', () => {
+                    const currentParentIdx = itemParentIdx(item);
+                    if (!currentParentIdx) return;
+                    const targets = getMainBudgetTargets(currentParentIdx);
+                    if (!targets.length) {
+                        alert('Não há outro orçamento principal para copiar.');
+                        return;
+                    }
+                    const target = askTargetMainBudget(targets);
+                    if (!target) return;
+                    const copied = cloneSubBudgetToMain(item, target);
+                    if (!copied) {
+                        alert('Não foi possível copiar o suborçamento.');
+                        return;
+                    }
+                    applySubBudgetVisibility();
+                    alert('Suborçamento copiado com sucesso.');
+                });
+            }
+
             if (openLinkBtn) {
                 openLinkBtn.addEventListener('click', () => {
                     const candidate = normalizeExternalLink(linkInput.value);
@@ -832,6 +925,9 @@
                 if (addSubBtn) {
                     addSubBtn.style.display = 'none';
                 }
+                if (copySubBtn) {
+                    copySubBtn.style.display = '';
+                }
                 if (packageTotalEl) {
                     packageTotalEl.style.display = 'none';
                 }
@@ -846,6 +942,9 @@
                 }
                 if (addSubBtn) {
                     addSubBtn.style.display = '';
+                }
+                if (copySubBtn) {
+                    copySubBtn.style.display = 'none';
                 }
             }
 
