@@ -51,10 +51,13 @@
                 <div class="kanban-header">Pendentes</div>
                 <div class="kanban-body">
                     {% for ticket in pending_tickets %}
-                        <div class="ticket-card" draggable="true" data-ticket-id="{{ ticket.id }}">
+                        <div class="ticket-card{% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %} shared-ticket{% endif %}" draggable="true" data-ticket-id="{{ ticket.id }}">
                             <div class="ticket-title">
                                 <span class="urgency-dot urgency-{{ ticket.urgency }}"></span>
                                 #{{ ticket.id }} - {{ ticket.title }}
+                                {% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %}
+                                    <span class="status-pill status-shared">Compartilhado</span>
+                                {% endif %}
                             </div>
                             {% if is_ti_group %}
                                 <div class="ticket-meta">
@@ -77,10 +80,13 @@
                     <div class="kanban-header">{{ user.full_name }}</div>
                     <div class="kanban-body">
                         {% for ticket in user_tickets|get_item:user.id %}
-                            <div class="ticket-card" draggable="true" data-ticket-id="{{ ticket.id }}">
+                            <div class="ticket-card{% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %} shared-ticket{% endif %}" draggable="true" data-ticket-id="{{ ticket.id }}">
                                 <div class="ticket-title">
                                     <span class="urgency-dot urgency-{{ ticket.urgency }}"></span>
                                     #{{ ticket.id }} - {{ ticket.title }}
+                                    {% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %}
+                                        <span class="status-pill status-shared">Compartilhado</span>
+                                    {% endif %}
                                 </div>
                             </div>
                         {% endfor %}
@@ -92,10 +98,13 @@
                 <div class="kanban-header">Fechados</div>
                 <div class="kanban-body">
                     {% for ticket in closed_tickets %}
-                        <div class="ticket-card" draggable="true" data-ticket-id="{{ ticket.id }}">
+                        <div class="ticket-card{% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %} shared-ticket{% endif %}" draggable="true" data-ticket-id="{{ ticket.id }}">
                             <div class="ticket-title">
                                 <span class="urgency-dot urgency-{{ ticket.urgency }}"></span>
                                 #{{ ticket.id }} - {{ ticket.title }}
+                                {% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %}
+                                    <span class="status-pill status-shared">Compartilhado</span>
+                                {% endif %}
                             </div>
                             <div class="ticket-meta">
                                 {{ ticket_meta|get_item:ticket.id|default:""|get_item:'requester' }}
@@ -640,10 +649,18 @@
                     body: new URLSearchParams({
                         ticket_id: draggingId,
                         target: target,
+                        source_target: sourceColumn ? sourceColumn.dataset.target : '',
                         multi: draggingMulti ? '1' : '0',
                         resolution: resolutionText,
                     }),
                 });
+
+                let responseData = {};
+                try {
+                    responseData = await response.json();
+                } catch (err) {
+                    responseData = {};
+                }
 
                 if (!response.ok) {
                     if (shouldClone) {
@@ -651,6 +668,12 @@
                     } else if (previousParent) {
                         previousParent.appendChild(draggingCard);
                     }
+                    draggingId = null;
+                    return;
+                }
+
+                if (responseData.partial_unassign) {
+                    movedCard.remove();
                     draggingId = null;
                     return;
                 }

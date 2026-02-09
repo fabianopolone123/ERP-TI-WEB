@@ -634,11 +634,14 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
             'collaborators'
         )
         ticket_map = {user.id: [] for user in ti_users}
+        multi_assigned_ticket_ids: set[int] = set()
         for ticket in in_progress_tickets:
             ids = set()
             if ticket.assigned_to_id:
                 ids.add(ticket.assigned_to_id)
             ids.update(ticket.collaborators.values_list('id', flat=True))
+            if len(ids) > 1:
+                multi_assigned_ticket_ids.add(ticket.id)
             for uid in ids:
                 if uid in ticket_map:
                     ticket_map[uid].append(ticket)
@@ -657,6 +660,7 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
                 'requester': name or '- ',
                 'department': dept or '',
                 'description': ticket.description or '',
+                'is_multi_attendant': ticket.id in multi_assigned_ticket_ids,
             }
         context['ticket_meta'] = ticket_meta
 
@@ -679,10 +683,36 @@ def move_ticket(request):
         return JsonResponse({'ok': False, 'error': 'not_found'}, status=404)
 
     multi = request.POST.get('multi') == '1'
+    source_target = (request.POST.get('source_target') or '').strip()
     previous_status = ticket.status
     previous_assignee_id = ticket.assigned_to_id
 
     if target == 'pendente':
+        source_user_id = None
+        if source_target.startswith('user_'):
+            try:
+                source_user_id = int(source_target.replace('user_', ''))
+            except ValueError:
+                source_user_id = None
+
+        current_assignees = set()
+        if ticket.assigned_to_id:
+            current_assignees.add(ticket.assigned_to_id)
+        current_assignees.update(ticket.collaborators.values_list('id', flat=True))
+
+        # When the ticket is shared across attendants, dropping to pending from one
+        # user column should remove only that attendant and keep the others working.
+        if source_user_id and source_user_id in current_assignees and len(current_assignees) > 1:
+            if ticket.assigned_to_id == source_user_id:
+                remaining = [uid for uid in current_assignees if uid != source_user_id]
+                promoted_id = remaining[0]
+                ticket.assigned_to_id = promoted_id
+                ticket.save(update_fields=['assigned_to', 'updated_at'])
+                ticket.collaborators.remove(promoted_id)
+            else:
+                ticket.collaborators.remove(source_user_id)
+            return JsonResponse({'ok': True, 'partial_unassign': True})
+
         ticket.status = Ticket.Status.PENDENTE
         ticket.assigned_to = None
         ticket.save()

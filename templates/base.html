@@ -275,6 +275,12 @@
             cursor: grab;
         }
 
+        .ticket-card.shared-ticket {
+            border-color: #f59e0b;
+            background: linear-gradient(135deg, #17233f 0%, #2a1d0f 100%);
+            box-shadow: inset 0 0 0 1px rgba(245, 158, 11, 0.25);
+        }
+
         .ticket-card.dragging {
             opacity: 0.6;
         }
@@ -310,6 +316,7 @@
         .status-pendente { background: rgba(148, 163, 184, 0.2); color: #cbd5f5; border: 1px solid #334155; }
         .status-em_atendimento { background: rgba(59, 130, 246, 0.2); color: #93c5fd; border: 1px solid #1d4ed8; }
         .status-fechado { background: rgba(34, 197, 94, 0.2); color: #86efac; border: 1px solid #166534; }
+        .status-shared { background: rgba(245, 158, 11, 0.18); color: #fcd34d; border: 1px solid #b45309; }
 
         .ticket-desc {
             font-size: 0.88rem;
