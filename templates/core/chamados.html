@@ -22,7 +22,7 @@
         <div class="topbar" style="margin-top: 16px;">
             <h3>Chamados</h3>
             <div style="display: flex; gap: 8px; align-items: center;">
-                {% if is_ti_group and whatsapp_group %}
+                {% if is_ti_group %}
                     <button type="button" data-open-whatsapp>
                         WhatsApp
                     </button>
@@ -340,7 +340,7 @@
     </div>
 </div>
 
-{% if is_ti_group and whatsapp_group %}
+{% if is_ti_group %}
     <div class="modal" data-whatsapp-modal hidden>
         <div class="modal-backdrop" data-close-whatsapp></div>
         <div class="modal-content">
@@ -349,7 +349,7 @@
                 <button type="button" data-close-whatsapp>Fechar</button>
             </div>
             <div class="ticket-legend">
-                <strong>Grupo atual:</strong> {{ whatsapp_group }}
+                <strong>Grupo atual:</strong> {{ whatsapp_group|default:"(nao configurado)" }}
                 <div class="muted" style="margin-top: 6px;">
                     Placeholders disponíveis: {id}, {title}, {description}, {status}, {responsavel}, {message}
                 </div>
@@ -1030,6 +1030,26 @@
 
         openBtn.addEventListener('click', open);
         closeEls.forEach((el) => el.addEventListener('click', close));
+    })();
+</script>
+<script>
+    (function () {
+        const REFRESH_MS = 3000;
+        const isTyping = () => {
+            const active = document.activeElement;
+            if (!active) return false;
+            const tag = (active.tagName || '').toLowerCase();
+            return tag === 'input' || tag === 'textarea' || active.isContentEditable;
+        };
+        const hasOpenModal = () =>
+            Array.from(document.querySelectorAll('.modal')).some((modal) => !modal.hidden);
+
+        setInterval(() => {
+            if (document.hidden) return;
+            if (isTyping()) return;
+            if (hasOpenModal()) return;
+            window.location.reload();
+        }, REFRESH_MS);
     })();
 </script>
 {% endblock %}
