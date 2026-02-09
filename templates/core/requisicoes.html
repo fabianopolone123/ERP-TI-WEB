@@ -696,19 +696,30 @@
         };
 
         const askTargetMainBudget = (targets) => {
-            if (!targets.length) return null;
-            const lines = targets.map((item, i) => {
-                const name = (item.querySelector('[data-field="name"]')?.value || '').trim() || `Orçamento ${i + 1}`;
-                return `${i + 1} - ${name}`;
+            if (!targets.length) return { item: null, cancelled: false, invalid: true };
+            const lines = targets.map((item) => {
+                const name = (item.querySelector('[data-field="name"]')?.value || '').trim() || 'Orçamento sem nome';
+                const idx = itemIdx(item);
+                const quoteId = (item.querySelector('[data-field="quote-id"]')?.value || '').trim();
+                const persisted = quoteId ? ` | ID salvo: ${quoteId}` : '';
+                return `ID: ${idx}${persisted} | ${name}`;
             });
             const answer = window.prompt(
-                `Copiar suborçamento para qual orçamento principal?\n${lines.join('\n')}`,
-                '1'
+                `Copiar suborçamento para qual orçamento principal?\nDigite o ID exibido na lista.\n\n${lines.join('\n')}`,
+                targets[0] ? itemIdx(targets[0]) : ''
             );
-            if (answer === null) return null;
-            const choice = Number(String(answer).trim());
-            if (!Number.isFinite(choice) || choice < 1 || choice > targets.length) return null;
-            return targets[choice - 1];
+            if (answer === null) return { item: null, cancelled: true, invalid: false };
+            const typed = String(answer || '').trim();
+            if (!typed) return { item: null, cancelled: false, invalid: true };
+            const normalized = typed.toLowerCase();
+
+            const matched = targets.find((item) => {
+                const idx = itemIdx(item);
+                const quoteId = (item.querySelector('[data-field="quote-id"]')?.value || '').trim();
+                return normalized === String(idx).toLowerCase() || (quoteId && normalized === String(quoteId).toLowerCase());
+            }) || null;
+
+            return { item: matched, cancelled: false, invalid: !matched };
         };
 
         const cloneSubBudgetToMain = (sourceItem, targetMainItem) => {
@@ -881,15 +892,20 @@
                         alert('Não há outro orçamento principal para copiar.');
                         return;
                     }
-                    const target = askTargetMainBudget(targets);
-                    if (!target) return;
-                    const copied = cloneSubBudgetToMain(item, target);
+                    const pick = askTargetMainBudget(targets);
+                    if (pick.cancelled) return;
+                    if (pick.invalid || !pick.item) {
+                        alert('ID de orçamento inválido. Use o ID mostrado na lista do prompt.');
+                        return;
+                    }
+                    const copied = cloneSubBudgetToMain(item, pick.item);
                     if (!copied) {
                         alert('Não foi possível copiar o suborçamento.');
                         return;
                     }
                     applySubBudgetVisibility();
-                    alert('Suborçamento copiado com sucesso.');
+                    const targetName = (pick.item.querySelector('[data-field="name"]')?.value || '').trim() || 'destino';
+                    alert(`Suborçamento copiado com sucesso para: ${targetName}.`);
                 });
             }
 
