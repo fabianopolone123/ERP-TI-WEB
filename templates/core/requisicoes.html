@@ -765,29 +765,18 @@
             const preview = item.querySelector('[data-photo-preview]');
 
             const clearAsParent = (removedIdx) => {
-                budgetList.querySelectorAll('[data-budget-item]').forEach((other) => {
-                    const otherParentIdx = other.querySelector('[data-field="parent-idx"]');
-                    const otherParentQuoteId = other.querySelector('[data-field="parent-quote-id"]');
-                    const otherLabel = other.querySelector('[data-parent-label]');
-                    const otherApproved = other.querySelector('[data-field="approved"]');
-                    const otherPackageTotal = other.querySelector('[data-budget-package-total]');
-                    if (!otherParentIdx || !otherParentQuoteId || !otherLabel) return;
-                    if (otherParentIdx.value === String(removedIdx)) {
-                        otherParentIdx.value = '';
-                        otherParentQuoteId.value = '';
-                        otherLabel.style.display = 'none';
-                        otherLabel.textContent = '';
-                        other.style.marginLeft = '';
-                        other.style.borderLeft = '';
-                        other.style.display = '';
-                        if (otherApproved) {
-                            otherApproved.disabled = false;
-                        }
-                        if (otherPackageTotal) {
-                            otherPackageTotal.style.display = '';
-                        }
-                    }
-                });
+                const pending = [String(removedIdx)];
+                while (pending.length) {
+                    const parent = pending.shift();
+                    const all = Array.from(form.querySelectorAll('[data-budget-item]'));
+                    all.forEach((other) => {
+                        const otherParentIdx = (other.querySelector('[data-field="parent-idx"]')?.value || '').trim();
+                        if (!otherParentIdx || otherParentIdx !== parent) return;
+                        const childIdx = (other.querySelector('[data-budget-index]')?.value || '').trim();
+                        if (childIdx) pending.push(childIdx);
+                        other.remove();
+                    });
+                }
             };
 
             preview.style.cursor = 'zoom-in';
