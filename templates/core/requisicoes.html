@@ -239,7 +239,10 @@
         <div class="form-row">
             <div style="flex: 2;">
                 <label>Link</label>
-                <input type="url" data-field="link" placeholder="https://..." />
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <input type="url" data-field="link" placeholder="https://..." />
+                    <button type="button" data-open-budget-link>Abrir link</button>
+                </div>
             </div>
             <div style="flex: 2;">
                 <label>Foto</label>
@@ -408,6 +411,12 @@
         };
 
         const toBrMoney = (value) => value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const normalizeExternalLink = (value) => {
+            const raw = (value || '').trim();
+            if (!raw) return '';
+            if (/^https?:\/\//i.test(raw)) return raw;
+            return `https://${raw}`;
+        };
 
         const allBudgetItems = () => Array.from(form.querySelectorAll('[data-budget-item]'));
         const itemIdx = (item) => (item.querySelector('[data-budget-index]')?.value || '').trim();
@@ -545,6 +554,7 @@
             const removeBtn = item.querySelector('[data-remove-budget]');
             const addSubBtn = item.querySelector('[data-add-sub-budget]');
             const approvedInput = item.querySelector('[data-field="approved"]');
+            const openLinkBtn = item.querySelector('[data-open-budget-link]');
             const captureBtn = item.querySelector('[data-capture-budget]');
             const photoInput = item.querySelector('[data-field="photo"]');
             const preview = item.querySelector('[data-photo-preview]');
@@ -595,6 +605,22 @@
                 }
                 openSubBudgetModal(item);
             });
+
+            if (openLinkBtn) {
+                openLinkBtn.addEventListener('click', () => {
+                    const candidate = normalizeExternalLink(linkInput.value);
+                    if (!candidate) {
+                        alert('Informe um link para abrir.');
+                        return;
+                    }
+                    try {
+                        const url = new URL(candidate);
+                        window.open(url.toString(), '_blank', 'noopener,noreferrer');
+                    } catch (err) {
+                        alert(`Link inválido: ${err}`);
+                    }
+                });
+            }
 
             if (parentMeta) {
                 parentIdxInput.value = String(parentMeta.idx || '');
