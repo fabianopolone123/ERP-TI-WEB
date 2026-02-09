@@ -439,15 +439,99 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
             raise InvalidOperation
         return value
 
+    def _save_quotes(self, request, requisition: Requisition, update_mode: bool = False) -> tuple[int, str | None]:
+        existing_quotes = {}
+        if update_mode:
+            existing_quotes = {str(item.id): item for item in requisition.quotes.all()}
+        kept_ids: set[int] = set()
+        saved_count = 0
+
+        for idx in request.POST.getlist('budget_index'):
+            idx = (idx or '').strip()
+            if not idx:
+                continue
+
+            quote_id = (request.POST.get(f'budget_quote_id_{idx}') or '').strip()
+            name = (request.POST.get(f'budget_name_{idx}') or '').strip()
+            value_raw = (request.POST.get(f'budget_value_{idx}') or '').strip()
+            link = (request.POST.get(f'budget_link_{idx}') or '').strip()
+            photo = request.FILES.get(f'budget_photo_{idx}')
+
+            if not name and not value_raw and not link and not photo and not quote_id:
+                continue
+
+            if not name:
+                return 0, f'Orçamento #{idx}: informe o nome.'
+
+            try:
+                value = self._parse_decimal_br(value_raw)
+            except (InvalidOperation, ValueError):
+                return 0, f'Orçamento #{idx}: valor inválido.'
+
+            if update_mode and quote_id and quote_id in existing_quotes:
+                quote = existing_quotes[quote_id]
+                quote.name = name
+                quote.value = value
+                quote.link = link
+                if photo:
+                    quote.photo = photo
+                    quote.save()
+                else:
+                    quote.save(update_fields=['name', 'value', 'link'])
+                kept_ids.add(quote.id)
+                saved_count += 1
+                continue
+
+            created = RequisitionQuote.objects.create(
+                requisition=requisition,
+                name=name,
+                value=value,
+                link=link,
+                photo=photo,
+            )
+            kept_ids.add(created.id)
+            saved_count += 1
+
+        if saved_count == 0:
+            return 0, 'Cadastre pelo menos um orçamento.'
+        if update_mode:
+            requisition.quotes.exclude(id__in=kept_ids).delete()
+        return saved_count, None
+
     def post(self, request, *args, **kwargs):
         if not is_ti_user(request):
             messages.error(request, 'Apenas usuários do departamento TI podem cadastrar requisições.')
             return self.get(request, *args, **kwargs)
 
+        mode = (request.POST.get('mode') or 'create').strip().lower()
         request_text = (request.POST.get('request_text') or '').strip()
         if not request_text:
             messages.error(request, 'Informe o texto da requisição.')
             return self.get(request, *args, **kwargs)
+
+        if mode == 'update':
+            requisition_id = (request.POST.get('requisition_id') or '').strip()
+            requisition = Requisition.objects.filter(id=requisition_id).first()
+            if not requisition:
+                messages.error(request, 'Requisição não encontrada para edição.')
+                return self.get(request, *args, **kwargs)
+
+            status_value = (request.POST.get('status') or Requisition.Status.PENDING_APPROVAL).strip()
+            valid_statuses = {choice[0] for choice in Requisition.Status.choices}
+            if status_value not in valid_statuses:
+                status_value = Requisition.Status.PENDING_APPROVAL
+
+            requisition.request = request_text
+            requisition.status = status_value
+            requisition.save(update_fields=['request', 'status', 'updated_at'])
+
+            saved_count, error = self._save_quotes(request, requisition, update_mode=True)
+            if error:
+                messages.error(request, error)
+                return self.get(request, *args, **kwargs)
+
+            messages.success(request, f'Requisição atualizada com sucesso com {saved_count} orçamento(s).')
+            return redirect('requisicoes')
 
         requisition = Requisition.objects.create(
             request=request_text,
@@ -455,41 +539,10 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
             status=Requisition.Status.PENDING_APPROVAL,
         )
 
-        created_quotes = 0
-        for idx in request.POST.getlist('budget_index'):
-            idx = (idx or '').strip()
-            if not idx:
-                continue
-            name = (request.POST.get(f'budget_name_{idx}') or '').strip()
-            value_raw = (request.POST.get(f'budget_value_{idx}') or '').strip()
-            link = (request.POST.get(f'budget_link_{idx}') or '').strip()
-            photo = request.FILES.get(f'budget_photo_{idx}')
-
-            if not name and not value_raw and not link and not photo:
-                continue
-            if not name:
-                messages.error(request, f'Orçamento #{idx}: informe o nome.')
-                requisition.delete()
-                return self.get(request, *args, **kwargs)
-            try:
-                value = self._parse_decimal_br(value_raw)
-            except (InvalidOperation, ValueError):
-                messages.error(request, f'Orçamento #{idx}: valor inválido.')
-                requisition.delete()
-                return self.get(request, *args, **kwargs)
-
-            RequisitionQuote.objects.create(
-                requisition=requisition,
-                name=name,
-                value=value,
-                link=link,
-                photo=photo,
-            )
-            created_quotes += 1
-
-        if created_quotes == 0:
+        created_quotes, error = self._save_quotes(request, requisition, update_mode=False)
+        if error:
             requisition.delete()
-            messages.error(request, 'Cadastre pelo menos um orçamento.')
+            messages.error(request, error)
             return self.get(request, *args, **kwargs)
 
         messages.success(request, f'Requisição cadastrada com sucesso com {created_quotes} orçamento(s).')

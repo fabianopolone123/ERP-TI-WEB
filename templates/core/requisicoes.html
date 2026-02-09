@@ -59,7 +59,7 @@
                 </thead>
                 <tbody>
                     {% for item in requisitions %}
-                        <tr data-req-row data-status="{{ item.status }}">
+                        <tr data-req-row data-status="{{ item.status }}" data-requisition-id="{{ item.id }}" style="cursor: pointer;">
                             <td data-sort-value="{{ item.id }}">{{ item.id }}</td>
                             <td>
                                 <div>{{ item.request }}</div>
@@ -98,15 +98,28 @@
     <div class="modal-backdrop" data-close-requisition></div>
     <div class="modal-content">
         <div class="topbar" style="margin-bottom: 8px;">
-            <h3>Nova requisição</h3>
+            <h3 data-requisition-modal-title>Nova requisição</h3>
             <button type="button" data-close-requisition>Fechar</button>
         </div>
         <form method="post" enctype="multipart/form-data" data-requisition-form>
             {% csrf_token %}
+            <input type="hidden" name="mode" value="create" data-requisition-mode />
+            <input type="hidden" name="requisition_id" value="" data-requisition-id-input />
             <div class="form-row">
                 <div style="flex: 1;">
                     <label for="id_request_text">Requisição</label>
                     <textarea id="id_request_text" name="request_text" rows="3" required placeholder="Descreva a necessidade da requisição..."></textarea>
+                </div>
+            </div>
+            <div class="form-row">
+                <div style="max-width: 320px;">
+                    <label for="id_requisition_status">Status</label>
+                    <select id="id_requisition_status" name="status">
+                        <option value="pending_approval">Pendente de aprovação</option>
+                        <option value="approved">Aprovado</option>
+                        <option value="rejected">Reprovado</option>
+                        <option value="received">Recebido</option>
+                    </select>
                 </div>
             </div>
 
@@ -149,6 +162,7 @@
 <template id="budget-item-template">
     <div class="ticket-legend" data-budget-item>
         <input type="hidden" name="budget_index" data-budget-index />
+        <input type="hidden" data-field="quote-id" />
         <div class="form-row">
             <div style="flex: 2;">
                 <label>Nome do orçamento</label>
@@ -183,9 +197,34 @@
 
 <script>
     (function () {
+        const requisitionData = {
+            {% for item in requisitions %}
+            "{{ item.id }}": {
+                id: {{ item.id }},
+                request: "{{ item.request|escapejs }}",
+                status: "{{ item.status|escapejs }}",
+                quotes: [
+                    {% for quote in item.quotes.all %}
+                    {
+                        id: {{ quote.id }},
+                        name: "{{ quote.name|escapejs }}",
+                        value: "{{ quote.value|floatformat:2|escapejs }}",
+                        link: "{{ quote.link|escapejs }}",
+                        photo_url: "{% if quote.photo %}{{ quote.photo.url|escapejs }}{% endif %}",
+                    }{% if not forloop.last %},{% endif %}
+                    {% endfor %}
+                ],
+            }{% if not forloop.last %},{% endif %}
+            {% endfor %}
+        };
+
         const modal = document.querySelector('[data-requisition-modal]');
         const openBtn = document.querySelector('[data-open-requisition]');
         const closeEls = document.querySelectorAll('[data-close-requisition]');
+        const modalTitle = document.querySelector('[data-requisition-modal-title]');
+        const modeInput = document.querySelector('[data-requisition-mode]');
+        const requisitionIdInput = document.querySelector('[data-requisition-id-input]');
+        const requisitionStatus = document.querySelector('#id_requisition_status');
         const addBtn = document.querySelector('[data-add-budget]');
         const copyBtn = document.querySelector('[data-copy-budgets]');
         const budgetList = document.querySelector('[data-budget-list]');
@@ -198,7 +237,7 @@
         const captureConfirmBtn = document.querySelector('[data-capture-confirm]');
         const captureCancelEls = document.querySelectorAll('[data-capture-cancel]');
 
-        if (!modal || !openBtn || !budgetList || !template || !form) return;
+        if (!modal || !openBtn || !budgetList || !template || !form || !modeInput || !requisitionIdInput || !requisitionStatus) return;
 
         let budgetIndex = 0;
         let captureTargetInput = null;
@@ -220,20 +259,36 @@
             throw new Error('API de captura indisponível neste navegador/contexto.');
         };
 
+        const clearBudgetItems = () => {
+            budgetList.innerHTML = '';
+        };
+
+        const toBrValue = (value) => {
+            const raw = (value || '').toString();
+            const n = Number(raw);
+            if (Number.isNaN(n)) return raw;
+            return n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        };
+
         const setBudgetFieldNames = (item, idx) => {
             item.querySelector('[data-budget-index]').value = String(idx);
+            item.querySelector('[data-field="quote-id"]').name = `budget_quote_id_${idx}`;
             item.querySelector('[data-field="name"]').name = `budget_name_${idx}`;
             item.querySelector('[data-field="value"]').name = `budget_value_${idx}`;
             item.querySelector('[data-field="link"]').name = `budget_link_${idx}`;
             item.querySelector('[data-field="photo"]').name = `budget_photo_${idx}`;
         };
 
-        const addBudgetItem = () => {
+        const addBudgetItem = (initialData = null) => {
             const fragment = template.content.cloneNode(true);
             const item = fragment.querySelector('[data-budget-item]');
             const idx = ++budgetIndex;
             setBudgetFieldNames(item, idx);
 
+            const quoteIdInput = item.querySelector('[data-field="quote-id"]');
+            const nameInput = item.querySelector('[data-field="name"]');
+            const valueInput = item.querySelector('[data-field="value"]');
+            const linkInput = item.querySelector('[data-field="link"]');
             const removeBtn = item.querySelector('[data-remove-budget]');
             const captureBtn = item.querySelector('[data-capture-budget]');
             const photoInput = item.querySelector('[data-field="photo"]');
@@ -244,11 +299,24 @@
                 item.remove();
             });
 
+            if (initialData) {
+                quoteIdInput.value = initialData.id ? String(initialData.id) : '';
+                nameInput.value = initialData.name || '';
+                valueInput.value = toBrValue(initialData.value || '');
+                linkInput.value = initialData.link || '';
+                if (initialData.photo_url) {
+                    preview.src = initialData.photo_url;
+                    preview.style.display = 'block';
+                }
+            }
+
             photoInput.addEventListener('change', () => {
                 const file = photoInput.files && photoInput.files[0];
                 if (!file) {
-                    preview.style.display = 'none';
-                    preview.removeAttribute('src');
+                    if (!initialData || !initialData.photo_url) {
+                        preview.style.display = 'none';
+                        preview.removeAttribute('src');
+                    }
                     return;
                 }
                 preview.src = URL.createObjectURL(file);
@@ -393,18 +461,51 @@
             }, 'image/png');
         });
 
-        const open = () => {
+        const openCreate = () => {
+            modeInput.value = 'create';
+            requisitionIdInput.value = '';
+            modalTitle.textContent = 'Nova requisição';
+            requestInput.value = '';
+            requisitionStatus.value = 'pending_approval';
+            clearBudgetItems();
+            budgetIndex = 0;
+            addBudgetItem();
             modal.hidden = false;
-            if (!budgetList.querySelector('[data-budget-item]')) addBudgetItem();
+        };
+
+        const openEdit = (id) => {
+            const data = requisitionData[String(id)];
+            if (!data) return;
+            modeInput.value = 'update';
+            requisitionIdInput.value = String(data.id);
+            modalTitle.textContent = `Editar requisição #${data.id}`;
+            requestInput.value = data.request || '';
+            requisitionStatus.value = data.status || 'pending_approval';
+            clearBudgetItems();
+            budgetIndex = 0;
+            if (Array.isArray(data.quotes) && data.quotes.length) {
+                data.quotes.forEach((q) => addBudgetItem(q));
+            } else {
+                addBudgetItem();
+            }
+            modal.hidden = false;
         };
 
         const close = () => {
             modal.hidden = true;
         };
 
-        openBtn.addEventListener('click', open);
+        openBtn.addEventListener('click', openCreate);
         closeEls.forEach((el) => el.addEventListener('click', close));
         addBtn.addEventListener('click', addBudgetItem);
+
+        document.querySelectorAll('[data-req-row]').forEach((row) => {
+            row.addEventListener('click', () => {
+                const id = row.getAttribute('data-requisition-id');
+                if (!id) return;
+                openEdit(id);
+            });
+        });
 
         copyBtn.addEventListener('click', async () => {
             const reqText = (requestInput.value || '').trim();
