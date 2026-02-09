@@ -1032,24 +1032,26 @@
         closeEls.forEach((el) => el.addEventListener('click', close));
     })();
 </script>
-<script>
-    (function () {
-        const REFRESH_MS = 3000;
-        const isTyping = () => {
-            const active = document.activeElement;
-            if (!active) return false;
-            const tag = (active.tagName || '').toLowerCase();
-            return tag === 'input' || tag === 'textarea' || active.isContentEditable;
-        };
-        const hasOpenModal = () =>
-            Array.from(document.querySelectorAll('.modal')).some((modal) => !modal.hidden);
+{% if is_ti_group %}
+    <script>
+        (function () {
+            const REFRESH_MS = 3000;
+            const isTyping = () => {
+                const active = document.activeElement;
+                if (!active) return false;
+                const tag = (active.tagName || '').toLowerCase();
+                return tag === 'input' || tag === 'textarea' || active.isContentEditable;
+            };
+            const hasOpenModal = () =>
+                Array.from(document.querySelectorAll('.modal')).some((modal) => !modal.hidden);
 
-        setInterval(() => {
-            if (document.hidden) return;
-            if (isTyping()) return;
-            if (hasOpenModal()) return;
-            window.location.reload();
-        }, REFRESH_MS);
-    })();
-</script>
+            setInterval(() => {
+                if (document.hidden) return;
+                if (isTyping()) return;
+                if (hasOpenModal()) return;
+                window.location.reload();
+            }, REFRESH_MS);
+        })();
+    </script>
+{% endif %}
 {% endblock %}
