@@ -46,9 +46,9 @@ DEFAULT_EMAIL_TEMPLATES = {
     'new_message_body': 'Nova mensagem: {message}',
 }
 DEFAULT_WA_TEMPLATES = {
-    'new_ticket': 'Novo chamado #{id}: {title} | {description}',
-    'status_update': 'Chamado #{id} atualizado: {status} | {responsavel}',
-    'new_message': 'Nova mensagem no chamado #{id}: {message}',
+    'new_ticket': 'Novo chamado #{id}: {title} | Solicitante: {solicitante} | Tipo: {tipo} | Urgência: {urgencia} | {description}',
+    'status_update': 'Chamado #{id} atualizado: {status} | Responsável: {responsavel} | Solicitante: {solicitante}',
+    'new_message': 'Nova mensagem no chamado #{id}: {message} | Solicitante: {solicitante}',
 }
 
 ERP_MODULES = [
@@ -217,16 +217,41 @@ def _build_whatsapp_summary(ticket, event_label="Novo chamado", extra_line=None)
     title = shorten((ticket.title or "").strip(), width=120, placeholder='...')
     description = shorten((ticket.description or "").strip(), width=160, placeholder='...')
     detail = shorten(((extra_line or "").replace('\n', ' ')).strip(), width=180, placeholder='...')
+    requester_name = (getattr(ticket.created_by, 'get_full_name', lambda: '')() or getattr(ticket.created_by, 'username', '') or '').strip()
+    requester_username = (getattr(ticket.created_by, 'username', '') or '').strip()
+    requester_email = (getattr(ticket.created_by, 'email', '') or '').strip()
+    responsible_name = ticket.assigned_to.full_name if ticket.assigned_to else ''
+    collaborators = ', '.join(
+        [u.full_name for u in ticket.collaborators.all() if (u.full_name or '').strip()]
+    )
+    created_at = timezone.localtime(ticket.created_at).strftime('%d/%m/%Y %H:%M') if ticket.created_at else ''
+    updated_at = timezone.localtime(ticket.updated_at).strftime('%d/%m/%Y %H:%M') if ticket.updated_at else ''
+    ticket_url = f"{getattr(settings, 'SITE_BASE_URL', '').rstrip('/')}/chamados/" if getattr(settings, 'SITE_BASE_URL', '') else ''
 
     templates = _get_whatsapp_templates()
     payload = _SafeDict(
         {
             'id': ticket.id,
+            'ticket_id': ticket.id,
             'title': title,
+            'titulo': title,
             'description': description,
+            'descricao': description,
             'status': ticket.get_status_display(),
+            'tipo': ticket.get_ticket_type_display(),
+            'urgencia': ticket.get_urgency_display(),
             'responsavel': ticket.assigned_to.full_name if ticket.assigned_to else '',
+            'responsavel_usuario': ticket.assigned_to.username if ticket.assigned_to and ticket.assigned_to.username else '',
+            'solicitante': requester_name,
+            'solicitante_usuario': requester_username,
+            'solicitante_email': requester_email,
+            'colaboradores': collaborators,
+            'criado_em': created_at,
+            'atualizado_em': updated_at,
+            'resolucao': (ticket.resolution or '').strip(),
+            'link': ticket_url,
             'message': detail or description or title,
+            'mensagem': detail or description or title,
         }
     )
 

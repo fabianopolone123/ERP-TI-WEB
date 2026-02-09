@@ -360,7 +360,7 @@
             <div class="ticket-legend">
                 <strong>Grupo atual:</strong> {{ whatsapp_group|default:"(nao configurado)" }}
                 <div class="muted" style="margin-top: 6px;">
-                    Placeholders disponíveis: {id}, {title}, {description}, {status}, {responsavel}, {message}
+                    Placeholders disponíveis: veja a lista completa abaixo dos templates.
                 </div>
             </div>
             <form method="post" action="{% url 'chamados_whatsapp_settings' %}">
@@ -436,19 +436,25 @@
                 <div class="form-row">
                     <div style="flex: 2;">
                         <label for="id_wa_new">Novo chamado</label>
-                        <textarea id="id_wa_new" name="template_new_ticket" rows="2" placeholder="Novo chamado #{id}: {title} | {description}">{{ wa_templates.new_ticket }}</textarea>
+                        <textarea id="id_wa_new" name="template_new_ticket" rows="2" placeholder="Novo chamado #{id}: {title} | Solicitante: {solicitante} | Tipo: {tipo} | Urgência: {urgencia} | {description}">{{ wa_templates.new_ticket }}</textarea>
                     </div>
                 </div>
                 <div class="form-row">
                     <div style="flex: 2;">
                         <label for="id_wa_status">Status atualizado</label>
-                        <textarea id="id_wa_status" name="template_status_update" rows="2" placeholder="Chamado #{id} atualizado: {status} | {responsavel}">{{ wa_templates.status_update }}</textarea>
+                        <textarea id="id_wa_status" name="template_status_update" rows="2" placeholder="Chamado #{id} atualizado: {status} | Responsável: {responsavel} | Solicitante: {solicitante}">{{ wa_templates.status_update }}</textarea>
                     </div>
                 </div>
                 <div class="form-row">
                     <div style="flex: 2;">
                         <label for="id_wa_msg">Nova mensagem</label>
-                        <textarea id="id_wa_msg" name="template_new_message" rows="2" placeholder="Nova mensagem no chamado #{id}: {message}">{{ wa_templates.new_message }}</textarea>
+                        <textarea id="id_wa_msg" name="template_new_message" rows="2" placeholder="Nova mensagem no chamado #{id}: {message} | Solicitante: {solicitante}">{{ wa_templates.new_message }}</textarea>
+                    </div>
+                </div>
+                <div class="ticket-legend" style="margin-bottom: 10px;">
+                    <strong>Placeholders disponíveis</strong>
+                    <div class="muted" style="margin-top:6px;">
+                        <code>{id}</code>, <code>{ticket_id}</code>, <code>{title}</code>, <code>{titulo}</code>, <code>{description}</code>, <code>{descricao}</code>, <code>{status}</code>, <code>{tipo}</code>, <code>{urgencia}</code>, <code>{responsavel}</code>, <code>{responsavel_usuario}</code>, <code>{solicitante}</code>, <code>{solicitante_usuario}</code>, <code>{solicitante_email}</code>, <code>{colaboradores}</code>, <code>{message}</code>, <code>{mensagem}</code>, <code>{criado_em}</code>, <code>{atualizado_em}</code>, <code>{resolucao}</code>, <code>{link}</code>
                     </div>
                 </div>
                 <button type="submit">Salvar templates</button>
