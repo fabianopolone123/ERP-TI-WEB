@@ -5,7 +5,7 @@ from decimal import Decimal, InvalidOperation
 from django.conf import settings
 from django.contrib import messages
 from django.core.mail import send_mail
-from django.db.models import Count, Sum
+from django.db.models import Count
 from django.shortcuts import redirect
 from django.utils import timezone
 from datetime import timedelta
@@ -455,6 +455,7 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
             quote_id = (request.POST.get(f'budget_quote_id_{idx}') or '').strip()
             name = (request.POST.get(f'budget_name_{idx}') or '').strip()
             value_raw = (request.POST.get(f'budget_value_{idx}') or '').strip()
+            freight_raw = (request.POST.get(f'budget_freight_{idx}') or '').strip()
             link = (request.POST.get(f'budget_link_{idx}') or '').strip()
             photo = request.FILES.get(f'budget_photo_{idx}')
 
@@ -468,18 +469,23 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
                 value = self._parse_decimal_br(value_raw)
             except (InvalidOperation, ValueError):
                 return 0, f'Orçamento #{idx}: valor inválido.'
+            try:
+                freight = self._parse_decimal_br(freight_raw or '0')
+            except (InvalidOperation, ValueError):
+                return 0, f'Orçamento #{idx}: frete inválido.'
 
             if update_mode and quote_id and quote_id in existing_quotes:
                 quote = existing_quotes[quote_id]
                 quote.name = name
                 quote.value = value
+                quote.freight = freight
                 quote.link = link
                 quote.parent = None
                 if photo:
                     quote.photo = photo
                     quote.save()
                 else:
-                    quote.save(update_fields=['name', 'value', 'link', 'parent'])
+                    quote.save(update_fields=['name', 'value', 'freight', 'link', 'parent'])
                 kept_ids.add(quote.id)
                 idx_to_quote[idx] = quote
                 saved_count += 1
@@ -490,6 +496,7 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
                 parent=None,
                 name=name,
                 value=value,
+                freight=freight,
                 link=link,
                 photo=photo,
             )
@@ -583,9 +590,13 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
             Requisition.objects
             .prefetch_related('quotes')
             .annotate(quotes_count=Count('quotes'))
-            .annotate(quotes_total=Sum('quotes__value'))
             .order_by('-created_at', '-id')
         )
+        for req in requisitions:
+            total = Decimal('0')
+            for quote in req.quotes.all():
+                total += (quote.value or Decimal('0')) + (quote.freight or Decimal('0'))
+            req.quotes_total = total
         context['requisitions'] = requisitions
         return context
 
