@@ -1,4 +1,5 @@
 ﻿import logging
+import unicodedata
 from textwrap import shorten
 from django.conf import settings
 from django.contrib import messages
@@ -80,6 +81,10 @@ def build_modules(active_slug: str | None) -> list[dict[str, str | bool]]:
 class _SafeDict(dict):
     def __missing__(self, key):
         return ''
+
+def _normalize_text(value: str) -> str:
+    raw = (value or '').strip().lower()
+    return unicodedata.normalize('NFKD', raw).encode('ascii', 'ignore').decode('ascii')
 
 
 def _get_whatsapp_templates() -> WhatsAppTemplate:
@@ -378,6 +383,7 @@ class AcessosView(LoginRequiredMixin, TemplateView):
                     .filter(username__iexact=selected_user.username)
                 )
                 access_map: dict[int, dict[str, str | set[str]]] = {}
+                admin_group_names: set[str] = set()
                 for member in memberships:
                     folder = member.group.folder
                     entry = access_map.setdefault(
@@ -391,6 +397,24 @@ class AcessosView(LoginRequiredMixin, TemplateView):
                     entry['groups'].add(member.group.name)
                     if member.group.access_level == 'leitura_escrita':
                         entry['level'] = 'leitura_escrita'
+                    normalized = _normalize_text(member.group.name)
+                    if 'admin' in normalized or 'administrador' in normalized:
+                        admin_group_names.add(member.group.name)
+
+                # Users in administrative groups are treated as full-access for all folders.
+                if admin_group_names:
+                    admin_label = ', '.join(sorted(admin_group_names))
+                    for folder in folders:
+                        entry = access_map.setdefault(
+                            folder.id,
+                            {
+                                'folder': folder.name,
+                                'level': 'leitura_escrita',
+                                'groups': set(),
+                            },
+                        )
+                        entry['level'] = 'leitura_escrita'
+                        entry['groups'].add(admin_label)
                 context['user_access'] = sorted(
                     [
                         {
@@ -902,3 +926,5 @@ def email_templates_update(request):
     template.save()
     messages.success(request, 'Templates de e-mail atualizados.')
     return redirect('chamados')
+
+
