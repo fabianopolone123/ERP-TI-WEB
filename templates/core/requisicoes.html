@@ -1300,7 +1300,6 @@
 
                 lines.push(`${i + 1}. ${main.name || '(sem nome)'}`);
                 lines.push(`   Valor: R$ ${main.value} | Frete: R$ ${main.freight} | Total pacote: R$ ${toBrMoney(total)}`);
-                if (main.createdAt) lines.push(`   ${main.createdAt}`);
                 if (main.link) lines.push(`   Link (${main.linkLabel || 'site'}): ${main.link}`);
                 let mainImageText = '';
                 const mainImg = await resolveClipboardImage(main.previewSrc);
@@ -1314,7 +1313,6 @@
                 htmlParts.push(`<li style="margin-bottom:12px;">`);
                 htmlParts.push(`<div><strong>${escapeHtml(main.name || '(sem nome)')}</strong></div>`);
                 htmlParts.push(`<div>Valor: <strong>R$ ${escapeHtml(main.value)}</strong> | Frete: <strong>R$ ${escapeHtml(main.freight)}</strong> | Total pacote: <strong>R$ ${escapeHtml(toBrMoney(total))}</strong></div>`);
-                if (main.createdAt) htmlParts.push(`<div style="color:#475569;font-size:12px;">${escapeHtml(main.createdAt)}</div>`);
                 if (main.link) htmlParts.push(`<div>Link: <a href="${escapeHtml(main.link)}" target="_blank" rel="noopener noreferrer">${escapeHtml(main.linkLabel || 'Abrir orçamento')}</a></div>`);
                 if (mainImg.htmlSrc) {
                     htmlParts.push(`<div style="margin-top:6px;"><img src="${escapeHtml(mainImg.htmlSrc)}" alt="Orçamento" style="margin-top:4px;max-width:360px;max-height:180px;border:1px solid #cbd5e1;border-radius:6px;"></div>`);
