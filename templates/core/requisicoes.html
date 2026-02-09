@@ -521,6 +521,32 @@
             if (/^https?:\/\//i.test(raw)) return raw;
             return `https://${raw}`;
         };
+        const escapeHtml = (value) => (value || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+        const shortLinkLabel = (value) => {
+            const normalized = normalizeExternalLink(value);
+            if (!normalized) return '';
+            try {
+                const u = new URL(normalized);
+                const host = u.hostname.replace(/^www\./i, '');
+                const path = (u.pathname || '/').replace(/\/+$/, '');
+                const firstPath = path && path !== '/' ? path.split('/').filter(Boolean).slice(0, 2).join('/') : '';
+                return firstPath ? `${host}/${firstPath}` : host;
+            } catch (_) {
+                return normalized.slice(0, 50);
+            }
+        };
+        const ensureAbsoluteMediaUrl = (value) => {
+            const raw = (value || '').trim();
+            if (!raw) return '';
+            if (/^https?:\/\//i.test(raw)) return raw;
+            if (raw.startsWith('/')) return `${window.location.origin}${raw}`;
+            return '';
+        };
         const budgetAccentPalette = ['#38bdf8', '#22c55e', '#f59e0b', '#a78bfa', '#f97316', '#14b8a6'];
 
         const allBudgetItems = () => Array.from(form.querySelectorAll('[data-budget-item]'));
@@ -659,6 +685,45 @@
 
             refreshBudgetCardStyles();
             recalculateBudgetPackages();
+        };
+
+        const collectBudgetData = () => {
+            const allItems = Array.from(form.querySelectorAll('[data-budget-item]'));
+            const parsed = allItems.map((item) => {
+                const idx = itemIdx(item);
+                const parentIdx = itemParentIdx(item);
+                const name = (item.querySelector('[data-field="name"]')?.value || '').trim();
+                const value = (item.querySelector('[data-field="value"]')?.value || '').trim();
+                const freight = (item.querySelector('[data-field="freight"]')?.value || '').trim();
+                const linkRaw = (item.querySelector('[data-field="link"]')?.value || '').trim();
+                const link = normalizeExternalLink(linkRaw);
+                const linkLabel = shortLinkLabel(linkRaw);
+                const createdAt = (item.querySelector('[data-budget-created-at]')?.textContent || '').trim();
+                const previewSrcRaw = (item.querySelector('[data-photo-preview]')?.getAttribute('src') || '').trim();
+                const previewSrc = ensureAbsoluteMediaUrl(previewSrcRaw);
+                if (!name && !value && !freight && !link) return null;
+                return {
+                    idx,
+                    parentIdx,
+                    name,
+                    value: value || '0,00',
+                    freight: freight || '0,00',
+                    link,
+                    linkLabel,
+                    createdAt,
+                    previewSrc,
+                };
+            }).filter(Boolean);
+
+            const byParent = new Map();
+            parsed.forEach((entry) => {
+                if (!entry.parentIdx) return;
+                if (!byParent.has(entry.parentIdx)) byParent.set(entry.parentIdx, []);
+                byParent.get(entry.parentIdx).push(entry);
+            });
+
+            const mainItems = parsed.filter((entry) => !entry.parentIdx);
+            return { mainItems, byParent };
         };
 
         const setBudgetFieldNames = (item, idx) => {
@@ -1068,31 +1133,78 @@
             const reqCode = modeInput.value === 'update'
                 ? `TI - ${String(requisitionIdInput.value || '0').padStart(4, '0')}`
                 : '(a definir após salvar)';
-            const lines = [];
-            lines.push(`Código: ${reqCode}`);
-            lines.push(`Título: ${reqTitle || '(sem título)'}`);
-            lines.push(`Requisição: ${reqText || '(sem texto)'}`);
-            lines.push('');
-            lines.push('Orçamentos:');
-            const items = Array.from(budgetList.querySelectorAll('[data-budget-item]'));
-            items.forEach((item, i) => {
-                const name = (item.querySelector('[data-field="name"]').value || '').trim();
-                const value = (item.querySelector('[data-field="value"]').value || '').trim();
-                const freight = (item.querySelector('[data-field="freight"]').value || '').trim();
-                const link = (item.querySelector('[data-field="link"]').value || '').trim();
-                const parentIdx = (item.querySelector('[data-field="parent-idx"]')?.value || '').trim();
-                const createdAt = (item.querySelector('[data-budget-created-at]')?.textContent || '').trim();
-                if (!name && !value && !freight && !link) return;
-                const prefix = parentIdx ? 'SUB' : String(i + 1);
-                lines.push(`${prefix}. ${name || '(sem nome)'} - R$ ${value || '0,00'} | Frete: R$ ${freight || '0,00'}`);
-                if (createdAt) lines.push(`   ${createdAt}`);
-                if (link) lines.push(`   Link: ${link}`);
+            const { mainItems, byParent } = collectBudgetData();
+
+            const lines = [
+                `Código: ${reqCode}`,
+                `Título: ${reqTitle || '(sem título)'}`,
+                `Requisição: ${reqText || '(sem texto)'}`,
+                '',
+                'Orçamentos:',
+            ];
+
+            const htmlParts = [
+                `<div style="font-family:Segoe UI,Arial,sans-serif;color:#0f172a;line-height:1.4;">`,
+                `<p><strong>Código:</strong> ${escapeHtml(reqCode)}<br><strong>Título:</strong> ${escapeHtml(reqTitle || '(sem título)')}<br><strong>Requisição:</strong> ${escapeHtml(reqText || '(sem texto)')}</p>`,
+                `<p><strong>Orçamentos:</strong></p>`,
+                `<ol style="margin:0;padding-left:20px;">`,
+            ];
+
+            mainItems.forEach((main, i) => {
+                const subs = byParent.get(main.idx) || [];
+                let total = parseBrNumber(main.value) + parseBrNumber(main.freight);
+                subs.forEach((sub) => {
+                    total += parseBrNumber(sub.value) + parseBrNumber(sub.freight);
+                });
+
+                lines.push(`${i + 1}. ${main.name || '(sem nome)'}`);
+                lines.push(`   Valor: R$ ${main.value} | Frete: R$ ${main.freight} | Total pacote: R$ ${toBrMoney(total)}`);
+                if (main.createdAt) lines.push(`   ${main.createdAt}`);
+                if (main.link) lines.push(`   Link (${main.linkLabel || 'site'}): ${main.link}`);
+                if (main.previewSrc) lines.push(`   Imagem: ${main.previewSrc}`);
+
+                htmlParts.push(`<li style="margin-bottom:12px;">`);
+                htmlParts.push(`<div><strong>${escapeHtml(main.name || '(sem nome)')}</strong></div>`);
+                htmlParts.push(`<div>Valor: <strong>R$ ${escapeHtml(main.value)}</strong> | Frete: <strong>R$ ${escapeHtml(main.freight)}</strong> | Total pacote: <strong>R$ ${escapeHtml(toBrMoney(total))}</strong></div>`);
+                if (main.createdAt) htmlParts.push(`<div style="color:#475569;font-size:12px;">${escapeHtml(main.createdAt)}</div>`);
+                if (main.link) htmlParts.push(`<div>Link: <a href="${escapeHtml(main.link)}" target="_blank" rel="noopener noreferrer">${escapeHtml(main.linkLabel || 'Abrir orçamento')}</a></div>`);
+                if (main.previewSrc) htmlParts.push(`<div style="margin-top:6px;"><a href="${escapeHtml(main.previewSrc)}" target="_blank" rel="noopener noreferrer">Imagem do orçamento</a><br><img src="${escapeHtml(main.previewSrc)}" alt="Orçamento" style="margin-top:4px;max-width:360px;max-height:180px;border:1px solid #cbd5e1;border-radius:6px;"></div>`);
+
+                if (subs.length) {
+                    lines.push(`   Suborçamentos:`);
+                    htmlParts.push(`<ul style="margin-top:8px;padding-left:18px;">`);
+                    subs.forEach((sub) => {
+                        lines.push(`   - ${sub.name || '(sem nome)'} | Valor: R$ ${sub.value} | Frete: R$ ${sub.freight}`);
+                        if (sub.link) lines.push(`     Link (${sub.linkLabel || 'site'}): ${sub.link}`);
+                        if (sub.previewSrc) lines.push(`     Imagem: ${sub.previewSrc}`);
+
+                        htmlParts.push(`<li style="margin-bottom:8px;"><strong>${escapeHtml(sub.name || '(sem nome)')}</strong> - Valor: R$ ${escapeHtml(sub.value)} | Frete: R$ ${escapeHtml(sub.freight)}`);
+                        if (sub.link) htmlParts.push(`<br>Link: <a href="${escapeHtml(sub.link)}" target="_blank" rel="noopener noreferrer">${escapeHtml(sub.linkLabel || 'Abrir')}</a>`);
+                        if (sub.previewSrc) htmlParts.push(`<br><a href="${escapeHtml(sub.previewSrc)}" target="_blank" rel="noopener noreferrer">Imagem do suborçamento</a>`);
+                        htmlParts.push(`</li>`);
+                    });
+                    htmlParts.push(`</ul>`);
+                }
+
+                htmlParts.push(`</li>`);
             });
-            const payload = lines.join('\n').trim();
-            if (!payload) return;
+
+            htmlParts.push(`</ol></div>`);
+            const payloadText = lines.join('\n').trim();
+            const payloadHtml = htmlParts.join('');
+            if (!payloadText) return;
             try {
-                await navigator.clipboard.writeText(payload);
-                alert('Orçamentos copiados para a área de transferência.');
+                if (window.ClipboardItem && navigator.clipboard?.write) {
+                    const clipItem = new ClipboardItem({
+                        'text/plain': new Blob([payloadText], { type: 'text/plain' }),
+                        'text/html': new Blob([payloadHtml], { type: 'text/html' }),
+                    });
+                    await navigator.clipboard.write([clipItem]);
+                    alert('Orçamentos copiados com formatação para e-mail (HTML + texto).');
+                } else {
+                    await navigator.clipboard.writeText(payloadText);
+                    alert('Orçamentos copiados em texto (seu navegador não suporta HTML no clipboard).');
+                }
             } catch (err) {
                 alert(`Falha ao copiar: ${err}`);
             }
