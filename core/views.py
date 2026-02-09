@@ -122,6 +122,13 @@ def _get_user_ad_groups(username: str) -> list[str]:
         # AD can omit the primary group from memberOf, so resolve it via primaryGroupID.
         primary_group_id = entry.primaryGroupID.value if 'primaryGroupID' in entry else None
         if primary_group_id:
+            primary_group_id_str = str(primary_group_id)
+            # Fallback for well-known RIDs when group lookup does not return.
+            if primary_group_id_str == '512':
+                groups.append('Admins. do dominio')
+            elif primary_group_id_str == '513':
+                groups.append('Usuarios do dominio')
+
             primary_filter = f'(&(objectCategory=group)(primaryGroupToken={primary_group_id}))'
             conn.search(
                 search_base=base_dn,
