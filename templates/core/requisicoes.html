@@ -548,6 +548,43 @@
             if (raw.startsWith('/')) return `${window.location.origin}${raw}`;
             return '';
         };
+        const blobToDataUrl = (blob) => new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(String(reader.result || ''));
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+        });
+        const resolveClipboardImage = async (rawValue) => {
+            const raw = (rawValue || '').trim();
+            if (!raw) return { htmlSrc: '', fallbackLink: '' };
+            if (raw.startsWith('data:image/')) {
+                return { htmlSrc: raw, fallbackLink: '' };
+            }
+            const absolute = ensureAbsoluteMediaUrl(raw) || raw;
+            if (!/^https?:\/\//i.test(absolute) && !absolute.startsWith('blob:')) {
+                return { htmlSrc: '', fallbackLink: '' };
+            }
+            try {
+                const response = await fetch(absolute, { credentials: 'include' });
+                if (!response.ok) {
+                    return { htmlSrc: '', fallbackLink: ensureAbsoluteMediaUrl(absolute) };
+                }
+                const blob = await response.blob();
+                if (!blob.type.startsWith('image/')) {
+                    return { htmlSrc: '', fallbackLink: ensureAbsoluteMediaUrl(absolute) };
+                }
+                const dataUrl = await blobToDataUrl(blob);
+                return {
+                    htmlSrc: dataUrl,
+                    fallbackLink: ensureAbsoluteMediaUrl(absolute),
+                };
+            } catch (_) {
+                return {
+                    htmlSrc: '',
+                    fallbackLink: ensureAbsoluteMediaUrl(absolute),
+                };
+            }
+        };
         const budgetAccentPalette = ['#38bdf8', '#22c55e', '#f59e0b', '#a78bfa', '#f97316', '#14b8a6'];
 
         const allBudgetItems = () => Array.from(form.querySelectorAll('[data-budget-item]'));
@@ -781,8 +818,7 @@
                 const link = normalizeExternalLink(linkRaw);
                 const linkLabel = shortLinkLabel(linkRaw);
                 const createdAt = (item.querySelector('[data-budget-created-at]')?.textContent || '').trim();
-                const previewSrcRaw = (item.querySelector('[data-photo-preview]')?.getAttribute('src') || '').trim();
-                const previewSrc = ensureAbsoluteMediaUrl(previewSrcRaw);
+                const previewSrc = (item.querySelector('[data-photo-preview]')?.getAttribute('src') || '').trim();
                 if (!name && !value && !freight && !link) return null;
                 return {
                     idx,
@@ -1254,44 +1290,65 @@
                 `<ol style="margin:0;padding-left:20px;">`,
             ];
 
-            mainItems.forEach((main, i) => {
+            for (let i = 0; i < mainItems.length; i += 1) {
+                const main = mainItems[i];
                 const subs = byParent.get(main.idx) || [];
                 let total = parseBrNumber(main.value) + parseBrNumber(main.freight);
-                subs.forEach((sub) => {
+                for (const sub of subs) {
                     total += parseBrNumber(sub.value) + parseBrNumber(sub.freight);
-                });
+                }
 
                 lines.push(`${i + 1}. ${main.name || '(sem nome)'}`);
                 lines.push(`   Valor: R$ ${main.value} | Frete: R$ ${main.freight} | Total pacote: R$ ${toBrMoney(total)}`);
                 if (main.createdAt) lines.push(`   ${main.createdAt}`);
                 if (main.link) lines.push(`   Link (${main.linkLabel || 'site'}): ${main.link}`);
-                if (main.previewSrc) lines.push(`   Imagem: ${main.previewSrc}`);
+                let mainImageText = '';
+                const mainImg = await resolveClipboardImage(main.previewSrc);
+                if (mainImg.htmlSrc) {
+                    mainImageText = '   Imagem: incorporada no conteúdo copiado.';
+                } else if (mainImg.fallbackLink) {
+                    mainImageText = `   Imagem: ${mainImg.fallbackLink}`;
+                }
+                if (mainImageText) lines.push(mainImageText);
 
                 htmlParts.push(`<li style="margin-bottom:12px;">`);
                 htmlParts.push(`<div><strong>${escapeHtml(main.name || '(sem nome)')}</strong></div>`);
                 htmlParts.push(`<div>Valor: <strong>R$ ${escapeHtml(main.value)}</strong> | Frete: <strong>R$ ${escapeHtml(main.freight)}</strong> | Total pacote: <strong>R$ ${escapeHtml(toBrMoney(total))}</strong></div>`);
                 if (main.createdAt) htmlParts.push(`<div style="color:#475569;font-size:12px;">${escapeHtml(main.createdAt)}</div>`);
                 if (main.link) htmlParts.push(`<div>Link: <a href="${escapeHtml(main.link)}" target="_blank" rel="noopener noreferrer">${escapeHtml(main.linkLabel || 'Abrir orçamento')}</a></div>`);
-                if (main.previewSrc) htmlParts.push(`<div style="margin-top:6px;"><a href="${escapeHtml(main.previewSrc)}" target="_blank" rel="noopener noreferrer">Imagem do orçamento</a><br><img src="${escapeHtml(main.previewSrc)}" alt="Orçamento" style="margin-top:4px;max-width:360px;max-height:180px;border:1px solid #cbd5e1;border-radius:6px;"></div>`);
+                if (mainImg.htmlSrc) {
+                    htmlParts.push(`<div style="margin-top:6px;"><img src="${escapeHtml(mainImg.htmlSrc)}" alt="Orçamento" style="margin-top:4px;max-width:360px;max-height:180px;border:1px solid #cbd5e1;border-radius:6px;"></div>`);
+                } else if (mainImg.fallbackLink) {
+                    htmlParts.push(`<div style="margin-top:6px;"><a href="${escapeHtml(mainImg.fallbackLink)}" target="_blank" rel="noopener noreferrer">Imagem do orçamento</a></div>`);
+                }
 
                 if (subs.length) {
                     lines.push(`   Suborçamentos:`);
                     htmlParts.push(`<ul style="margin-top:8px;padding-left:18px;">`);
-                    subs.forEach((sub) => {
+                    for (const sub of subs) {
                         lines.push(`   - ${sub.name || '(sem nome)'} | Valor: R$ ${sub.value} | Frete: R$ ${sub.freight}`);
                         if (sub.link) lines.push(`     Link (${sub.linkLabel || 'site'}): ${sub.link}`);
-                        if (sub.previewSrc) lines.push(`     Imagem: ${sub.previewSrc}`);
+                        const subImg = await resolveClipboardImage(sub.previewSrc);
+                        if (subImg.htmlSrc) {
+                            lines.push(`     Imagem: incorporada no conteúdo copiado.`);
+                        } else if (subImg.fallbackLink) {
+                            lines.push(`     Imagem: ${subImg.fallbackLink}`);
+                        }
 
                         htmlParts.push(`<li style="margin-bottom:8px;"><strong>${escapeHtml(sub.name || '(sem nome)')}</strong> - Valor: R$ ${escapeHtml(sub.value)} | Frete: R$ ${escapeHtml(sub.freight)}`);
                         if (sub.link) htmlParts.push(`<br>Link: <a href="${escapeHtml(sub.link)}" target="_blank" rel="noopener noreferrer">${escapeHtml(sub.linkLabel || 'Abrir')}</a>`);
-                        if (sub.previewSrc) htmlParts.push(`<br><a href="${escapeHtml(sub.previewSrc)}" target="_blank" rel="noopener noreferrer">Imagem do suborçamento</a>`);
+                        if (subImg.htmlSrc) {
+                            htmlParts.push(`<br><img src="${escapeHtml(subImg.htmlSrc)}" alt="Suborçamento" style="margin-top:4px;max-width:300px;max-height:150px;border:1px solid #cbd5e1;border-radius:6px;">`);
+                        } else if (subImg.fallbackLink) {
+                            htmlParts.push(`<br><a href="${escapeHtml(subImg.fallbackLink)}" target="_blank" rel="noopener noreferrer">Imagem do suborçamento</a>`);
+                        }
                         htmlParts.push(`</li>`);
-                    });
+                    }
                     htmlParts.push(`</ul>`);
                 }
 
                 htmlParts.push(`</li>`);
-            });
+            }
 
             htmlParts.push(`</ol></div>`);
             const payloadText = lines.join('\n').trim();
@@ -1346,4 +1403,3 @@
 </script>
 {% endif %}
 {% endblock %}
-
