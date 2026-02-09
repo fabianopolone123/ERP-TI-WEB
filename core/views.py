@@ -618,6 +618,10 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
             for quote in main_quotes:
                 quote.sub_items = subs_by_parent.get(quote.id, [])
                 quote.sub_items_count = len(quote.sub_items)
+                package_total = (quote.value or Decimal('0')) + (quote.freight or Decimal('0'))
+                for sub_item in quote.sub_items:
+                    package_total += (sub_item.value or Decimal('0')) + (sub_item.freight or Decimal('0'))
+                quote.package_total = package_total
 
             req.main_quotes = main_quotes
             req.main_quotes_count = len(main_quotes)
