@@ -431,7 +431,7 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
             return self.get(request, *args, **kwargs)
 
         quantity_raw = (request.POST.get('quantity') or '').strip()
-        unit_value_raw = (request.POST.get('unit_value') or '').strip().replace(',', '.')
+        unit_value_raw = (request.POST.get('unit_value') or '').strip()
         try:
             quantity = int(quantity_raw or '1')
             if quantity < 1:
@@ -441,7 +441,18 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
             return self.get(request, *args, **kwargs)
 
         try:
-            unit_value = Decimal(unit_value_raw or '0')
+            normalized_value = unit_value_raw.replace(' ', '')
+            if ',' in normalized_value and '.' in normalized_value:
+                if normalized_value.rfind(',') > normalized_value.rfind('.'):
+                    normalized_value = normalized_value.replace('.', '').replace(',', '.')
+                else:
+                    normalized_value = normalized_value.replace(',', '')
+            elif ',' in normalized_value:
+                normalized_value = normalized_value.replace('.', '').replace(',', '.')
+            elif normalized_value.count('.') > 1:
+                normalized_value = normalized_value.replace('.', '')
+
+            unit_value = Decimal(normalized_value or '0')
             if unit_value < 0:
                 raise InvalidOperation
         except (InvalidOperation, ValueError):
@@ -456,9 +467,7 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
             approved_at=(request.POST.get('approved_at') or '').strip() or None,
             received_at=(request.POST.get('received_at') or '').strip() or None,
             invoice=(request.POST.get('invoice') or '').strip(),
-            approved_by_2=(request.POST.get('approved_by_2') or '').strip(),
             req_type=(request.POST.get('req_type') or '').strip(),
-            location=(request.POST.get('location') or '').strip(),
             link=(request.POST.get('link') or '').strip(),
         )
         messages.success(request, 'Requisição cadastrada com sucesso.')
@@ -472,7 +481,6 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
         requisitions = Requisition.objects.all().order_by('-requested_at', '-id')
         context['requisitions'] = requisitions
         context['types'] = sorted({(item.req_type or '').strip() for item in requisitions if (item.req_type or '').strip()})
-        context['locations'] = sorted({(item.location or '').strip() for item in requisitions if (item.location or '').strip()})
         return context
 
 

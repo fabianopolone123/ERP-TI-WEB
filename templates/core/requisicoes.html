@@ -30,7 +30,7 @@
         <div class="form-row" style="margin-bottom: 10px;">
             <div>
                 <label for="id_req_search">Busca</label>
-                <input id="id_req_search" type="text" placeholder="Pesquisar por solicitação, NF, tipo, local..." data-req-search />
+                <input id="id_req_search" type="text" placeholder="Pesquisar por solicitação, NF e tipo..." data-req-search />
             </div>
             <div>
                 <label for="id_req_type_filter">Tipo</label>
@@ -38,15 +38,6 @@
                     <option value="">Todos</option>
                     {% for item_type in types %}
                         <option value="{{ item_type }}">{{ item_type }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div>
-                <label for="id_req_location_filter">Local</label>
-                <select id="id_req_location_filter" data-req-location-filter>
-                    <option value="">Todos</option>
-                    {% for item_location in locations %}
-                        <option value="{{ item_location }}">{{ item_location }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -75,9 +66,7 @@
                         <th>Aprovado</th>
                         <th>Recebido</th>
                         <th>NF</th>
-                        <th>Aprovado2</th>
                         <th>Tipo</th>
-                        <th>Local</th>
                         <th>Link</th>
                     </tr>
                 </thead>
@@ -86,7 +75,6 @@
                         <tr
                             data-req-row
                             data-type="{{ item.req_type|lower }}"
-                            data-location="{{ item.location|lower }}"
                             data-status="{% if item.received_at %}recebido{% elif item.approved_at %}aprovado{% elif item.requested_at %}requisitado{% else %}aberto{% endif %}"
                         >
                             <td data-sort-value="{{ item.id }}">{{ item.id }}</td>
@@ -98,9 +86,7 @@
                             <td data-sort-value="{{ item.approved_at|date:'Ymd' }}">{{ item.approved_at|date:'d/m/Y' }}</td>
                             <td data-sort-value="{{ item.received_at|date:'Ymd' }}">{{ item.received_at|date:'d/m/Y' }}</td>
                             <td>{{ item.invoice }}</td>
-                            <td>{{ item.approved_by_2 }}</td>
                             <td>{{ item.req_type }}</td>
-                            <td>{{ item.location }}</td>
                             <td>
                                 {% if item.link %}
                                     <a href="{{ item.link }}" target="_blank" rel="noreferrer">Abrir</a>
@@ -111,7 +97,7 @@
                         </tr>
                     {% empty %}
                         <tr>
-                            <td colspan="13" class="muted">Nenhuma requisição cadastrada.</td>
+                            <td colspan="11" class="muted">Nenhuma requisição cadastrada.</td>
                         </tr>
                     {% endfor %}
                 </tbody>
@@ -143,7 +129,7 @@
                     </div>
                     <div>
                         <label for="id_unit_value">Valor</label>
-                        <input id="id_unit_value" name="unit_value" type="number" min="0" step="0.01" value="0.00" required />
+                        <input id="id_unit_value" name="unit_value" type="text" value="0,00" placeholder="Ex.: 18.652,22" required />
                     </div>
                 </div>
                 <div class="form-row">
@@ -166,16 +152,8 @@
                         <input id="id_invoice" name="invoice" type="text" />
                     </div>
                     <div>
-                        <label for="id_approved_by_2">Aprovado2</label>
-                        <input id="id_approved_by_2" name="approved_by_2" type="text" />
-                    </div>
-                    <div>
                         <label for="id_req_type">Tipo</label>
                         <input id="id_req_type" name="req_type" type="text" />
-                    </div>
-                    <div>
-                        <label for="id_location">Local</label>
-                        <input id="id_location" name="location" type="text" />
                     </div>
                 </div>
                 <div class="form-row">
@@ -205,28 +183,24 @@
         (function () {
             const searchInput = document.querySelector('[data-req-search]');
             const typeSelect = document.querySelector('[data-req-type-filter]');
-            const locationSelect = document.querySelector('[data-req-location-filter]');
             const statusSelect = document.querySelector('[data-req-status-filter]');
             const rows = Array.from(document.querySelectorAll('[data-req-row]'));
-            if (!rows.length || !searchInput || !typeSelect || !locationSelect || !statusSelect) return;
+            if (!rows.length || !searchInput || !typeSelect || !statusSelect) return;
 
             const normalize = (value) => (value || '').toString().trim().toLowerCase();
 
             const applyFilters = () => {
                 const q = normalize(searchInput.value);
                 const type = normalize(typeSelect.value);
-                const location = normalize(locationSelect.value);
                 const status = normalize(statusSelect.value);
 
                 rows.forEach((row) => {
                     const text = normalize(row.textContent);
                     const rowType = normalize(row.dataset.type);
-                    const rowLocation = normalize(row.dataset.location);
                     const rowStatus = normalize(row.dataset.status);
                     const show =
                         (!q || text.includes(q)) &&
                         (!type || rowType === type) &&
-                        (!location || rowLocation === location) &&
                         (!status || rowStatus === status);
                     row.style.display = show ? '' : 'none';
                 });
@@ -234,7 +208,6 @@
 
             searchInput.addEventListener('input', applyFilters);
             typeSelect.addEventListener('change', applyFilters);
-            locationSelect.addEventListener('change', applyFilters);
             statusSelect.addEventListener('change', applyFilters);
         })();
     </script>
