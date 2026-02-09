@@ -61,7 +61,7 @@
                 <tbody>
                     {% for item in requisitions %}
                         <tr data-req-row data-status="{{ item.status }}" data-requisition-id="{{ item.id }}" style="cursor: pointer;">
-                            <td data-sort-value="{{ item.id }}">{{ item.id }}</td>
+                            <td data-sort-value="{{ item.id }}">{{ item.code }}</td>
                             <td>{{ item.title }}</td>
                             <td>
                                 <div>{{ item.request }}</div>
@@ -209,6 +209,7 @@
             {% for item in requisitions %}
             "{{ item.id }}": {
                 id: {{ item.id }},
+                code: "{{ item.code|escapejs }}",
                 title: "{{ item.title|escapejs }}",
                 request: "{{ item.request|escapejs }}",
                 status: "{{ item.status|escapejs }}",
@@ -489,7 +490,7 @@
             if (!data) return;
             modeInput.value = 'update';
             requisitionIdInput.value = String(data.id);
-            modalTitle.textContent = `Editar requisição #${data.id}`;
+            modalTitle.textContent = `Editar requisição ${data.code || ('TI - ' + String(data.id).padStart(4, '0'))}`;
             requisitionTitle.value = data.title || '';
             requestInput.value = data.request || '';
             requisitionStatus.value = data.status || 'pending_approval';
@@ -522,7 +523,11 @@
         copyBtn.addEventListener('click', async () => {
             const reqText = (requestInput.value || '').trim();
             const reqTitle = (requisitionTitle.value || '').trim();
+            const reqCode = modeInput.value === 'update'
+                ? `TI - ${String(requisitionIdInput.value || '0').padStart(4, '0')}`
+                : '(a definir após salvar)';
             const lines = [];
+            lines.push(`Código: ${reqCode}`);
             lines.push(`Título: ${reqTitle || '(sem título)'}`);
             lines.push(`Requisição: ${reqText || '(sem texto)'}`);
             lines.push('');

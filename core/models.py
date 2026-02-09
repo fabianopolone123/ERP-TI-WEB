@@ -66,6 +66,12 @@ class Requisition(models.Model):
     def __str__(self) -> str:
         return f'#{self.id} - {self.request}'
 
+    @property
+    def code(self) -> str:
+        if not self.id:
+            return 'TI - 0000'
+        return f'TI - {self.id:04d}'
+
 
 class RequisitionQuote(models.Model):
     requisition = models.ForeignKey(Requisition, on_delete=models.CASCADE, related_name='quotes')
