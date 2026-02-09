@@ -4,6 +4,103 @@
 {% block title %}Requisições | ERP TI{% endblock %}
 
 {% block content %}
+<style>
+    .budget-item {
+        position: relative;
+        border-radius: 12px;
+        border: 1px solid #2a3b57;
+        background: linear-gradient(180deg, rgba(13, 23, 42, 0.98) 0%, rgba(10, 18, 34, 0.98) 100%);
+        box-shadow: 0 8px 20px rgba(2, 8, 23, 0.32);
+        padding: 14px;
+        overflow: hidden;
+    }
+
+    .budget-item::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 4px;
+        background: var(--budget-accent, #38bdf8);
+    }
+
+    .budget-item[data-budget-role="main"] {
+        border-color: color-mix(in srgb, var(--budget-accent, #38bdf8) 38%, #2a3b57);
+    }
+
+    .budget-item[data-budget-role="sub"] {
+        background: linear-gradient(180deg, rgba(10, 17, 31, 0.98) 0%, rgba(7, 12, 24, 0.98) 100%);
+        border-style: dashed;
+        border-color: #344765;
+    }
+
+    .budget-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 8px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid rgba(71, 85, 105, 0.45);
+    }
+
+    .budget-head-meta {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+    }
+
+    .budget-kind {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 999px;
+        border: 1px solid color-mix(in srgb, var(--budget-accent, #38bdf8) 60%, #1e293b);
+        background: color-mix(in srgb, var(--budget-accent, #38bdf8) 20%, transparent);
+        color: #e2e8f0;
+        font-size: 0.72rem;
+        letter-spacing: 0.02em;
+        font-weight: 700;
+        padding: 3px 8px;
+        white-space: nowrap;
+    }
+
+    .budget-title {
+        font-size: 0.93rem;
+        font-weight: 700;
+        color: #e5eefb;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-width: 360px;
+    }
+
+    .budget-seq {
+        color: #93c5fd;
+        font-size: 0.8rem;
+        font-weight: 700;
+    }
+
+    .budget-actions-row {
+        align-self: flex-end;
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    .approve-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        border: 1px solid #166534;
+        border-radius: 999px;
+        background: rgba(34, 197, 94, 0.18);
+        font-weight: 700;
+        min-height: 40px;
+    }
+</style>
 <div class="card">
     <div class="topbar">
         <div>
@@ -208,11 +305,18 @@
 </div>
 
 <template id="budget-item-template">
-    <div class="ticket-legend" data-budget-item>
+    <div class="ticket-legend budget-item" data-budget-item>
         <input type="hidden" name="budget_index" data-budget-index />
         <input type="hidden" data-field="quote-id" />
         <input type="hidden" data-field="parent-idx" />
         <input type="hidden" data-field="parent-quote-id" />
+        <div class="budget-head">
+            <div class="budget-head-meta">
+                <span class="budget-kind" data-budget-kind>Principal</span>
+                <span class="budget-title" data-budget-title>Orçamento</span>
+            </div>
+            <span class="budget-seq" data-budget-seq>#01</span>
+        </div>
         <div class="muted" data-parent-label style="margin-bottom: 6px; display: none;"></div>
         <div class="form-row">
             <div style="flex: 2;">
@@ -227,8 +331,8 @@
                 <label>Frete</label>
                 <input type="text" data-field="freight" placeholder="Ex.: 120,00" />
             </div>
-            <div style="align-self: flex-end; display: flex; gap: 8px; flex-wrap: wrap;">
-                <label style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid #166534; border-radius: 999px; background: rgba(34, 197, 94, 0.18); font-weight: 700; min-height: 40px;">
+            <div class="budget-actions-row">
+                <label class="approve-pill">
                     <input type="radio" data-field="approved" />
                     Aprovar
                 </label>
@@ -417,10 +521,45 @@
             if (/^https?:\/\//i.test(raw)) return raw;
             return `https://${raw}`;
         };
+        const budgetAccentPalette = ['#38bdf8', '#22c55e', '#f59e0b', '#a78bfa', '#f97316', '#14b8a6'];
 
         const allBudgetItems = () => Array.from(form.querySelectorAll('[data-budget-item]'));
         const itemIdx = (item) => (item.querySelector('[data-budget-index]')?.value || '').trim();
         const itemParentIdx = (item) => (item.querySelector('[data-field="parent-idx"]')?.value || '').trim();
+        const budgetCardAccent = (index) => budgetAccentPalette[index % budgetAccentPalette.length];
+
+        const refreshBudgetCardStyles = () => {
+            const items = allBudgetItems();
+            const mainItems = items.filter((item) => !itemParentIdx(item));
+            const mainAccentByIdx = new Map();
+
+            mainItems.forEach((item, position) => {
+                const idx = itemIdx(item);
+                const accent = budgetCardAccent(position);
+                const kindEl = item.querySelector('[data-budget-kind]');
+                const titleEl = item.querySelector('[data-budget-title]');
+                const seqEl = item.querySelector('[data-budget-seq]');
+                item.dataset.budgetRole = 'main';
+                item.style.setProperty('--budget-accent', accent);
+                if (idx) mainAccentByIdx.set(idx, accent);
+                if (kindEl) kindEl.textContent = 'Orçamento principal';
+                if (titleEl) titleEl.textContent = (item.querySelector('[data-field="name"]')?.value || '').trim() || 'Orçamento principal';
+                if (seqEl) seqEl.textContent = `#${String(position + 1).padStart(2, '0')}`;
+            });
+
+            items.filter((item) => itemParentIdx(item)).forEach((item, subPosition) => {
+                const parentIdx = itemParentIdx(item);
+                const accent = mainAccentByIdx.get(parentIdx) || '#64748b';
+                const kindEl = item.querySelector('[data-budget-kind]');
+                const titleEl = item.querySelector('[data-budget-title]');
+                const seqEl = item.querySelector('[data-budget-seq]');
+                item.dataset.budgetRole = 'sub';
+                item.style.setProperty('--budget-accent', accent);
+                if (kindEl) kindEl.textContent = 'Suborçamento';
+                if (titleEl) titleEl.textContent = (item.querySelector('[data-field="name"]')?.value || '').trim() || 'Suborçamento';
+                if (seqEl) seqEl.textContent = `SUB-${String(subPosition + 1).padStart(2, '0')}`;
+            });
+        };
 
         const recalculateBudgetPackages = () => {
             const items = allBudgetItems();
@@ -518,6 +657,7 @@
                 });
             });
 
+            refreshBudgetCardStyles();
             recalculateBudgetPackages();
         };
 
@@ -691,6 +831,10 @@
                 el.addEventListener('input', recalculateBudgetPackages);
                 el.addEventListener('change', recalculateBudgetPackages);
             });
+            if (nameInput) {
+                nameInput.addEventListener('input', refreshBudgetCardStyles);
+                nameInput.addEventListener('change', refreshBudgetCardStyles);
+            }
 
             captureBtn.addEventListener('click', async () => {
                 try {
