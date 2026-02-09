@@ -165,6 +165,22 @@
 
             <div data-budget-list style="display: grid; gap: 10px;"></div>
 
+            <div class="modal" data-sub-budget-modal hidden>
+                <div class="modal-backdrop" data-close-sub-budget></div>
+                <div class="modal-content" style="width: min(980px, 96vw);">
+                    <div class="topbar" style="margin-bottom: 8px;">
+                        <h3 data-sub-budget-title>Suborçamentos</h3>
+                        <div style="display: flex; gap: 8px;">
+                            <button type="button" data-sub-budget-add>Adicionar sub orçamento</button>
+                            <button type="button" data-close-sub-budget>Fechar</button>
+                        </div>
+                    </div>
+                    <div class="muted" style="margin-bottom: 8px;">Edite os suborçamentos deste orçamento-mãe.</div>
+                    <div data-sub-budget-empty class="muted">Nenhum suborçamento cadastrado.</div>
+                    <div data-sub-budget-list style="display: grid; gap: 10px;"></div>
+                </div>
+            </div>
+
             <div style="margin-top: 14px;">
                 <button type="submit">Salvar requisição</button>
             </div>
@@ -229,8 +245,7 @@
                     <input type="radio" data-field="approved" />
                     Aprovar
                 </label>
-                <button type="button" data-toggle-sub style="display: none;">Suborçamentos (0)</button>
-                <button type="button" data-add-sub-budget>Sub orçamento</button>
+                <button type="button" data-add-sub-budget>Suborçamentos (0)</button>
                 <button type="button" data-remove-budget>Remover</button>
             </div>
         </div>
@@ -300,6 +315,12 @@
         const addBtn = document.querySelector('[data-add-budget]');
         const copyBtn = document.querySelector('[data-copy-budgets]');
         const budgetList = document.querySelector('[data-budget-list]');
+        const subBudgetModal = document.querySelector('[data-sub-budget-modal]');
+        const subBudgetTitle = document.querySelector('[data-sub-budget-title]');
+        const subBudgetList = document.querySelector('[data-sub-budget-list]');
+        const subBudgetEmpty = document.querySelector('[data-sub-budget-empty]');
+        const subBudgetAddBtn = document.querySelector('[data-sub-budget-add]');
+        const closeSubBudgetEls = document.querySelectorAll('[data-close-sub-budget]');
         const form = document.querySelector('[data-requisition-form]');
         const requestInput = document.querySelector('#id_request_text');
         const template = document.querySelector('#budget-item-template');
@@ -312,7 +333,7 @@
         const imageViewer = document.querySelector('[data-image-viewer-src]');
         const closeImageViewerEls = document.querySelectorAll('[data-close-image-viewer]');
 
-        if (!modal || !openBtn || !budgetList || !template || !form || !modeInput || !requisitionIdInput || !requisitionStatus || !requisitionTitle) return;
+        if (!modal || !openBtn || !budgetList || !template || !form || !modeInput || !requisitionIdInput || !requisitionStatus || !requisitionTitle || !subBudgetModal || !subBudgetTitle || !subBudgetList || !subBudgetEmpty || !subBudgetAddBtn) return;
 
         let budgetIndex = 0;
         let captureTargetInput = null;
@@ -322,6 +343,7 @@
         let dragging = false;
         let startX = 0;
         let startY = 0;
+        let activeSubBudgetParent = null;
 
         const openImageViewer = (src) => {
             if (!imageViewerModal || !imageViewer || !src) return;
@@ -336,6 +358,25 @@
         };
 
         closeImageViewerEls.forEach((el) => el.addEventListener('click', closeImageViewer));
+        closeSubBudgetEls.forEach((el) => el.addEventListener('click', () => closeSubBudgetModal()));
+
+        subBudgetAddBtn.addEventListener('click', () => {
+            if (!activeSubBudgetParent) return;
+            const parentIdx = itemIdx(activeSubBudgetParent);
+            const parentQuoteId = (activeSubBudgetParent.querySelector('[data-field="quote-id"]')?.value || '').trim();
+            const parentName = (activeSubBudgetParent.querySelector('[data-field="name"]')?.value || '').trim() || `Orcamento ${parentIdx}`;
+            const created = addBudgetItem(null, {
+                idx: parentIdx,
+                quoteId: parentQuoteId,
+                name: parentName,
+            });
+            if (created?.item) {
+                created.item.style.display = '';
+                subBudgetList.appendChild(created.item);
+                updateSubBudgetEmptyState();
+                recalculateBudgetPackages();
+            }
+        });
 
         const getDisplayStream = async () => {
             const constraints = { video: true, audio: false };
@@ -349,7 +390,10 @@
         };
 
         const clearBudgetItems = () => {
+            closeSubBudgetModal();
             budgetList.innerHTML = '';
+            subBudgetList.innerHTML = '';
+            updateSubBudgetEmptyState();
         };
 
         const toBrValue = (value) => {
@@ -378,7 +422,7 @@
 
         const toBrMoney = (value) => value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-        const allBudgetItems = () => Array.from(budgetList.querySelectorAll('[data-budget-item]'));
+        const allBudgetItems = () => Array.from(form.querySelectorAll('[data-budget-item]'));
         const itemIdx = (item) => (item.querySelector('[data-budget-index]')?.value || '').trim();
         const itemParentIdx = (item) => (item.querySelector('[data-field="parent-idx"]')?.value || '').trim();
 
@@ -412,6 +456,49 @@
             });
         };
 
+        const updateSubBudgetEmptyState = () => {
+            subBudgetEmpty.style.display = subBudgetList.querySelector('[data-budget-item]') ? 'none' : '';
+        };
+
+        const moveSubItemsBackToMainList = () => {
+            const moved = Array.from(subBudgetList.querySelectorAll('[data-budget-item]'));
+            if (!moved.length) return;
+            if (activeSubBudgetParent && activeSubBudgetParent.isConnected) {
+                let anchor = activeSubBudgetParent;
+                moved.forEach((item) => {
+                    anchor.insertAdjacentElement('afterend', item);
+                    anchor = item;
+                });
+            } else {
+                moved.forEach((item) => budgetList.appendChild(item));
+            }
+        };
+
+        const closeSubBudgetModal = () => {
+            moveSubItemsBackToMainList();
+            subBudgetModal.hidden = true;
+            activeSubBudgetParent = null;
+            updateSubBudgetEmptyState();
+            applySubBudgetVisibility();
+        };
+
+        const openSubBudgetModal = (parentItem) => {
+            moveSubItemsBackToMainList();
+            activeSubBudgetParent = parentItem;
+            const parentName = (parentItem.querySelector('[data-field="name"]')?.value || '').trim() || 'Orçamento';
+            const parentIdx = itemIdx(parentItem);
+            subBudgetTitle.textContent = `Suborçamentos - ${parentName}`;
+            subBudgetModal.hidden = false;
+
+            const subItems = allBudgetItems().filter((item) => itemParentIdx(item) === parentIdx);
+            subItems.forEach((item) => {
+                item.style.display = '';
+                subBudgetList.appendChild(item);
+            });
+            updateSubBudgetEmptyState();
+            recalculateBudgetPackages();
+        };
+
         const applySubBudgetVisibility = () => {
             const items = allBudgetItems();
             const subsByParent = new Map();
@@ -425,19 +512,13 @@
             items.forEach((mainItem) => {
                 const mainIdx = itemIdx(mainItem);
                 if (!mainIdx || itemParentIdx(mainItem)) return;
-                const toggleBtn = mainItem.querySelector('[data-toggle-sub]');
-                if (!toggleBtn) return;
+                const subBtn = mainItem.querySelector('[data-add-sub-budget]');
+                if (!subBtn) return;
                 const subItems = subsByParent.get(mainIdx) || [];
-                if (!subItems.length) {
-                    toggleBtn.style.display = 'none';
-                    toggleBtn.removeAttribute('data-open');
-                    return;
-                }
-                const isOpen = toggleBtn.getAttribute('data-open') === '1';
-                toggleBtn.style.display = '';
-                toggleBtn.textContent = isOpen ? `Ocultar suborçamentos (${subItems.length})` : `Suborçamentos (${subItems.length})`;
+                subBtn.textContent = `Suborçamentos (${subItems.length})`;
                 subItems.forEach((subItem) => {
-                    subItem.style.display = isOpen ? '' : 'none';
+                    const inOpenModal = !subBudgetModal.hidden && activeSubBudgetParent && itemIdx(activeSubBudgetParent) === mainIdx && subBudgetList.contains(subItem);
+                    subItem.style.display = inOpenModal ? '' : 'none';
                 });
             });
 
@@ -476,7 +557,6 @@
             const packageTotalEl = item.querySelector('[data-budget-package-total]');
             const removeBtn = item.querySelector('[data-remove-budget]');
             const addSubBtn = item.querySelector('[data-add-sub-budget]');
-            const toggleSubBtn = item.querySelector('[data-toggle-sub]');
             const approvedInput = item.querySelector('[data-field="approved"]');
             const captureBtn = item.querySelector('[data-capture-budget]');
             const photoInput = item.querySelector('[data-field="photo"]');
@@ -489,7 +569,6 @@
                     const otherLabel = other.querySelector('[data-parent-label]');
                     const otherApproved = other.querySelector('[data-field="approved"]');
                     const otherPackageTotal = other.querySelector('[data-budget-package-total]');
-                    const otherToggleSub = other.querySelector('[data-toggle-sub]');
                     if (!otherParentIdx || !otherParentQuoteId || !otherLabel) return;
                     if (otherParentIdx.value === String(removedIdx)) {
                         otherParentIdx.value = '';
@@ -504,10 +583,6 @@
                         }
                         if (otherPackageTotal) {
                             otherPackageTotal.style.display = '';
-                        }
-                        if (otherToggleSub) {
-                            otherToggleSub.style.display = 'none';
-                            otherToggleSub.removeAttribute('data-open');
                         }
                     }
                 });
@@ -528,25 +603,11 @@
             });
 
             addSubBtn.addEventListener('click', () => {
-                const parentName = (nameInput.value || '').trim() || `Orcamento ${idx}`;
-                addBudgetItem(null, {
-                    idx: idx,
-                    quoteId: quoteIdInput.value || '',
-                    name: parentName,
-                });
-                if (toggleSubBtn) {
-                    toggleSubBtn.setAttribute('data-open', '1');
+                if (parentMeta) {
+                    return;
                 }
-                applySubBudgetVisibility();
+                openSubBudgetModal(item);
             });
-
-            if (toggleSubBtn) {
-                toggleSubBtn.addEventListener('click', () => {
-                    const isOpen = toggleSubBtn.getAttribute('data-open') === '1';
-                    toggleSubBtn.setAttribute('data-open', isOpen ? '0' : '1');
-                    applySubBudgetVisibility();
-                });
-            }
 
             if (parentMeta) {
                 parentIdxInput.value = String(parentMeta.idx || '');
@@ -561,8 +622,8 @@
                     approvedInput.checked = false;
                     approvedInput.disabled = true;
                 }
-                if (toggleSubBtn) {
-                    toggleSubBtn.style.display = 'none';
+                if (addSubBtn) {
+                    addSubBtn.style.display = 'none';
                 }
                 if (packageTotalEl) {
                     packageTotalEl.style.display = 'none';
@@ -575,6 +636,9 @@
                 }
                 if (packageTotalEl) {
                     packageTotalEl.style.display = '';
+                }
+                if (addSubBtn) {
+                    addSubBtn.style.display = '';
                 }
             }
 
@@ -756,6 +820,7 @@
         });
 
         const openCreate = () => {
+            closeSubBudgetModal();
             modeInput.value = 'create';
             requisitionIdInput.value = '';
             modalTitle.textContent = 'Nova requisição';
@@ -769,6 +834,7 @@
         };
 
         const openEdit = (id) => {
+            closeSubBudgetModal();
             const data = requisitionData[String(id)];
             if (!data) return;
             modeInput.value = 'update';
@@ -823,6 +889,7 @@
         };
 
         const close = () => {
+            closeSubBudgetModal();
             modal.hidden = true;
         };
 
