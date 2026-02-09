@@ -1,6 +1,7 @@
 ﻿import logging
 import unicodedata
 from textwrap import shorten
+from decimal import Decimal, InvalidOperation
 from django.conf import settings
 from django.contrib import messages
 from django.core.mail import send_mail
@@ -21,6 +22,7 @@ from .ldap_importer import import_ad_users
 from .models import (
     ERPUser,
     Equipment,
+    Requisition,
     AccessFolder,
     AccessMember,
     Ticket,
@@ -57,7 +59,7 @@ ERP_MODULES = [
     {'slug': 'ramais', 'label': 'Ramais', 'url_name': None},
     {'slug': 'softwares', 'label': 'Softwares', 'url_name': None},
     {'slug': 'insumos', 'label': 'Insumos', 'url_name': None},
-    {'slug': 'requisicoes', 'label': 'Requisições', 'url_name': None},
+    {'slug': 'requisicoes', 'label': 'Requisições', 'url_name': 'requisicoes'},
     {'slug': 'emprestimos', 'label': 'Empréstimos', 'url_name': None},
     {'slug': 'chamados', 'label': 'Chamados', 'url_name': 'chamados'},
 ]
@@ -412,6 +414,65 @@ class EquipamentosView(LoginRequiredMixin, TemplateView):
         context['is_ti_group'] = is_ti
         context['modules'] = build_modules('equipamentos') if is_ti else []
         context['equipments'] = Equipment.objects.all().order_by('-created_at')
+        return context
+
+
+class RequisicoesView(LoginRequiredMixin, TemplateView):
+    template_name = 'core/requisicoes.html'
+
+    def post(self, request, *args, **kwargs):
+        if not is_ti_user(request):
+            messages.error(request, 'Apenas usuários do departamento TI podem cadastrar requisições.')
+            return self.get(request, *args, **kwargs)
+
+        request_text = (request.POST.get('request') or '').strip()
+        if not request_text:
+            messages.error(request, 'Informe a solicitação.')
+            return self.get(request, *args, **kwargs)
+
+        quantity_raw = (request.POST.get('quantity') or '').strip()
+        unit_value_raw = (request.POST.get('unit_value') or '').strip().replace(',', '.')
+        try:
+            quantity = int(quantity_raw or '1')
+            if quantity < 1:
+                raise ValueError
+        except ValueError:
+            messages.error(request, 'Quantidade inválida.')
+            return self.get(request, *args, **kwargs)
+
+        try:
+            unit_value = Decimal(unit_value_raw or '0')
+            if unit_value < 0:
+                raise InvalidOperation
+        except (InvalidOperation, ValueError):
+            messages.error(request, 'Valor unitário inválido.')
+            return self.get(request, *args, **kwargs)
+
+        Requisition.objects.create(
+            request=request_text,
+            quantity=quantity,
+            unit_value=unit_value,
+            requested_at=(request.POST.get('requested_at') or '').strip() or None,
+            approved_at=(request.POST.get('approved_at') or '').strip() or None,
+            received_at=(request.POST.get('received_at') or '').strip() or None,
+            invoice=(request.POST.get('invoice') or '').strip(),
+            approved_by_2=(request.POST.get('approved_by_2') or '').strip(),
+            req_type=(request.POST.get('req_type') or '').strip(),
+            location=(request.POST.get('location') or '').strip(),
+            link=(request.POST.get('link') or '').strip(),
+        )
+        messages.success(request, 'Requisição cadastrada com sucesso.')
+        return redirect('requisicoes')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        is_ti = is_ti_user(self.request)
+        context['is_ti_group'] = is_ti
+        context['modules'] = build_modules('requisicoes') if is_ti else []
+        requisitions = Requisition.objects.all().order_by('-requested_at', '-id')
+        context['requisitions'] = requisitions
+        context['types'] = sorted({(item.req_type or '').strip() for item in requisitions if (item.req_type or '').strip()})
+        context['locations'] = sorted({(item.location or '').strip() for item in requisitions if (item.location or '').strip()})
         return context
 
 
@@ -1066,5 +1127,7 @@ def email_templates_update(request):
     template.save()
     messages.success(request, 'Templates de e-mail atualizados.')
     return redirect('chamados')
+
+
 
 

@@ -547,8 +547,10 @@
                         th.dataset.sort = direction;
 
                         rows.sort((a, b) => {
-                            const aText = a.children[index]?.textContent || '';
-                            const bText = b.children[index]?.textContent || '';
+                            const aCell = a.children[index];
+                            const bCell = b.children[index];
+                            const aText = aCell?.dataset.sortValue ?? aCell?.textContent ?? '';
+                            const bText = bCell?.dataset.sortValue ?? bCell?.textContent ?? '';
                             const aVal = parseValue(aText);
                             const bVal = parseValue(bText);
 

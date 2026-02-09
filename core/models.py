@@ -35,6 +35,30 @@ class Equipment(models.Model):
         return f'{self.equipment} - {self.user}'
 
 
+class Requisition(models.Model):
+    request = models.CharField(max_length=300)
+    quantity = models.PositiveIntegerField(default=1)
+    unit_value = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    total_value = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    requested_at = models.DateField(null=True, blank=True)
+    approved_at = models.DateField(null=True, blank=True)
+    received_at = models.DateField(null=True, blank=True)
+    invoice = models.CharField(max_length=120, blank=True, default='')
+    approved_by_2 = models.CharField(max_length=200, blank=True, default='')
+    req_type = models.CharField(max_length=120, blank=True, default='')
+    location = models.CharField(max_length=120, blank=True, default='')
+    link = models.URLField(blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        self.total_value = (self.quantity or 0) * (self.unit_value or 0)
+        super().save(*args, **kwargs)
+
+    def __str__(self) -> str:
+        return f'#{self.id} - {self.request}'
+
+
 class AccessFolder(models.Model):
     name = models.CharField(max_length=200)
     path = models.CharField(max_length=500)
