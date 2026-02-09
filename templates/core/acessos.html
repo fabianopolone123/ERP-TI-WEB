@@ -78,6 +78,14 @@
 
         <div class="ticket-legend" style="margin-top: 16px;">
             <strong>Acessos do usuário selecionado</strong>
+            <div style="margin-top: 8px;">
+                <strong>Grupos do usuário:</strong>
+                {% if user_groups %}
+                    {{ user_groups|join:", " }}
+                {% else %}
+                    <span class="muted">Nenhum grupo encontrado no snapshot atual.</span>
+                {% endif %}
+            </div>
             <div style="margin-top: 8px; overflow-x: auto;">
                 <table class="data-table">
                     <thead>

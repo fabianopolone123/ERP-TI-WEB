@@ -375,6 +375,7 @@ class AcessosView(LoginRequiredMixin, TemplateView):
         selected_user_id = self.request.GET.get('user') or ''
         context['selected_user_id'] = selected_user_id
         context['user_access'] = []
+        context['user_groups'] = []
         if selected_user_id:
             selected_user = ERPUser.objects.filter(id=selected_user_id).first()
             if selected_user and selected_user.username:
@@ -382,6 +383,7 @@ class AcessosView(LoginRequiredMixin, TemplateView):
                     AccessMember.objects.select_related('group__folder')
                     .filter(username__iexact=selected_user.username)
                 )
+                context['user_groups'] = sorted({m.group.name for m in memberships}, key=lambda v: v.lower())
                 access_map: dict[int, dict[str, str | set[str]]] = {}
                 admin_group_names: set[str] = set()
                 for member in memberships:
