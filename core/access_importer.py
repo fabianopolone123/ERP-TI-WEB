@@ -3,12 +3,13 @@ from __future__ import annotations
 import os
 import re
 import subprocess
+import unicodedata
 
 from django.conf import settings
 from ldap3 import Connection, Server, SUBTREE
 from ldap3.utils.conv import escape_filter_chars
 
-from .models import AccessFolder, AccessGroup, AccessMember
+from .models import AccessFolder, AccessGroup, AccessMember, ERPUser
 
 
 _IGNORE_PREFIXES = (
@@ -18,7 +19,14 @@ _IGNORE_PREFIXES = (
 )
 _IGNORE_NAMES = {
     'CREATOR OWNER',
-    'Everyone',
+}
+_GLOBAL_IDENTITY_NAMES = {
+    'everyone',
+    'authenticated users',
+    'domain users',
+    'todos',
+    'usuarios autenticados',
+    'usuarios do dominio',
 }
 
 
@@ -91,6 +99,17 @@ def _filter_group(identity: str) -> str | None:
     return identity
 
 
+def _normalize_identity_name(value: str) -> str:
+    raw = (value or '').strip().lower()
+    no_accent = unicodedata.normalize('NFKD', raw).encode('ascii', 'ignore').decode('ascii')
+    return no_accent
+
+
+def _is_global_identity(identity: str) -> bool:
+    base = identity.split('\\', 1)[1] if '\\' in identity else identity
+    return _normalize_identity_name(base) in _GLOBAL_IDENTITY_NAMES
+
+
 def _resolve_group_members(conn: Connection, group_name: str) -> list[tuple[str, str]]:
     base_dn = getattr(settings, 'AD_LDAP_BASE_DN', '')
     safe_group = escape_filter_chars(group_name)
@@ -133,13 +152,19 @@ def refresh_access_snapshot(root_path: str) -> tuple[int, int, int]:
     folders = _list_folders(root_path)
     group_count = 0
     member_count = 0
+    active_users = list(ERPUser.objects.filter(is_active=True).order_by('full_name'))
 
     for folder_name, folder_path in folders:
         folder = AccessFolder.objects.create(name=folder_name, path=folder_path)
         identities = _parse_icacls(folder_path)
         group_levels: dict[str, str] = {}
+        group_is_global: dict[str, bool] = {}
         for identity, rights in identities:
             group_name = _filter_group(identity)
+            is_global = False
+            if not group_name and _is_global_identity(identity):
+                group_name = 'Todos os usuarios'
+                is_global = True
             if not group_name:
                 continue
             level = _rights_to_level(rights)
@@ -148,11 +173,15 @@ def refresh_access_snapshot(root_path: str) -> tuple[int, int, int]:
                 continue
             if level == 'leitura_escrita' or current is None:
                 group_levels[group_name] = level
+            group_is_global[group_name] = group_is_global.get(group_name, False) or is_global
 
         for group_name, level in group_levels.items():
             group = AccessGroup.objects.create(folder=folder, name=group_name, access_level=level)
             group_count += 1
-            members = _resolve_group_members(conn, group_name)
+            if group_is_global.get(group_name):
+                members = [(u.full_name or u.username or '', u.username or '') for u in active_users]
+            else:
+                members = _resolve_group_members(conn, group_name)
             member_objs = [AccessMember(group=group, name=name, username=username) for name, username in members]
             if member_objs:
                 AccessMember.objects.bulk_create(member_objs)
