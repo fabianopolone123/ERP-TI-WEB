@@ -17,8 +17,11 @@ _IGNORE_PREFIXES = (
     'NT AUTHORITY\\',
     'NT SERVICE\\',
 )
-_IGNORE_NAMES = {
-    'CREATOR OWNER',
+_IGNORE_IDENTITY_NAMES = {
+    'creator owner',
+    'proprietario criador',
+    'system',
+    'sistema',
 }
 _GLOBAL_IDENTITY_NAMES = {
     'everyone',
@@ -54,13 +57,22 @@ def _parse_icacls(path: str) -> list[tuple[str, str]]:
     result = subprocess.run(
         ['icacls', path],
         capture_output=True,
-        text=True,
-        encoding='utf-8',
-        errors='ignore',
+        text=False,
         check=False,
     )
+    output = b'' if result.stdout is None else result.stdout
+    decoded = ''
+    for encoding in ('oem', 'cp850', 'cp1252', 'utf-8'):
+        try:
+            decoded = output.decode(encoding)
+            break
+        except Exception:
+            continue
+    if not decoded:
+        decoded = output.decode('latin-1', errors='ignore')
+
     identities: list[tuple[str, str]] = []
-    for raw in result.stdout.splitlines():
+    for raw in decoded.splitlines():
         line = raw.strip()
         if not line:
             continue
@@ -88,15 +100,15 @@ def _rights_to_level(rights: str) -> str:
 
 
 def _filter_group(identity: str) -> str | None:
+    base = identity.split('\\', 1)[1] if '\\' in identity else identity
+    normalized = _normalize_identity_name(base)
+    if normalized in _IGNORE_IDENTITY_NAMES:
+        return None
+    if base.endswith('$'):
+        return None
     if any(identity.startswith(prefix) for prefix in _IGNORE_PREFIXES):
         return None
-    if identity in _IGNORE_NAMES:
-        return None
-    if identity.endswith('$'):
-        return None
-    if '\\' in identity:
-        return identity.split('\\', 1)[1]
-    return identity
+    return base
 
 
 def _normalize_identity_name(value: str) -> str:
