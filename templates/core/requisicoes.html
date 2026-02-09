@@ -167,6 +167,19 @@
     </div>
 </div>
 
+<div class="modal" data-image-viewer-modal hidden>
+    <div class="modal-backdrop" data-close-image-viewer></div>
+    <div class="modal-content" style="width: min(1200px, 96vw);">
+        <div class="topbar" style="margin-bottom: 8px;">
+            <h3>Foto do orçamento</h3>
+            <button type="button" data-close-image-viewer>Fechar</button>
+        </div>
+        <div style="display: flex; justify-content: center; align-items: center; min-height: 220px;">
+            <img data-image-viewer-src alt="Foto do orçamento" style="max-width: 100%; max-height: 78vh; border: 1px solid #1f2a44; border-radius: 10px;" />
+        </div>
+    </div>
+</div>
+
 <template id="budget-item-template">
     <div class="ticket-legend" data-budget-item>
         <input type="hidden" name="budget_index" data-budget-index />
@@ -247,6 +260,9 @@
         const captureCanvas = document.querySelector('[data-capture-canvas]');
         const captureConfirmBtn = document.querySelector('[data-capture-confirm]');
         const captureCancelEls = document.querySelectorAll('[data-capture-cancel]');
+        const imageViewerModal = document.querySelector('[data-image-viewer-modal]');
+        const imageViewer = document.querySelector('[data-image-viewer-src]');
+        const closeImageViewerEls = document.querySelectorAll('[data-close-image-viewer]');
 
         if (!modal || !openBtn || !budgetList || !template || !form || !modeInput || !requisitionIdInput || !requisitionStatus || !requisitionTitle) return;
 
@@ -258,6 +274,20 @@
         let dragging = false;
         let startX = 0;
         let startY = 0;
+
+        const openImageViewer = (src) => {
+            if (!imageViewerModal || !imageViewer || !src) return;
+            imageViewer.src = src;
+            imageViewerModal.hidden = false;
+        };
+
+        const closeImageViewer = () => {
+            if (!imageViewerModal || !imageViewer) return;
+            imageViewerModal.hidden = true;
+            imageViewer.removeAttribute('src');
+        };
+
+        closeImageViewerEls.forEach((el) => el.addEventListener('click', closeImageViewer));
 
         const getDisplayStream = async () => {
             const constraints = { video: true, audio: false };
@@ -304,6 +334,13 @@
             const captureBtn = item.querySelector('[data-capture-budget]');
             const photoInput = item.querySelector('[data-field="photo"]');
             const preview = item.querySelector('[data-photo-preview]');
+
+            preview.style.cursor = 'zoom-in';
+            preview.addEventListener('click', () => {
+                const src = preview.getAttribute('src') || '';
+                if (!src || preview.style.display === 'none') return;
+                openImageViewer(src);
+            });
 
             removeBtn.addEventListener('click', () => {
                 if (budgetList.querySelectorAll('[data-budget-item]').length <= 1) return;
