@@ -246,6 +246,22 @@ class TicketTimelineEvent(models.Model):
         return f'Timeline #{self.id} ({self.ticket_id})'
 
 
+class TicketWorkLog(models.Model):
+    ticket = models.ForeignKey(Ticket, on_delete=models.CASCADE, related_name='work_logs')
+    attendant = models.ForeignKey(ERPUser, on_delete=models.CASCADE, related_name='ticket_work_logs')
+    opened_at = models.DateTimeField()
+    closed_at = models.DateTimeField()
+    failure_type = models.CharField(max_length=20, choices=Ticket.FailureType.choices, default=Ticket.FailureType.NS)
+    action_text = models.TextField(blank=True, default='')
+    priority_label = models.CharField(max_length=60, blank=True, default='')
+    exported_at = models.DateTimeField(null=True, blank=True)
+    exported_path = models.CharField(max_length=500, blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self) -> str:
+        return f'WorkLog #{self.id} ({self.ticket_id})'
+
+
 class WhatsAppTemplate(models.Model):
     new_ticket = models.TextField(default='Novo chamado #{id}: {title} | {description}')
     status_update = models.TextField(default='Chamado #{id} atualizado: {status} | {responsavel}')

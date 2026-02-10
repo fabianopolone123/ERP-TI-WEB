@@ -22,7 +22,7 @@ from ldap3 import Connection, Server, SUBTREE
 from ldap3.utils.conv import escape_filter_chars
 
 from .ldap_importer import import_ad_users
-from .chamados_excel import append_chamado_event_to_excel
+from .chamados_excel import export_attendant_logs_to_excel
 from .models import (
     ERPUser,
     Equipment,
@@ -33,6 +33,7 @@ from .models import (
     Ticket,
     TicketMessage,
     TicketTimelineEvent,
+    TicketWorkLog,
     WhatsAppTemplate,
     EmailTemplate,
     WhatsAppNotificationSettings,
@@ -391,6 +392,35 @@ def _log_ticket_timeline(
         actor_user=request_user if getattr(request_user, 'is_authenticated', False) else None,
         actor_ti=actor_ti,
         note=(note or '').strip(),
+    )
+
+
+def _create_ticket_work_log(
+    *,
+    ticket: Ticket,
+    source_target: str,
+    opened_at,
+    closed_at,
+    failure_type: str,
+    action_text: str,
+):
+    if not source_target.startswith('user_'):
+        return
+    try:
+        attendant_id = int(source_target.replace('user_', ''))
+    except ValueError:
+        return
+    attendant = ERPUser.objects.filter(id=attendant_id).first()
+    if not attendant:
+        return
+    TicketWorkLog.objects.create(
+        ticket=ticket,
+        attendant=attendant,
+        opened_at=opened_at,
+        closed_at=closed_at,
+        failure_type=failure_type,
+        action_text=(action_text or '').strip(),
+        priority_label=ticket.get_urgency_display(),
     )
 
 
@@ -912,6 +942,7 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
                     }
                 )
             context['wa_contacts'] = contacts
+            context['chamados_xlsx_default_path'] = getattr(settings, 'CHAMADOS_XLSX_PATH', '')
         if not is_ti:
             context['own_tickets'] = (
                 Ticket.objects.filter(created_by=self.request.user).order_by('-created_at')
@@ -1170,8 +1201,9 @@ def move_ticket(request):
 
             cycle_start = ticket.current_cycle_started_at or ticket.created_at
             closed_at = timezone.now()
-            append_chamado_event_to_excel(
+            _create_ticket_work_log(
                 ticket=ticket,
+                source_target=source_target,
                 opened_at=cycle_start,
                 closed_at=closed_at,
                 failure_type=failure_type,
@@ -1219,8 +1251,9 @@ def move_ticket(request):
             return JsonResponse({'ok': False, 'error': 'failure_required'}, status=400)
         cycle_start = ticket.current_cycle_started_at or ticket.created_at
         closed_at = timezone.now()
-        append_chamado_event_to_excel(
+        _create_ticket_work_log(
             ticket=ticket,
+            source_target=source_target,
             opened_at=cycle_start,
             closed_at=closed_at,
             failure_type=failure_type,
@@ -1263,8 +1296,9 @@ def move_ticket(request):
                 return JsonResponse({'ok': False, 'error': 'action_required'}, status=400)
             cycle_start = ticket.current_cycle_started_at or ticket.created_at
             closed_at = timezone.now()
-            append_chamado_event_to_excel(
+            _create_ticket_work_log(
                 ticket=ticket,
+                source_target=source_target,
                 opened_at=cycle_start,
                 closed_at=closed_at,
                 failure_type=failure_type,
@@ -1562,6 +1596,41 @@ def ticket_reopen(request):
 @require_GET
 def ws_tickets_ping(request):
     return JsonResponse({'ok': True, 'transport': 'http-fallback'})
+
+
+@login_required
+@require_POST
+def chamados_fill_spreadsheet(request):
+    if not is_ti_user(request):
+        return JsonResponse({'ok': False, 'error': 'forbidden'}, status=403)
+
+    attendant_id = (request.POST.get('attendant_id') or '').strip()
+    workbook_path = (request.POST.get('workbook_path') or '').strip()
+    if not attendant_id or not workbook_path:
+        messages.error(request, 'Informe atendente e caminho da planilha.')
+        return redirect('chamados')
+
+    try:
+        attendant_id_int = int(attendant_id)
+    except ValueError:
+        messages.error(request, 'Atendente inválido.')
+        return redirect('chamados')
+
+    attendant = ERPUser.objects.filter(id=attendant_id_int, department__iexact='TI', is_active=True).first()
+    if not attendant:
+        messages.error(request, 'Atendente não encontrado.')
+        return redirect('chamados')
+
+    ok, exported_count, detail = export_attendant_logs_to_excel(
+        attendant=attendant,
+        workbook_path=workbook_path,
+    )
+    if ok:
+        messages.success(request, f'{attendant.full_name}: {detail}')
+    else:
+        messages.error(request, f'{attendant.full_name}: {detail}')
+    return redirect('chamados')
+
 
 @login_required
 @require_POST

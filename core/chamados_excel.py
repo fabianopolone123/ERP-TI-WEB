@@ -1,15 +1,13 @@
 import logging
-import json
 import re
 import unicodedata
 from datetime import datetime
 from pathlib import Path
 
-from django.conf import settings
 from django.utils import timezone
 from openpyxl import load_workbook
 
-from .models import ERPUser, Ticket
+from .models import ERPUser, Ticket, TicketWorkLog
 
 logger = logging.getLogger(__name__)
 
@@ -141,140 +139,63 @@ def _format_duration(opened_at: datetime, closed_at: datetime) -> str:
     return f'{hours:02d}:{mins:02d}'
 
 
-def _pending_queue_path() -> Path:
-    configured = getattr(settings, 'CHAMADOS_XLSX_PENDING_PATH', '') or ''
-    if configured:
-        return Path(configured)
-    return Path(settings.BASE_DIR) / 'data' / 'chamados_excel_pending.jsonl'
-
-
-def _read_pending_entries(path: Path) -> list[dict]:
+def export_attendant_logs_to_excel(*, attendant: ERPUser, workbook_path: str) -> tuple[bool, int, str]:
+    path = Path((workbook_path or '').strip())
     if not path.exists():
-        return []
-    items: list[dict] = []
-    for line in path.read_text(encoding='utf-8').splitlines():
-        raw = (line or '').strip()
-        if not raw:
-            continue
-        try:
-            parsed = json.loads(raw)
-            if isinstance(parsed, dict):
-                items.append(parsed)
-        except Exception:
-            continue
-    return items
+        return False, 0, f'Arquivo não encontrado: {path}'
 
-
-def _write_pending_entries(path: Path, entries: list[dict]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    if not entries:
-        if path.exists():
-            path.unlink()
-        return
-    content = '\n'.join(json.dumps(item, ensure_ascii=False) for item in entries) + '\n'
-    path.write_text(content, encoding='utf-8')
-
-
-def _queue_pending_entry(event_dt: datetime, values: dict, ticket_id: int) -> None:
-    path = _pending_queue_path()
-    entries = _read_pending_entries(path)
-    entries.append(
-        {
-            'ticket_id': ticket_id,
-            'event_dt': timezone.localtime(event_dt).isoformat(),
-            'values': values,
-        }
+    logs = list(
+        TicketWorkLog.objects.filter(attendant=attendant, exported_at__isnull=True)
+        .select_related('ticket__created_by')
+        .order_by('closed_at', 'id')
     )
-    _write_pending_entries(path, entries)
-    logger.warning('Lancamento do chamado #%s enfileirado para reprocesso: %s', ticket_id, path)
-
-
-def _append_values_to_workbook(workbook_path: Path, event_dt: datetime, values: dict) -> None:
-    wb = load_workbook(workbook_path)
-    sheet = _resolve_sheet(wb, timezone.localtime(event_dt))
-    header_row, header_map = _find_header(sheet)
-    target_row = _find_next_row(sheet, header_row, header_map)
-    for key, col in header_map.items():
-        if not col:
-            continue
-        if key not in values:
-            continue
-        sheet.cell(row=target_row, column=col, value=values[key])
-    wb.save(workbook_path)
-
-
-def _flush_pending_entries(workbook_path: Path) -> None:
-    path = _pending_queue_path()
-    entries = _read_pending_entries(path)
-    if not entries:
-        return
-
-    remaining: list[dict] = []
-    for idx, entry in enumerate(entries):
-        try:
-            event_dt = datetime.fromisoformat(str(entry.get('event_dt', '')))
-            values = entry.get('values') or {}
-            _append_values_to_workbook(workbook_path, event_dt, values)
-        except PermissionError:
-            remaining.append(entry)
-            remaining.extend(entries[idx + 1 :])
-            break
-        except Exception:
-            logger.exception('Falha ao reprocessar lancamento enfileirado: %s', entry)
-
-    _write_pending_entries(path, remaining)
-
-
-def append_chamado_event_to_excel(
-    *,
-    ticket: Ticket,
-    opened_at: datetime,
-    closed_at: datetime,
-    failure_type: str,
-    action_text: str,
-) -> bool:
-    workbook_path = Path(getattr(settings, 'CHAMADOS_XLSX_PATH', '') or '')
-    if not workbook_path:
-        return False
-    if not workbook_path.exists():
-        logger.warning('Arquivo de chamados nao encontrado: %s', workbook_path)
-        return False
+    if not logs:
+        return True, 0, 'Nenhum apontamento pendente para exportar.'
 
     try:
-        _flush_pending_entries(workbook_path)
+        wb = load_workbook(path)
+        for log in logs:
+            sheet = _resolve_sheet(wb, timezone.localtime(log.closed_at))
+            header_row, header_map = _find_header(sheet)
+            target_row = _find_next_row(sheet, header_row, header_map)
 
-        creator = ticket.created_by
-        username = (creator.username if creator else '') or ''
-        erp_user = ERPUser.objects.filter(username__iexact=username).first() if username else None
-        contato = (erp_user.full_name if erp_user and erp_user.full_name else username) or '-'
-        setor = (erp_user.department if erp_user else '') or ''
+            ticket = log.ticket
+            creator = ticket.created_by
+            username = (creator.username if creator else '') or ''
+            erp_user = ERPUser.objects.filter(username__iexact=username).first() if username else None
+            contato = (erp_user.full_name if erp_user and erp_user.full_name else username) or '-'
+            setor = (erp_user.department if erp_user else '') or ''
+            failure_label = dict(Ticket.FailureType.choices).get(log.failure_type, log.failure_type or '')
 
-        failure_map = {
-            Ticket.FailureType.NS: 'N/S',
-            Ticket.FailureType.EQUIPAMENTO: 'Equipamento',
-            Ticket.FailureType.SOFTWARE: 'Software',
-        }
-        failure_label = failure_map.get(failure_type, failure_type or '')
+            values = {
+                'ti': '',
+                'data': _format_dt(log.opened_at),
+                'contato': contato,
+                'setor': setor,
+                'notificacao': ticket.description or '',
+                'prioridade': log.priority_label or ticket.get_urgency_display(),
+                'falha': failure_label,
+                'acao': log.action_text or '',
+                'fechado': _format_dt(log.closed_at),
+                'tempo': _format_duration(log.opened_at, log.closed_at),
+                'acao_eficaz': '',
+            }
 
-        values = {
-            'ti': '',
-            'data': _format_dt(opened_at),
-            'contato': contato,
-            'setor': setor,
-            'notificacao': ticket.description or '',
-            'prioridade': ticket.get_urgency_display(),
-            'falha': failure_label,
-            'acao': action_text or '',
-            'fechado': _format_dt(closed_at),
-            'tempo': _format_duration(opened_at, closed_at),
-            'acao_eficaz': '',
-        }
+            for key, col in header_map.items():
+                if not col or key not in values:
+                    continue
+                sheet.cell(row=target_row, column=col, value=values[key])
 
-        _append_values_to_workbook(workbook_path, closed_at, values)
-        return True
+        wb.save(path)
     except PermissionError:
-        _queue_pending_entry(closed_at, values, ticket.id)
-        return False
-    except Exception:
-        logger.exception('Falha ao escrever chamado #%s na planilha', ticket.id)
-        return False
+        return False, 0, f'Sem permissão para gravar na planilha: {path}'
+    except Exception as exc:
+        logger.exception('Falha ao exportar apontamentos de %s para planilha', attendant.full_name)
+        return False, 0, f'Falha ao preencher planilha: {exc}'
+
+    now = timezone.now()
+    TicketWorkLog.objects.filter(id__in=[row.id for row in logs]).update(
+        exported_at=now,
+        exported_path=str(path),
+    )
+    return True, len(logs), f'{len(logs)} apontamento(s) exportado(s) com sucesso.'

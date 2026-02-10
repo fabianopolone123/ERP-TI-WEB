@@ -79,6 +79,11 @@
                         E-mail
                     </button>
                 {% endif %}
+                {% if is_ti_group %}
+                    <button type="button" data-open-planilha>
+                        Planilha
+                    </button>
+                {% endif %}
                 <button type="button" data-open-modal>Abrir chamado</button>
             </div>
         </div>
@@ -669,6 +674,43 @@
         </div>
     </div>
 {% endif %}
+{% if is_ti_group %}
+    <div class="modal" data-planilha-modal hidden>
+        <div class="modal-backdrop" data-close-planilha></div>
+        <div class="modal-content">
+            <div class="topbar" style="margin-bottom: 8px;">
+                <h3>Preencher planilha</h3>
+                <button type="button" data-close-planilha>Fechar</button>
+            </div>
+            <form method="post" action="{% url 'chamados_preencher_planilha' %}">
+                {% csrf_token %}
+                <div class="form-row">
+                    <div>
+                        <label for="id_planilha_atendente">Atendente</label>
+                        <select id="id_planilha_atendente" name="attendant_id" required>
+                            <option value="">Selecione...</option>
+                            {% for user in ti_users %}
+                                <option value="{{ user.id }}">{{ user.full_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div style="flex: 2;">
+                        <label for="id_planilha_caminho">Caminho da planilha</label>
+                        <input
+                            id="id_planilha_caminho"
+                            name="workbook_path"
+                            type="text"
+                            value="{{ chamados_xlsx_default_path }}"
+                            placeholder="S:\TI\Documentos\Chamados\Chamados 2026 - Fabiano.xlsx"
+                            required
+                        />
+                    </div>
+                </div>
+                <button type="submit">Preencher planilha</button>
+            </form>
+        </div>
+    </div>
+{% endif %}
 
 <script>
     (function () {
@@ -1226,6 +1268,24 @@
         const modal = document.querySelector('[data-email-modal]');
         const openBtn = document.querySelector('[data-open-email]');
         const closeEls = document.querySelectorAll('[data-close-email]');
+        if (!modal || !openBtn) return;
+
+        const open = () => {
+            modal.hidden = false;
+        };
+        const close = () => {
+            modal.hidden = true;
+        };
+
+        openBtn.addEventListener('click', open);
+        closeEls.forEach((el) => el.addEventListener('click', close));
+    })();
+</script>
+<script>
+    (function () {
+        const modal = document.querySelector('[data-planilha-modal]');
+        const openBtn = document.querySelector('[data-open-planilha]');
+        const closeEls = document.querySelectorAll('[data-close-planilha]');
         if (!modal || !openBtn) return;
 
         const open = () => {

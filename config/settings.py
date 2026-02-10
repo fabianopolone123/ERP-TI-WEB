@@ -194,10 +194,6 @@ CHAMADOS_XLSX_PATH = os.environ.get(
     'CHAMADOS_XLSX_PATH',
     r'S:\TI\Documentos\Chamados\Chamados 2026 - Fabiano.xlsx',
 )
-CHAMADOS_XLSX_PENDING_PATH = os.environ.get(
-    'CHAMADOS_XLSX_PENDING_PATH',
-    str(BASE_DIR / 'data' / 'chamados_excel_pending.jsonl'),
-)
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
