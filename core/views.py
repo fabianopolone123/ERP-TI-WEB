@@ -992,6 +992,7 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
                 'department': dept or '',
                 'description': ticket.description or '',
                 'is_multi_attendant': ticket.id in multi_assigned_ticket_ids,
+                'failure_type': ticket.last_failure_type or '',
             }
         context['ticket_meta'] = ticket_meta
 
@@ -1146,6 +1147,11 @@ def move_ticket(request):
     progress_note = (request.POST.get('progress_note') or '').strip()
     resolution_note = (request.POST.get('resolution') or '').strip()
     failure_type = (request.POST.get('failure_type') or '').strip().lower()
+    valid_failures = {choice[0] for choice in Ticket.FailureType.choices}
+    if failure_type not in valid_failures:
+        saved_failure = (ticket.last_failure_type or '').strip().lower()
+        if saved_failure in valid_failures:
+            failure_type = saved_failure
     previous_status = ticket.status
     previous_assignee_id = ticket.assigned_to_id
     source_is_user = source_target.startswith('user_')
@@ -1193,7 +1199,6 @@ def move_ticket(request):
         if source_target.startswith('user_') and destination_status == Ticket.Status.PENDENTE and not progress_note:
             return JsonResponse({'ok': False, 'error': 'progress_note_required'}, status=400)
         if source_is_user:
-            valid_failures = {choice[0] for choice in Ticket.FailureType.choices}
             if failure_type not in valid_failures:
                 return JsonResponse({'ok': False, 'error': 'failure_required'}, status=400)
             if not progress_note:
@@ -1246,7 +1251,6 @@ def move_ticket(request):
             return JsonResponse({'ok': False, 'error': 'close_only_from_attendant'}, status=400)
         if not resolution_note:
             return JsonResponse({'ok': False, 'error': 'resolution_required'}, status=400)
-        valid_failures = {choice[0] for choice in Ticket.FailureType.choices}
         if failure_type not in valid_failures:
             return JsonResponse({'ok': False, 'error': 'failure_required'}, status=400)
         cycle_start = ticket.current_cycle_started_at or ticket.created_at
@@ -1289,7 +1293,6 @@ def move_ticket(request):
         timeline_note = f'Chamado assumido por {assignee.full_name}.'
         is_clone_assignment = bool(multi and ticket.assigned_to_id and ticket.assigned_to_id != assignee.id)
         if source_is_user and not is_clone_assignment:
-            valid_failures = {choice[0] for choice in Ticket.FailureType.choices}
             if failure_type not in valid_failures:
                 return JsonResponse({'ok': False, 'error': 'failure_required'}, status=400)
             if not progress_note:

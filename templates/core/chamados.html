@@ -103,7 +103,7 @@
                 <div class="kanban-header">Novo</div>
                 <div class="kanban-body">
                     {% for ticket in new_tickets %}
-                        <div class="ticket-card{% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %} shared-ticket{% endif %}" draggable="true" data-ticket-id="{{ ticket.id }}">
+                        <div class="ticket-card{% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %} shared-ticket{% endif %}" draggable="true" data-ticket-id="{{ ticket.id }}" data-failure-type="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'failure_type' }}">
                             <div class="ticket-title">
                                 <span class="urgency-dot urgency-{{ ticket.urgency }}"></span>
                                 #{{ ticket.id }} - {{ ticket.title }}
@@ -136,7 +136,7 @@
                     <div class="kanban-header">{{ user.full_name }}</div>
                     <div class="kanban-body">
                         {% for ticket in user_tickets|get_item:user.id %}
-                            <div class="ticket-card{% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %} shared-ticket{% endif %}" draggable="true" data-ticket-id="{{ ticket.id }}">
+                            <div class="ticket-card{% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %} shared-ticket{% endif %}" draggable="true" data-ticket-id="{{ ticket.id }}" data-failure-type="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'failure_type' }}">
                                 <div class="ticket-title">
                                     <span class="urgency-dot urgency-{{ ticket.urgency }}"></span>
                                     #{{ ticket.id }} - {{ ticket.title }}
@@ -167,7 +167,7 @@
                 <div class="kanban-header">Fechados</div>
                 <div class="kanban-body">
                     {% for ticket in closed_tickets %}
-                        <div class="ticket-card{% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %} shared-ticket{% endif %}" draggable="true" data-ticket-id="{{ ticket.id }}">
+                        <div class="ticket-card{% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %} shared-ticket{% endif %}" draggable="true" data-ticket-id="{{ ticket.id }}" data-failure-type="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'failure_type' }}">
                             <div class="ticket-title">
                                 <span class="urgency-dot urgency-{{ ticket.urgency }}"></span>
                                 #{{ ticket.id }} - {{ ticket.title }}
@@ -197,7 +197,7 @@
                 <div class="kanban-header">Pendente</div>
                 <div class="kanban-body">
                     {% for ticket in pending_tickets %}
-                        <div class="ticket-card{% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %} shared-ticket{% endif %}" draggable="true" data-ticket-id="{{ ticket.id }}">
+                        <div class="ticket-card{% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %} shared-ticket{% endif %}" draggable="true" data-ticket-id="{{ ticket.id }}" data-failure-type="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'failure_type' }}">
                             <div class="ticket-title">
                                 <span class="urgency-dot urgency-{{ ticket.urgency }}"></span>
                                 #{{ ticket.id }} - {{ ticket.title }}
@@ -229,7 +229,7 @@
                 <div class="kanban-header">Programado</div>
                 <div class="kanban-body">
                     {% for ticket in scheduled_tickets %}
-                        <div class="ticket-card{% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %} shared-ticket{% endif %}" draggable="true" data-ticket-id="{{ ticket.id }}">
+                        <div class="ticket-card{% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %} shared-ticket{% endif %}" draggable="true" data-ticket-id="{{ ticket.id }}" data-failure-type="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'failure_type' }}">
                             <div class="ticket-title">
                                 <span class="urgency-dot urgency-{{ ticket.urgency }}"></span>
                                 #{{ ticket.id }} - {{ ticket.title }}
@@ -787,6 +787,15 @@
                 let resolutionText = '';
                 let progressNote = '';
                 let failureType = '';
+                const normalizeFailureType = (rawValue) => {
+                    const raw = (rawValue || '').trim().toLowerCase();
+                    if (!raw) return '';
+                    if (raw === 'n/s' || raw === 'ns' || raw === 'n-s') return 'ns';
+                    if (raw === 'equipamento') return 'equipamento';
+                    if (raw === 'software') return 'software';
+                    return '';
+                };
+                const currentSavedFailure = normalizeFailureType(draggingCard.dataset.failureType || '');
 
                 const askFailureType = () => {
                     const raw = (prompt('Tipo de falha (N/S, Equipamento ou Software):') || '').trim().toLowerCase();
@@ -814,7 +823,7 @@
                     progressNote = progressNote.trim();
                 }
                 if (isUserSource && (isPending || isScheduled || isClosing || (isUserTarget && !shouldClone))) {
-                    failureType = askFailureType();
+                    failureType = currentSavedFailure || askFailureType();
                     if (!failureType) {
                         alert('Informe um tipo de falha válido: N/S, Equipamento ou Software.');
                         draggingId = null;
@@ -884,6 +893,11 @@
                         if (card !== movedCard) {
                             card.remove();
                         }
+                    });
+                }
+                if (failureType) {
+                    board.querySelectorAll(`.ticket-card[data-ticket-id="${draggingId}"]`).forEach((card) => {
+                        card.dataset.failureType = failureType;
                     });
                 }
                 draggingId = null;
