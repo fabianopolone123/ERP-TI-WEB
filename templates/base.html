@@ -232,12 +232,12 @@
 
         .kanban {
             display: grid;
-            grid-auto-flow: column;
-            grid-auto-columns: minmax(260px, 1fr);
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
             gap: 12px;
             margin-top: 16px;
-            overflow-x: auto;
+            overflow-x: hidden;
             padding-bottom: 8px;
+            align-items: start;
         }
 
         .kanban-column {
