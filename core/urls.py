@@ -20,6 +20,7 @@ from .views import (
     whatsapp_templates_update,
     whatsapp_settings_update,
     ticket_reopen,
+    ws_tickets_ping,
 )
 
 urlpatterns = [
@@ -41,5 +42,6 @@ urlpatterns = [
     path('chamados/whatsapp-group-lookup/', whatsapp_group_lookup, name='chamados_whatsapp_group_lookup'),
     path('chamados/whatsapp-settings/', whatsapp_settings_update, name='chamados_whatsapp_settings'),
     path('chamados/reabrir/', ticket_reopen, name='chamados_reabrir'),
+    path('ws/tickets/', ws_tickets_ping, name='ws_tickets_ping'),
     path('', DashboardView.as_view(), name='dashboard'),
 ]

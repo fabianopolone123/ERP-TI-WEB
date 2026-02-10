@@ -1,4 +1,5 @@
 import logging
+import json
 import re
 import unicodedata
 from datetime import datetime
@@ -140,6 +141,90 @@ def _format_duration(opened_at: datetime, closed_at: datetime) -> str:
     return f'{hours:02d}:{mins:02d}'
 
 
+def _pending_queue_path() -> Path:
+    configured = getattr(settings, 'CHAMADOS_XLSX_PENDING_PATH', '') or ''
+    if configured:
+        return Path(configured)
+    return Path(settings.BASE_DIR) / 'data' / 'chamados_excel_pending.jsonl'
+
+
+def _read_pending_entries(path: Path) -> list[dict]:
+    if not path.exists():
+        return []
+    items: list[dict] = []
+    for line in path.read_text(encoding='utf-8').splitlines():
+        raw = (line or '').strip()
+        if not raw:
+            continue
+        try:
+            parsed = json.loads(raw)
+            if isinstance(parsed, dict):
+                items.append(parsed)
+        except Exception:
+            continue
+    return items
+
+
+def _write_pending_entries(path: Path, entries: list[dict]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if not entries:
+        if path.exists():
+            path.unlink()
+        return
+    content = '\n'.join(json.dumps(item, ensure_ascii=False) for item in entries) + '\n'
+    path.write_text(content, encoding='utf-8')
+
+
+def _queue_pending_entry(event_dt: datetime, values: dict, ticket_id: int) -> None:
+    path = _pending_queue_path()
+    entries = _read_pending_entries(path)
+    entries.append(
+        {
+            'ticket_id': ticket_id,
+            'event_dt': timezone.localtime(event_dt).isoformat(),
+            'values': values,
+        }
+    )
+    _write_pending_entries(path, entries)
+    logger.warning('Lancamento do chamado #%s enfileirado para reprocesso: %s', ticket_id, path)
+
+
+def _append_values_to_workbook(workbook_path: Path, event_dt: datetime, values: dict) -> None:
+    wb = load_workbook(workbook_path)
+    sheet = _resolve_sheet(wb, timezone.localtime(event_dt))
+    header_row, header_map = _find_header(sheet)
+    target_row = _find_next_row(sheet, header_row, header_map)
+    for key, col in header_map.items():
+        if not col:
+            continue
+        if key not in values:
+            continue
+        sheet.cell(row=target_row, column=col, value=values[key])
+    wb.save(workbook_path)
+
+
+def _flush_pending_entries(workbook_path: Path) -> None:
+    path = _pending_queue_path()
+    entries = _read_pending_entries(path)
+    if not entries:
+        return
+
+    remaining: list[dict] = []
+    for idx, entry in enumerate(entries):
+        try:
+            event_dt = datetime.fromisoformat(str(entry.get('event_dt', '')))
+            values = entry.get('values') or {}
+            _append_values_to_workbook(workbook_path, event_dt, values)
+        except PermissionError:
+            remaining.append(entry)
+            remaining.extend(entries[idx + 1 :])
+            break
+        except Exception:
+            logger.exception('Falha ao reprocessar lancamento enfileirado: %s', entry)
+
+    _write_pending_entries(path, remaining)
+
+
 def append_chamado_event_to_excel(
     *,
     ticket: Ticket,
@@ -156,10 +241,7 @@ def append_chamado_event_to_excel(
         return False
 
     try:
-        wb = load_workbook(workbook_path)
-        sheet = _resolve_sheet(wb, timezone.localtime(closed_at))
-        header_row, header_map = _find_header(sheet)
-        target_row = _find_next_row(sheet, header_row, header_map)
+        _flush_pending_entries(workbook_path)
 
         creator = ticket.created_by
         username = (creator.username if creator else '') or ''
@@ -188,15 +270,11 @@ def append_chamado_event_to_excel(
             'acao_eficaz': '',
         }
 
-        for key, col in header_map.items():
-            if not col:
-                continue
-            if key not in values:
-                continue
-            sheet.cell(row=target_row, column=col, value=values[key])
-
-        wb.save(workbook_path)
+        _append_values_to_workbook(workbook_path, closed_at, values)
         return True
+    except PermissionError:
+        _queue_pending_entry(closed_at, values, ticket.id)
+        return False
     except Exception:
         logger.exception('Falha ao escrever chamado #%s na planilha', ticket.id)
         return False

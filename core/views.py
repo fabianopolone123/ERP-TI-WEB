@@ -1556,6 +1556,12 @@ def ticket_reopen(request):
         )
     return JsonResponse({'ok': True})
 
+
+@login_required
+@require_GET
+def ws_tickets_ping(request):
+    return JsonResponse({'ok': True, 'transport': 'http-fallback'})
+
 @login_required
 @require_POST
 def whatsapp_templates_update(request):
