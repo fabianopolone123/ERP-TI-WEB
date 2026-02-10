@@ -189,6 +189,12 @@ WAPI_DEFAULT_GROUP_JID = os.environ.get('WAPI_DEFAULT_GROUP_JID', '')
 # Acessos
 ACCESS_ROOT_PATH = os.environ.get('ACCESS_ROOT_PATH', r'\\SRV-FS\\Sidertec')
 
+# Exportacao de chamados para planilha mensal
+CHAMADOS_XLSX_PATH = os.environ.get(
+    'CHAMADOS_XLSX_PATH',
+    r'S:\TI\Documentos\Chamados\Chamados 2026 - Fabiano.xlsx',
+)
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 

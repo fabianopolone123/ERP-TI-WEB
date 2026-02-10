@@ -22,6 +22,7 @@ from ldap3 import Connection, Server, SUBTREE
 from ldap3.utils.conv import escape_filter_chars
 
 from .ldap_importer import import_ad_users
+from .chamados_excel import append_chamado_event_to_excel
 from .models import (
     ERPUser,
     Equipment,
@@ -1113,8 +1114,10 @@ def move_ticket(request):
     source_target = (request.POST.get('source_target') or '').strip()
     progress_note = (request.POST.get('progress_note') or '').strip()
     resolution_note = (request.POST.get('resolution') or '').strip()
+    failure_type = (request.POST.get('failure_type') or '').strip().lower()
     previous_status = ticket.status
     previous_assignee_id = ticket.assigned_to_id
+    source_is_user = source_target.startswith('user_')
 
     if target in {'novo', 'pendente', 'programado'}:
         status_map = {
@@ -1158,9 +1161,27 @@ def move_ticket(request):
 
         if source_target.startswith('user_') and destination_status == Ticket.Status.PENDENTE and not progress_note:
             return JsonResponse({'ok': False, 'error': 'progress_note_required'}, status=400)
+        if source_is_user:
+            valid_failures = {choice[0] for choice in Ticket.FailureType.choices}
+            if failure_type not in valid_failures:
+                return JsonResponse({'ok': False, 'error': 'failure_required'}, status=400)
+            if not progress_note:
+                return JsonResponse({'ok': False, 'error': 'action_required'}, status=400)
+
+            cycle_start = ticket.current_cycle_started_at or ticket.created_at
+            closed_at = timezone.now()
+            append_chamado_event_to_excel(
+                ticket=ticket,
+                opened_at=cycle_start,
+                closed_at=closed_at,
+                failure_type=failure_type,
+                action_text=progress_note,
+            )
 
         ticket.status = destination_status
         ticket.assigned_to = None
+        ticket.last_failure_type = failure_type if source_is_user else ticket.last_failure_type
+        ticket.current_cycle_started_at = None
         if destination_status != Ticket.Status.FECHADO:
             ticket.resolution = ''
         ticket.save()
@@ -1191,8 +1212,23 @@ def move_ticket(request):
     if target == 'fechado':
         if not resolution_note:
             return JsonResponse({'ok': False, 'error': 'resolution_required'}, status=400)
+        if source_is_user:
+            valid_failures = {choice[0] for choice in Ticket.FailureType.choices}
+            if failure_type not in valid_failures:
+                return JsonResponse({'ok': False, 'error': 'failure_required'}, status=400)
+            cycle_start = ticket.current_cycle_started_at or ticket.created_at
+            closed_at = timezone.now()
+            append_chamado_event_to_excel(
+                ticket=ticket,
+                opened_at=cycle_start,
+                closed_at=closed_at,
+                failure_type=failure_type,
+                action_text=resolution_note,
+            )
         ticket.status = Ticket.Status.FECHADO
         ticket.resolution = resolution_note
+        ticket.last_failure_type = failure_type if source_is_user else ticket.last_failure_type
+        ticket.current_cycle_started_at = None
         ticket.save()
         if previous_status != Ticket.Status.FECHADO:
             _notify_whatsapp(ticket, event_type="status_closed", event_label="Status atualizado", extra_line="Status atual: Fechado")
@@ -1217,7 +1253,24 @@ def move_ticket(request):
         sent_assignment = False
         timeline_event = TicketTimelineEvent.EventType.ASSIGNED
         timeline_note = f'Chamado assumido por {assignee.full_name}.'
-        if multi and ticket.assigned_to_id and ticket.assigned_to_id != assignee.id:
+        is_clone_assignment = bool(multi and ticket.assigned_to_id and ticket.assigned_to_id != assignee.id)
+        if source_is_user and not is_clone_assignment:
+            valid_failures = {choice[0] for choice in Ticket.FailureType.choices}
+            if failure_type not in valid_failures:
+                return JsonResponse({'ok': False, 'error': 'failure_required'}, status=400)
+            if not progress_note:
+                return JsonResponse({'ok': False, 'error': 'action_required'}, status=400)
+            cycle_start = ticket.current_cycle_started_at or ticket.created_at
+            closed_at = timezone.now()
+            append_chamado_event_to_excel(
+                ticket=ticket,
+                opened_at=cycle_start,
+                closed_at=closed_at,
+                failure_type=failure_type,
+                action_text=progress_note,
+            )
+
+        if is_clone_assignment:
             ticket.save()
             ticket.collaborators.add(assignee)
             timeline_note = f'{assignee.full_name} foi adicionado como colaborador no chamado.'
@@ -1225,6 +1278,13 @@ def move_ticket(request):
             ticket.assigned_to = assignee
             if was_closed:
                 ticket.resolution = ''
+            if source_is_user and not is_clone_assignment:
+                ticket.current_cycle_started_at = timezone.now()
+            else:
+                ticket.current_cycle_started_at = (
+                    ticket.created_at if previous_status == Ticket.Status.NOVO else timezone.now()
+                )
+            ticket.last_failure_type = failure_type if source_is_user else ticket.last_failure_type
             ticket.save()
             ticket.collaborators.clear()
             if was_closed:
@@ -1482,7 +1542,8 @@ def ticket_reopen(request):
     if ticket.status == Ticket.Status.FECHADO:
         ticket.status = Ticket.Status.NOVO
         ticket.resolution = ''
-        ticket.save(update_fields=['status', 'resolution', 'updated_at'])
+        ticket.current_cycle_started_at = None
+        ticket.save(update_fields=['status', 'resolution', 'current_cycle_started_at', 'updated_at'])
         _notify_whatsapp(ticket, event_type="status_pending", event_label="Status atualizado", extra_line="Status atual: Novo")
         _notify_ticket_email(ticket, event_label="Status atualizado", extra_line="Status atual: Novo")
         _log_ticket_timeline(

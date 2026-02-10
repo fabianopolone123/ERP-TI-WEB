@@ -147,6 +147,11 @@ class Ticket(models.Model):
         EM_ATENDIMENTO = 'em_atendimento', 'Em atendimento'
         FECHADO = 'fechado', 'Fechado'
 
+    class FailureType(models.TextChoices):
+        NS = 'ns', 'N/S'
+        EQUIPAMENTO = 'equipamento', 'Equipamento'
+        SOFTWARE = 'software', 'Software'
+
     title = models.CharField(max_length=200)
     description = models.TextField()
     ticket_type = models.CharField(
@@ -181,6 +186,8 @@ class Ticket(models.Model):
     )
     attachment = models.FileField(upload_to='tickets/', null=True, blank=True)
     resolution = models.TextField(blank=True, default='')
+    current_cycle_started_at = models.DateTimeField(null=True, blank=True)
+    last_failure_type = models.CharField(max_length=20, choices=FailureType.choices, blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

@@ -732,6 +732,7 @@
                 const isUserSource = sourceColumn && sourceColumn.dataset.target.startsWith('user_');
                 const isClosing = target === 'fechado';
                 const isPending = target === 'pendente';
+                const isScheduled = target === 'programado';
                 const shouldClone = !isClosing && draggingMulti && isUserTarget && isUserSource;
 
                 if (targetBody.querySelector(`.ticket-card[data-ticket-id="${draggingId}"]`)) {
@@ -743,6 +744,16 @@
                 let movedCard = draggingCard;
                 let resolutionText = '';
                 let progressNote = '';
+                let failureType = '';
+
+                const askFailureType = () => {
+                    const raw = (prompt('Tipo de falha (N/S, Equipamento ou Software):') || '').trim().toLowerCase();
+                    if (!raw) return '';
+                    if (raw === 'n/s' || raw === 'ns' || raw === 'n-s') return 'ns';
+                    if (raw === 'equipamento') return 'equipamento';
+                    if (raw === 'software') return 'software';
+                    return '';
+                };
 
                 if (isClosing) {
                     resolutionText = prompt('Informe a resolução do chamado:');
@@ -752,13 +763,21 @@
                     }
                     resolutionText = resolutionText.trim();
                 }
-                if (isPending && isUserSource) {
-                    progressNote = prompt('O que foi feito neste atendimento antes de voltar para Pendente?');
+                if (isUserSource && (isPending || isScheduled || (isUserTarget && !shouldClone))) {
+                    progressNote = prompt('Ação / Correção realizada neste atendimento:');
                     if (!progressNote || !progressNote.trim()) {
                         draggingId = null;
                         return;
                     }
                     progressNote = progressNote.trim();
+                }
+                if (isUserSource && (isPending || isScheduled || isClosing || (isUserTarget && !shouldClone))) {
+                    failureType = askFailureType();
+                    if (!failureType) {
+                        alert('Informe um tipo de falha válido: N/S, Equipamento ou Software.');
+                        draggingId = null;
+                        return;
+                    }
                 }
 
                 if (shouldClone) {
@@ -780,6 +799,7 @@
                         multi: draggingMulti ? '1' : '0',
                         resolution: resolutionText,
                         progress_note: progressNote,
+                        failure_type: failureType,
                     }),
                 });
 
@@ -795,6 +815,10 @@
                         alert('Informe o que foi feito antes de mover para Pendente.');
                     } else if (responseData.error === 'resolution_required') {
                         alert('Informe a resolução para finalizar o chamado.');
+                    } else if (responseData.error === 'failure_required') {
+                        alert('Informe o tipo de falha: N/S, Equipamento ou Software.');
+                    } else if (responseData.error === 'action_required') {
+                        alert('Informe a ação/correção ao mover o chamado.');
                     }
                     if (shouldClone) {
                         movedCard.remove();
