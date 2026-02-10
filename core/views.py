@@ -1400,7 +1400,7 @@ def ticket_detail(request, ticket_id: int):
             'author': msg.created_by.username if msg.created_by else 'Sistema',
             'message': msg.message,
             'attachment_url': msg.attachment.url if msg.attachment else '',
-            'created_at': msg.created_at.strftime('%d/%m/%Y %H:%M'),
+            'created_at': timezone.localtime(msg.created_at).strftime('%d/%m/%Y %H:%M'),
         }
         if msg.is_internal:
             internal_messages.append(payload)
@@ -1422,7 +1422,7 @@ def ticket_detail(request, ticket_id: int):
                 'to_status': _timeline_status_label(row.to_status),
                 'note': row.note,
                 'actor': actor_name,
-                'created_at': row.created_at.strftime('%d/%m/%Y %H:%M'),
+                'created_at': timezone.localtime(row.created_at).strftime('%d/%m/%Y %H:%M'),
             }
         )
 
@@ -1452,7 +1452,7 @@ def ticket_detail(request, ticket_id: int):
             )
             or '-',
             'attachment_url': ticket.attachment.url if ticket.attachment else '',
-            'created_at': ticket.created_at.strftime('%d/%m/%Y %H:%M'),
+            'created_at': timezone.localtime(ticket.created_at).strftime('%d/%m/%Y %H:%M'),
             'can_edit': can_edit,
         },
         'messages': {
