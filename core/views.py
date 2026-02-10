@@ -2,6 +2,8 @@
 import unicodedata
 from textwrap import shorten
 from decimal import Decimal, InvalidOperation
+from pathlib import Path
+from uuid import uuid4
 from django.conf import settings
 from django.contrib import messages
 from django.core.mail import send_mail
@@ -12,7 +14,7 @@ from django.utils import timezone
 from datetime import timedelta
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.http import JsonResponse
+from django.http import JsonResponse, FileResponse
 from django.urls import reverse
 from django.utils.dateparse import parse_date
 from django.views.decorators.http import require_GET, require_POST
@@ -1609,8 +1611,9 @@ def chamados_fill_spreadsheet(request):
 
     attendant_id = (request.POST.get('attendant_id') or '').strip()
     workbook_path = (request.POST.get('workbook_path') or '').strip()
-    if not attendant_id or not workbook_path:
-        messages.error(request, 'Informe atendente e caminho da planilha.')
+    workbook_file = request.FILES.get('workbook_file')
+    if not attendant_id:
+        messages.error(request, 'Informe o atendente.')
         return redirect('chamados')
 
     try:
@@ -1624,11 +1627,33 @@ def chamados_fill_spreadsheet(request):
         messages.error(request, 'Atendente não encontrado.')
         return redirect('chamados')
 
+    export_path = workbook_path
+    output_filename = ''
+    if workbook_file:
+        upload_dir = settings.MEDIA_ROOT / 'exports'
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        suffix = Path(workbook_file.name or '').suffix.lower() or '.xlsx'
+        tmp_name = f'planilha_{uuid4().hex}{suffix}'
+        tmp_path = upload_dir / tmp_name
+        with tmp_path.open('wb') as stream:
+            for chunk in workbook_file.chunks():
+                stream.write(chunk)
+        export_path = str(tmp_path)
+        output_filename = workbook_file.name or f'planilha_{attendant_id_int}.xlsx'
+
+    if not export_path:
+        messages.error(request, 'Informe o caminho da planilha ou selecione um arquivo.')
+        return redirect('chamados')
+
     ok, exported_count, detail = export_attendant_logs_to_excel(
         attendant=attendant,
-        workbook_path=workbook_path,
+        workbook_path=export_path,
     )
     if ok:
+        if workbook_file:
+            response = FileResponse(open(export_path, 'rb'), as_attachment=True, filename=output_filename)
+            response['X-Export-Result'] = detail
+            return response
         messages.success(request, f'{attendant.full_name}: {detail}')
     else:
         messages.error(request, f'{attendant.full_name}: {detail}')

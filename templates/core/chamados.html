@@ -682,7 +682,7 @@
                 <h3>Preencher planilha</h3>
                 <button type="button" data-close-planilha>Fechar</button>
             </div>
-            <form method="post" action="{% url 'chamados_preencher_planilha' %}">
+            <form method="post" action="{% url 'chamados_preencher_planilha' %}" enctype="multipart/form-data">
                 {% csrf_token %}
                 <div class="form-row">
                     <div>
@@ -702,7 +702,15 @@
                             type="text"
                             value="{{ chamados_xlsx_default_path }}"
                             placeholder="S:\TI\Documentos\Chamados\Chamados 2026 - Fabiano.xlsx"
-                            required
+                        />
+                    </div>
+                    <div style="flex: 2;">
+                        <label for="id_planilha_arquivo">Ou escolher arquivo (.xlsx)</label>
+                        <input
+                            id="id_planilha_arquivo"
+                            name="workbook_file"
+                            type="file"
+                            accept=".xlsx,.xlsm,.xltx,.xltm"
                         />
                     </div>
                 </div>
@@ -1300,6 +1308,8 @@
         const modal = document.querySelector('[data-planilha-modal]');
         const openBtn = document.querySelector('[data-open-planilha]');
         const closeEls = document.querySelectorAll('[data-close-planilha]');
+        const fileInput = document.querySelector('#id_planilha_arquivo');
+        const pathInput = document.querySelector('#id_planilha_caminho');
         if (!modal || !openBtn) return;
 
         const open = () => {
@@ -1311,6 +1321,14 @@
 
         openBtn.addEventListener('click', open);
         closeEls.forEach((el) => el.addEventListener('click', close));
+        if (fileInput && pathInput) {
+            fileInput.addEventListener('change', () => {
+                const selected = fileInput.files && fileInput.files[0] ? fileInput.files[0].name : '';
+                if (selected) {
+                    pathInput.value = selected;
+                }
+            });
+        }
     })();
 </script>
 <script>
