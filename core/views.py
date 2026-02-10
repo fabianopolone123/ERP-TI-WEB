@@ -1165,6 +1165,8 @@ def move_ticket(request):
             'programado': Ticket.Status.PROGRAMADO,
         }
         destination_status = status_map[target]
+        if destination_status == Ticket.Status.NOVO and previous_status != Ticket.Status.NOVO:
+            return JsonResponse({'ok': False, 'error': 'cannot_return_to_new'}, status=400)
         source_user_id = None
         if source_target.startswith('user_'):
             try:
@@ -1597,19 +1599,19 @@ def ticket_reopen(request):
         return JsonResponse({'ok': False, 'error': 'forbidden'}, status=403)
 
     if ticket.status == Ticket.Status.FECHADO:
-        ticket.status = Ticket.Status.NOVO
+        ticket.status = Ticket.Status.PENDENTE
         ticket.resolution = ''
         ticket.current_cycle_started_at = None
         ticket.save(update_fields=['status', 'resolution', 'current_cycle_started_at', 'updated_at'])
-        _notify_whatsapp(ticket, event_type="status_pending", event_label="Status atualizado", extra_line="Status atual: Novo")
-        _notify_ticket_email(ticket, event_label="Status atualizado", extra_line="Status atual: Novo")
+        _notify_whatsapp(ticket, event_type="status_pending", event_label="Status atualizado", extra_line="Status atual: Pendente")
+        _notify_ticket_email(ticket, event_label="Status atualizado", extra_line="Status atual: Pendente")
         _log_ticket_timeline(
             ticket=ticket,
             event_type=TicketTimelineEvent.EventType.REOPENED,
             request_user=request.user,
             from_status=Ticket.Status.FECHADO,
-            to_status=Ticket.Status.NOVO,
-            note='Chamado reaberto para a coluna Novo.',
+            to_status=Ticket.Status.PENDENTE,
+            note='Chamado reaberto para a coluna Pendente.',
         )
     return JsonResponse({'ok': True})
 
