@@ -1180,6 +1180,23 @@ def move_ticket(request):
         # When the ticket is shared across attendants, dropping to queue columns from one
         # user column should remove only that attendant and keep the others working.
         if source_user_id and source_user_id in current_assignees and len(current_assignees) > 1:
+            if source_is_user:
+                if failure_type not in valid_failures:
+                    return JsonResponse({'ok': False, 'error': 'failure_required'}, status=400)
+                if not progress_note:
+                    return JsonResponse({'ok': False, 'error': 'action_required'}, status=400)
+                cycle_start = ticket.current_cycle_started_at or ticket.created_at
+                closed_at = timezone.now()
+                _create_ticket_work_log(
+                    ticket=ticket,
+                    source_target=source_target,
+                    opened_at=cycle_start,
+                    closed_at=closed_at,
+                    failure_type=failure_type,
+                    action_text=progress_note,
+                )
+                ticket.last_failure_type = failure_type
+                ticket.save(update_fields=['last_failure_type', 'updated_at'])
             if ticket.assigned_to_id == source_user_id:
                 remaining = [uid for uid in current_assignees if uid != source_user_id]
                 promoted_id = remaining[0]
