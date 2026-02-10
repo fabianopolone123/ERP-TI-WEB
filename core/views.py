@@ -1210,24 +1210,25 @@ def move_ticket(request):
         return JsonResponse({'ok': True})
 
     if target == 'fechado':
+        if not source_is_user:
+            return JsonResponse({'ok': False, 'error': 'close_only_from_attendant'}, status=400)
         if not resolution_note:
             return JsonResponse({'ok': False, 'error': 'resolution_required'}, status=400)
-        if source_is_user:
-            valid_failures = {choice[0] for choice in Ticket.FailureType.choices}
-            if failure_type not in valid_failures:
-                return JsonResponse({'ok': False, 'error': 'failure_required'}, status=400)
-            cycle_start = ticket.current_cycle_started_at or ticket.created_at
-            closed_at = timezone.now()
-            append_chamado_event_to_excel(
-                ticket=ticket,
-                opened_at=cycle_start,
-                closed_at=closed_at,
-                failure_type=failure_type,
-                action_text=resolution_note,
-            )
+        valid_failures = {choice[0] for choice in Ticket.FailureType.choices}
+        if failure_type not in valid_failures:
+            return JsonResponse({'ok': False, 'error': 'failure_required'}, status=400)
+        cycle_start = ticket.current_cycle_started_at or ticket.created_at
+        closed_at = timezone.now()
+        append_chamado_event_to_excel(
+            ticket=ticket,
+            opened_at=cycle_start,
+            closed_at=closed_at,
+            failure_type=failure_type,
+            action_text=resolution_note,
+        )
         ticket.status = Ticket.Status.FECHADO
         ticket.resolution = resolution_note
-        ticket.last_failure_type = failure_type if source_is_user else ticket.last_failure_type
+        ticket.last_failure_type = failure_type
         ticket.current_cycle_started_at = None
         ticket.save()
         if previous_status != Ticket.Status.FECHADO:

@@ -815,6 +815,8 @@
                         alert('Informe o que foi feito antes de mover para Pendente.');
                     } else if (responseData.error === 'resolution_required') {
                         alert('Informe a resolução para finalizar o chamado.');
+                    } else if (responseData.error === 'close_only_from_attendant') {
+                        alert('Só é permitido finalizar chamado quando ele sai da coluna de um atendente.');
                     } else if (responseData.error === 'failure_required') {
                         alert('Informe o tipo de falha: N/S, Equipamento ou Software.');
                     } else if (responseData.error === 'action_required') {
