@@ -141,7 +141,9 @@ class Ticket(models.Model):
         ALTA = 'alta', 'Alta'
 
     class Status(models.TextChoices):
+        NOVO = 'novo', 'Novo'
         PENDENTE = 'pendente', 'Pendente'
+        PROGRAMADO = 'programado', 'Programado'
         EM_ATENDIMENTO = 'em_atendimento', 'Em atendimento'
         FECHADO = 'fechado', 'Fechado'
 
@@ -157,7 +159,7 @@ class Ticket(models.Model):
         choices=Urgency.choices,
         default=Urgency.NAO_CLASSIFICADO,
     )
-    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDENTE)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.NOVO)
     created_by = models.ForeignKey(
         'auth.User',
         null=True,
@@ -202,6 +204,39 @@ class TicketMessage(models.Model):
 
     def __str__(self) -> str:
         return f'Mensagem #{self.id} ({self.ticket_id})'
+
+
+class TicketTimelineEvent(models.Model):
+    class EventType(models.TextChoices):
+        CREATED = 'created', 'Criado'
+        STATUS_CHANGED = 'status_changed', 'Status alterado'
+        ASSIGNED = 'assigned', 'Atribuído'
+        UNASSIGNED = 'unassigned', 'Desatribuído'
+        REOPENED = 'reopened', 'Reaberto'
+
+    ticket = models.ForeignKey(Ticket, on_delete=models.CASCADE, related_name='timeline_events')
+    event_type = models.CharField(max_length=20, choices=EventType.choices, default=EventType.STATUS_CHANGED)
+    from_status = models.CharField(max_length=20, blank=True, default='')
+    to_status = models.CharField(max_length=20, blank=True, default='')
+    actor_user = models.ForeignKey(
+        'auth.User',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='ticket_timeline_events',
+    )
+    actor_ti = models.ForeignKey(
+        ERPUser,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='ticket_timeline_events',
+    )
+    note = models.TextField(blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self) -> str:
+        return f'Timeline #{self.id} ({self.ticket_id})'
 
 
 class WhatsAppTemplate(models.Model):

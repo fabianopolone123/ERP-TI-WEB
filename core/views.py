@@ -31,6 +31,7 @@ from .models import (
     AccessMember,
     Ticket,
     TicketMessage,
+    TicketTimelineEvent,
     WhatsAppTemplate,
     EmailTemplate,
     WhatsAppNotificationSettings,
@@ -360,6 +361,36 @@ def is_ti_user(request) -> bool:
     if not user:
         return False
     return (user.department or '').strip().upper() == 'TI'
+
+
+def _timeline_status_label(status_code: str) -> str:
+    mapping = dict(Ticket.Status.choices)
+    return mapping.get(status_code, status_code or '-')
+
+
+def _log_ticket_timeline(
+    *,
+    ticket: Ticket,
+    event_type: str,
+    request_user,
+    from_status: str = '',
+    to_status: str = '',
+    note: str = '',
+):
+    actor_ti = None
+    username = getattr(request_user, 'username', '')
+    if username:
+        actor_ti = ERPUser.objects.filter(username__iexact=username).first()
+
+    TicketTimelineEvent.objects.create(
+        ticket=ticket,
+        event_type=event_type,
+        from_status=from_status or '',
+        to_status=to_status or '',
+        actor_user=request_user if getattr(request_user, 'is_authenticated', False) else None,
+        actor_ti=actor_ti,
+        note=(note or '').strip(),
+    )
 
 
 class DashboardView(LoginRequiredMixin, TemplateView):
@@ -810,9 +841,16 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
             description=description,
             ticket_type=ticket_type,
             urgency=urgency,
-            status=Ticket.Status.PENDENTE,
+            status=Ticket.Status.NOVO,
             created_by=request.user,
             attachment=attachment,
+        )
+        _log_ticket_timeline(
+            ticket=ticket,
+            event_type=TicketTimelineEvent.EventType.CREATED,
+            request_user=request.user,
+            to_status=Ticket.Status.NOVO,
+            note='Chamado criado no quadro como Novo.',
         )
         _notify_whatsapp(ticket, event_type="new_ticket", event_label="Novo chamado")
         messages.success(request, 'Chamado aberto com sucesso.')
@@ -881,7 +919,9 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
 
         ti_users = list(ERPUser.objects.filter(department__iexact='TI', is_active=True).order_by('full_name'))
         context['ti_users'] = ti_users
+        context['new_tickets'] = Ticket.objects.filter(status=Ticket.Status.NOVO).select_related('created_by').order_by('-created_at')
         context['pending_tickets'] = Ticket.objects.filter(status=Ticket.Status.PENDENTE).select_related('created_by').order_by('-created_at')
+        context['scheduled_tickets'] = Ticket.objects.filter(status=Ticket.Status.PROGRAMADO).select_related('created_by').order_by('-created_at')
         context['closed_tickets'] = Ticket.objects.filter(status=Ticket.Status.FECHADO).select_related('created_by').order_by('-created_at')
         in_progress_tickets = Ticket.objects.filter(status=Ticket.Status.EM_ATENDIMENTO).select_related('created_by').prefetch_related(
             'collaborators'
@@ -899,7 +939,13 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
                 if uid in ticket_map:
                     ticket_map[uid].append(ticket)
 
-        all_tickets = list(context['pending_tickets']) + list(context['closed_tickets']) + list(in_progress_tickets)
+        all_tickets = (
+            list(context['new_tickets'])
+            + list(context['pending_tickets'])
+            + list(context['scheduled_tickets'])
+            + list(context['closed_tickets'])
+            + list(in_progress_tickets)
+        )
         usernames = {t.created_by.username for t in all_tickets if t.created_by}
         erp_users = ERPUser.objects.filter(username__in=list(usernames))
         erp_map = {u.username.lower(): u for u in erp_users}
@@ -1035,7 +1081,7 @@ class RelatoriosView(LoginRequiredMixin, TemplateView):
         context['attendants'] = attendants
         context['summary'] = {
             'total': total_tickets,
-            'pending': tickets.filter(status=Ticket.Status.PENDENTE).count(),
+            'pending': tickets.filter(status__in=[Ticket.Status.NOVO, Ticket.Status.PENDENTE, Ticket.Status.PROGRAMADO]).count(),
             'in_progress': tickets.filter(status=Ticket.Status.EM_ATENDIMENTO).count(),
             'closed': tickets.filter(status=Ticket.Status.FECHADO).count(),
         }
@@ -1065,10 +1111,18 @@ def move_ticket(request):
 
     multi = request.POST.get('multi') == '1'
     source_target = (request.POST.get('source_target') or '').strip()
+    progress_note = (request.POST.get('progress_note') or '').strip()
+    resolution_note = (request.POST.get('resolution') or '').strip()
     previous_status = ticket.status
     previous_assignee_id = ticket.assigned_to_id
 
-    if target == 'pendente':
+    if target in {'novo', 'pendente', 'programado'}:
+        status_map = {
+            'novo': Ticket.Status.NOVO,
+            'pendente': Ticket.Status.PENDENTE,
+            'programado': Ticket.Status.PROGRAMADO,
+        }
+        destination_status = status_map[target]
         source_user_id = None
         if source_target.startswith('user_'):
             try:
@@ -1081,7 +1135,7 @@ def move_ticket(request):
             current_assignees.add(ticket.assigned_to_id)
         current_assignees.update(ticket.collaborators.values_list('id', flat=True))
 
-        # When the ticket is shared across attendants, dropping to pending from one
+        # When the ticket is shared across attendants, dropping to queue columns from one
         # user column should remove only that attendant and keep the others working.
         if source_user_id and source_user_id in current_assignees and len(current_assignees) > 1:
             if ticket.assigned_to_id == source_user_id:
@@ -1092,41 +1146,90 @@ def move_ticket(request):
                 ticket.collaborators.remove(promoted_id)
             else:
                 ticket.collaborators.remove(source_user_id)
+            _log_ticket_timeline(
+                ticket=ticket,
+                event_type=TicketTimelineEvent.EventType.UNASSIGNED,
+                request_user=request.user,
+                from_status=previous_status,
+                to_status=ticket.status,
+                note=f'Atendente removido do compartilhamento ao mover para {_timeline_status_label(destination_status)}.',
+            )
             return JsonResponse({'ok': True, 'partial_unassign': True})
 
-        ticket.status = Ticket.Status.PENDENTE
+        if source_target.startswith('user_') and destination_status == Ticket.Status.PENDENTE and not progress_note:
+            return JsonResponse({'ok': False, 'error': 'progress_note_required'}, status=400)
+
+        ticket.status = destination_status
         ticket.assigned_to = None
+        if destination_status != Ticket.Status.FECHADO:
+            ticket.resolution = ''
         ticket.save()
         ticket.collaborators.clear()
-        if previous_status != Ticket.Status.PENDENTE:
-            _notify_whatsapp(ticket, event_type="status_pending", event_label="Status atualizado", extra_line="Status atual: Pendente")
-            _notify_ticket_email(ticket, event_label="Status atualizado", extra_line="Status atual: Pendente")
+        if previous_status != destination_status:
+            _notify_whatsapp(
+                ticket,
+                event_type="status_pending",
+                event_label="Status atualizado",
+                extra_line=f"Status atual: {_timeline_status_label(destination_status)}",
+            )
+            _notify_ticket_email(
+                ticket,
+                event_label="Status atualizado",
+                extra_line=f"Status atual: {_timeline_status_label(destination_status)}",
+            )
+        timeline_note = progress_note or f'Chamado movido para {_timeline_status_label(destination_status)}.'
+        _log_ticket_timeline(
+            ticket=ticket,
+            event_type=TicketTimelineEvent.EventType.STATUS_CHANGED,
+            request_user=request.user,
+            from_status=previous_status,
+            to_status=destination_status,
+            note=timeline_note,
+        )
         return JsonResponse({'ok': True})
+
     if target == 'fechado':
-        resolution = (request.POST.get('resolution') or '').strip()
-        if not resolution:
+        if not resolution_note:
             return JsonResponse({'ok': False, 'error': 'resolution_required'}, status=400)
         ticket.status = Ticket.Status.FECHADO
-        ticket.resolution = resolution
+        ticket.resolution = resolution_note
         ticket.save()
         if previous_status != Ticket.Status.FECHADO:
             _notify_whatsapp(ticket, event_type="status_closed", event_label="Status atualizado", extra_line="Status atual: Fechado")
             _notify_ticket_email(ticket, event_label="Status atualizado", extra_line="Status atual: Fechado")
+        _log_ticket_timeline(
+            ticket=ticket,
+            event_type=TicketTimelineEvent.EventType.STATUS_CHANGED,
+            request_user=request.user,
+            from_status=previous_status,
+            to_status=Ticket.Status.FECHADO,
+            note=f'Resolução registrada: {resolution_note}',
+        )
         return JsonResponse({'ok': True})
+
     if target.startswith('user_'):
         user_id = target.replace('user_', '')
         assignee = ERPUser.objects.filter(id=user_id).first()
         if not assignee:
             return JsonResponse({'ok': False, 'error': 'user_not_found'}, status=404)
+        was_closed = previous_status == Ticket.Status.FECHADO
         ticket.status = Ticket.Status.EM_ATENDIMENTO
         sent_assignment = False
+        timeline_event = TicketTimelineEvent.EventType.ASSIGNED
+        timeline_note = f'Chamado assumido por {assignee.full_name}.'
         if multi and ticket.assigned_to_id and ticket.assigned_to_id != assignee.id:
             ticket.save()
             ticket.collaborators.add(assignee)
+            timeline_note = f'{assignee.full_name} foi adicionado como colaborador no chamado.'
         else:
             ticket.assigned_to = assignee
+            if was_closed:
+                ticket.resolution = ''
             ticket.save()
             ticket.collaborators.clear()
+            if was_closed:
+                timeline_event = TicketTimelineEvent.EventType.REOPENED
+                timeline_note = f'Chamado reaberto e atribuído para {assignee.full_name}.'
         if not multi:
             if previous_assignee_id is None:
                 _notify_whatsapp(
@@ -1156,6 +1259,14 @@ def move_ticket(request):
                 event_label="Status atualizado",
                 extra_line=f"Status atual: Em atendimento | Responsável: {assignee.full_name}",
             )
+        _log_ticket_timeline(
+            ticket=ticket,
+            event_type=timeline_event,
+            request_user=request.user,
+            from_status=previous_status,
+            to_status=Ticket.Status.EM_ATENDIMENTO,
+            note=timeline_note,
+        )
         return JsonResponse({'ok': True})
 
     return JsonResponse({'ok': False, 'error': 'invalid_target'}, status=400)
@@ -1167,7 +1278,7 @@ def ticket_detail(request, ticket_id: int):
     ticket = (
         Ticket.objects.filter(id=ticket_id)
         .select_related('assigned_to', 'created_by')
-        .prefetch_related('collaborators')
+        .prefetch_related('collaborators', 'timeline_events__actor_user', 'timeline_events__actor_ti')
         .first()
     )
     if not ticket:
@@ -1195,6 +1306,25 @@ def ticket_detail(request, ticket_id: int):
             internal_messages.append(payload)
         else:
             public_messages.append(payload)
+
+    timeline_rows = []
+    for row in ticket.timeline_events.select_related('actor_user', 'actor_ti').order_by('created_at'):
+        actor_name = '-'
+        if row.actor_ti and row.actor_ti.full_name:
+            actor_name = row.actor_ti.full_name
+        elif row.actor_user:
+            actor_name = row.actor_user.get_full_name() or row.actor_user.username
+        timeline_rows.append(
+            {
+                'id': row.id,
+                'event_type': row.get_event_type_display(),
+                'from_status': _timeline_status_label(row.from_status),
+                'to_status': _timeline_status_label(row.to_status),
+                'note': row.note,
+                'actor': actor_name,
+                'created_at': row.created_at.strftime('%d/%m/%Y %H:%M'),
+            }
+        )
 
     can_edit = is_ti and ticket.created_by_id == request.user.id
     data = {
@@ -1229,6 +1359,7 @@ def ticket_detail(request, ticket_id: int):
             'public': public_messages,
             'internal': internal_messages,
         },
+        'timeline': timeline_rows,
         'internal_allowed': is_ti,
     }
     return JsonResponse(data)
@@ -1349,10 +1480,19 @@ def ticket_reopen(request):
         return JsonResponse({'ok': False, 'error': 'forbidden'}, status=403)
 
     if ticket.status == Ticket.Status.FECHADO:
-        ticket.status = Ticket.Status.PENDENTE
-        ticket.save(update_fields=['status', 'updated_at'])
-        _notify_whatsapp(ticket, event_type="status_pending", event_label="Status atualizado", extra_line="Status atual: Pendente")
-        _notify_ticket_email(ticket, event_label="Status atualizado", extra_line="Status atual: Pendente")
+        ticket.status = Ticket.Status.NOVO
+        ticket.resolution = ''
+        ticket.save(update_fields=['status', 'resolution', 'updated_at'])
+        _notify_whatsapp(ticket, event_type="status_pending", event_label="Status atualizado", extra_line="Status atual: Novo")
+        _notify_ticket_email(ticket, event_label="Status atualizado", extra_line="Status atual: Novo")
+        _log_ticket_timeline(
+            ticket=ticket,
+            event_type=TicketTimelineEvent.EventType.REOPENED,
+            request_user=request.user,
+            from_status=Ticket.Status.FECHADO,
+            to_status=Ticket.Status.NOVO,
+            note='Chamado reaberto para a coluna Novo.',
+        )
     return JsonResponse({'ok': True})
 
 @login_required
