@@ -26,6 +26,28 @@
         color: #93a4bf;
         line-height: 1.25;
     }
+    .detail-description-block {
+        margin-top: 6px;
+        margin-bottom: 8px;
+        padding: 10px 12px;
+        border-radius: 10px;
+        border: 1px solid #3b82f6;
+        background: rgba(59, 130, 246, 0.14);
+    }
+    .detail-description-label {
+        font-size: 0.78rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: #93c5fd;
+        margin-bottom: 6px;
+    }
+    .detail-description-text {
+        color: #e2e8f0;
+        font-weight: 600;
+        line-height: 1.4;
+        white-space: pre-wrap;
+    }
 </style>
 <div class="card">
     <div class="topbar">
@@ -296,7 +318,10 @@
         </div>
         <div class="ticket-details">
             <div><strong>Título:</strong> <span data-detail-title></span></div>
-            <div><strong>Descrição:</strong> <span data-detail-description></span></div>
+            <div class="detail-description-block">
+                <div class="detail-description-label">Descrição do problema</div>
+                <div class="detail-description-text" data-detail-description></div>
+            </div>
             <div><strong>Tipo:</strong> <span data-detail-type></span></div>
             <div><strong>Urgência:</strong> <span data-detail-urgency></span></div>
             <div><strong>Status:</strong> <span data-detail-status></span></div>
