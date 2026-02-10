@@ -84,6 +84,19 @@
                         Planilha
                     </button>
                 {% endif %}
+                <label for="id_refresh_seconds" style="display:flex; align-items:center; gap:6px; font-size:0.82rem; color:#93a4bf;">
+                    Atualizar a cada
+                    <input
+                        id="id_refresh_seconds"
+                        type="number"
+                        min="3"
+                        max="300"
+                        step="1"
+                        value="10"
+                        style="width:70px; padding:6px 8px;"
+                    />
+                    s
+                </label>
                 <button type="button" data-open-modal>Abrir chamado</button>
             </div>
         </div>
@@ -1386,7 +1399,33 @@
 {% if is_ti_group %}
     <script>
         (function () {
-            const REFRESH_MS = 3000;
+            const DEFAULT_SECONDS = 10;
+            const STORAGE_KEY = 'chamados_refresh_seconds';
+            const refreshInput = document.querySelector('#id_refresh_seconds');
+
+            const loadSeconds = () => {
+                const raw = (localStorage.getItem(STORAGE_KEY) || '').trim();
+                const parsed = parseInt(raw, 10);
+                if (Number.isNaN(parsed)) return DEFAULT_SECONDS;
+                return Math.min(300, Math.max(3, parsed));
+            };
+
+            const saveSeconds = (value) => {
+                localStorage.setItem(STORAGE_KEY, String(value));
+            };
+
+            let refreshSeconds = loadSeconds();
+            if (refreshInput) {
+                refreshInput.value = String(refreshSeconds);
+                refreshInput.addEventListener('change', () => {
+                    const parsed = parseInt(refreshInput.value || '', 10);
+                    refreshSeconds = Number.isNaN(parsed) ? DEFAULT_SECONDS : Math.min(300, Math.max(3, parsed));
+                    refreshInput.value = String(refreshSeconds);
+                    saveSeconds(refreshSeconds);
+                    restartTimer();
+                });
+            }
+
             const isTyping = () => {
                 const active = document.activeElement;
                 if (!active) return false;
@@ -1396,12 +1435,19 @@
             const hasOpenModal = () =>
                 Array.from(document.querySelectorAll('.modal')).some((modal) => !modal.hidden);
 
-            setInterval(() => {
-                if (document.hidden) return;
-                if (isTyping()) return;
-                if (hasOpenModal()) return;
-                window.location.reload();
-            }, REFRESH_MS);
+            let timerId = null;
+            const restartTimer = () => {
+                if (timerId) {
+                    clearInterval(timerId);
+                }
+                timerId = setInterval(() => {
+                    if (document.hidden) return;
+                    if (isTyping()) return;
+                    if (hasOpenModal()) return;
+                    window.location.reload();
+                }, refreshSeconds * 1000);
+            };
+            restartTimer();
         })();
     </script>
 {% endif %}
