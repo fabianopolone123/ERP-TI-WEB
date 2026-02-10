@@ -267,11 +267,11 @@
             gap: 10px;
         }
 
-        /* Ordem fixa do quadro TI: Novo -> Pendente -> Programado -> Atendentes -> Fechados */
+        /* Ordem fixa do quadro TI: Novo -> Atendentes -> Pendente -> Programado -> Fechados */
         .kanban-column[data-target="novo"] { order: 1; }
-        .kanban-column[data-target="pendente"] { order: 2; }
-        .kanban-column[data-target="programado"] { order: 3; }
-        .kanban-column[data-target^="user_"] { order: 4; }
+        .kanban-column[data-target^="user_"] { order: 2; }
+        .kanban-column[data-target="pendente"] { order: 3; }
+        .kanban-column[data-target="programado"] { order: 4; }
         .kanban-column[data-target="fechado"] { order: 5; }
 
         .ticket-card {
