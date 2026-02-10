@@ -869,12 +869,13 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
             messages.info(request, 'Chamado idêntico detectado recentemente. Não foi criado novamente.')
             return redirect('chamados')
 
+        initial_status = Ticket.Status.PROGRAMADO if is_ti else Ticket.Status.NOVO
         ticket = Ticket.objects.create(
             title=title,
             description=description,
             ticket_type=ticket_type,
             urgency=urgency,
-            status=Ticket.Status.NOVO,
+            status=initial_status,
             created_by=request.user,
             attachment=attachment,
         )
@@ -882,8 +883,8 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
             ticket=ticket,
             event_type=TicketTimelineEvent.EventType.CREATED,
             request_user=request.user,
-            to_status=Ticket.Status.NOVO,
-            note='Chamado criado no quadro como Novo.',
+            to_status=initial_status,
+            note=f'Chamado criado no quadro como {_timeline_status_label(initial_status)}.',
         )
         _notify_whatsapp(ticket, event_type="new_ticket", event_label="Novo chamado")
         messages.success(request, 'Chamado aberto com sucesso.')
@@ -1337,12 +1338,7 @@ def move_ticket(request):
             ticket.assigned_to = assignee
             if was_closed:
                 ticket.resolution = ''
-            if source_is_user and not is_clone_assignment:
-                ticket.current_cycle_started_at = timezone.now()
-            else:
-                ticket.current_cycle_started_at = (
-                    ticket.created_at if previous_status == Ticket.Status.NOVO else timezone.now()
-                )
+            ticket.current_cycle_started_at = timezone.now()
             ticket.last_failure_type = failure_type if source_is_user else ticket.last_failure_type
             ticket.save()
             ticket.collaborators.clear()
