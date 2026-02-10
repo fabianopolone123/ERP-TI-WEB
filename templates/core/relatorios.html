@@ -1,0 +1,225 @@
+{% extends "base.html" %}
+
+{% block title %}Relatórios | ERP TI{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="topbar">
+        <div>
+            <h2>Relatórios de Chamados</h2>
+            <p class="muted">Filtros e indicadores para análise dos chamados da TI.</p>
+        </div>
+        <form method="post" action="{% url 'logout' %}" class="inline-form">
+            {% csrf_token %}
+            <button type="submit">Sair</button>
+        </form>
+    </div>
+
+    {% if is_ti_group %}
+        {% include "core/_tabs.html" %}
+
+        <style>
+            .report-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+                gap: 10px;
+            }
+            .report-kpi {
+                background: #0c1527;
+                border: 1px solid #1f2a44;
+                border-radius: 10px;
+                padding: 12px;
+            }
+            .report-kpi h4 {
+                margin: 0 0 6px;
+                font-size: 0.82rem;
+                text-transform: uppercase;
+                color: #93c5fd;
+                letter-spacing: 0.04em;
+            }
+            .report-kpi .value {
+                font-size: 1.6rem;
+                font-weight: 800;
+                color: #e2e8f0;
+            }
+            .chart-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+                gap: 12px;
+                margin-top: 14px;
+            }
+            .chart-card {
+                background: #0c1527;
+                border: 1px solid #1f2a44;
+                border-radius: 10px;
+                padding: 12px;
+            }
+            .chart-card h4 {
+                margin: 0 0 10px;
+            }
+            .chart-wrap {
+                min-height: 220px;
+            }
+        </style>
+
+        <form method="get" class="ticket-form" style="margin-top: 16px;">
+            <div class="form-row">
+                <div>
+                    <label for="id_date_from">De</label>
+                    <input id="id_date_from" type="date" name="date_from" value="{{ filters.date_from }}" />
+                </div>
+                <div>
+                    <label for="id_date_to">Até</label>
+                    <input id="id_date_to" type="date" name="date_to" value="{{ filters.date_to }}" />
+                </div>
+                <div>
+                    <label for="id_requester">Solicitante</label>
+                    <select id="id_requester" name="requester">
+                        <option value="">Todos</option>
+                        {% for requester in requesters %}
+                            <option value="{{ requester.id }}" {% if filters.requester == requester.id|stringformat:'s' %}selected{% endif %}>
+                                {{ requester.label }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label for="id_assignee">Atendente TI</label>
+                    <select id="id_assignee" name="assignee">
+                        <option value="">Todos</option>
+                        {% for attendant in attendants %}
+                            <option value="{{ attendant.id }}" {% if filters.assignee == attendant.id|stringformat:'s' %}selected{% endif %}>
+                                {{ attendant.full_name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label for="id_status">Status</label>
+                    <select id="id_status" name="status">
+                        <option value="">Todos</option>
+                        {% for value, label in status_choices %}
+                            <option value="{{ value }}" {% if filters.status == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label for="id_q">Busca</label>
+                    <input id="id_q" type="text" name="q" value="{{ filters.q }}" placeholder="Título ou descrição..." />
+                </div>
+            </div>
+            <div style="display:flex; gap:8px;">
+                <button type="submit">Aplicar filtros</button>
+                <a href="{% url 'relatorios' %}" class="tab-button" style="border-radius: 8px;">Limpar</a>
+            </div>
+        </form>
+
+        <div class="report-grid" style="margin-top: 14px;">
+            <div class="report-kpi">
+                <h4>Total</h4>
+                <div class="value">{{ summary.total }}</div>
+            </div>
+            <div class="report-kpi">
+                <h4>Pendentes</h4>
+                <div class="value">{{ summary.pending }}</div>
+            </div>
+            <div class="report-kpi">
+                <h4>Em Atendimento</h4>
+                <div class="value">{{ summary.in_progress }}</div>
+            </div>
+            <div class="report-kpi">
+                <h4>Fechados</h4>
+                <div class="value">{{ summary.closed }}</div>
+            </div>
+        </div>
+
+        {{ chart_data|json_script:"report-chart-data" }}
+
+        <div class="chart-grid">
+            <div class="chart-card">
+                <h4>Status</h4>
+                <div class="chart-wrap"><canvas id="chart-status"></canvas></div>
+            </div>
+            <div class="chart-card">
+                <h4>Urgência</h4>
+                <div class="chart-wrap"><canvas id="chart-urgency"></canvas></div>
+            </div>
+            <div class="chart-card">
+                <h4>Tipo</h4>
+                <div class="chart-wrap"><canvas id="chart-type"></canvas></div>
+            </div>
+            <div class="chart-card">
+                <h4>Top Solicitantes</h4>
+                <div class="chart-wrap"><canvas id="chart-requesters"></canvas></div>
+            </div>
+            <div class="chart-card" style="grid-column: 1 / -1;">
+                <h4>Evolução por Dia</h4>
+                <div class="chart-wrap"><canvas id="chart-days"></canvas></div>
+            </div>
+        </div>
+
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        <script>
+            (function () {
+                const dataEl = document.getElementById('report-chart-data');
+                if (!dataEl || typeof Chart === 'undefined') return;
+                const source = JSON.parse(dataEl.textContent || '{}');
+
+                const makeLabels = (arr) => (arr || []).map((item) => item.label);
+                const makeValues = (arr) => (arr || []).map((item) => item.total);
+
+                const renderBar = (canvasId, rows, color, horizontal = false) => {
+                    const el = document.getElementById(canvasId);
+                    if (!el) return;
+                    new Chart(el, {
+                        type: 'bar',
+                        data: {
+                            labels: makeLabels(rows),
+                            datasets: [{ data: makeValues(rows), backgroundColor: color }],
+                        },
+                        options: {
+                            indexAxis: horizontal ? 'y' : 'x',
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { display: false } },
+                            scales: { y: { beginAtZero: true } },
+                        },
+                    });
+                };
+
+                const renderLine = (canvasId, rows, color) => {
+                    const el = document.getElementById(canvasId);
+                    if (!el) return;
+                    new Chart(el, {
+                        type: 'line',
+                        data: {
+                            labels: makeLabels(rows),
+                            datasets: [{
+                                data: makeValues(rows),
+                                borderColor: color,
+                                backgroundColor: 'rgba(59,130,246,0.2)',
+                                tension: 0.25,
+                                fill: true,
+                            }],
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { display: false } },
+                            scales: { y: { beginAtZero: true } },
+                        },
+                    });
+                };
+
+                renderBar('chart-status', source.status || [], '#3b82f6');
+                renderBar('chart-urgency', source.urgency || [], '#f59e0b');
+                renderBar('chart-type', source.type || [], '#22c55e');
+                renderBar('chart-requesters', source.requesters || [], '#a78bfa', true);
+                renderLine('chart-days', source.days || [], '#38bdf8');
+            })();
+        </script>
+    {% else %}
+        <p>Solicite ao administrador a inclusão no departamento <strong>TI</strong>.</p>
+    {% endif %}
+</div>
+{% endblock %}

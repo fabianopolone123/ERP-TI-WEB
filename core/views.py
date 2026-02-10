@@ -5,6 +5,8 @@ from decimal import Decimal, InvalidOperation
 from django.conf import settings
 from django.contrib import messages
 from django.core.mail import send_mail
+from django.db.models import Count, Q
+from django.db.models.functions import TruncDate
 from django.shortcuts import redirect
 from django.utils import timezone
 from datetime import timedelta
@@ -12,6 +14,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import JsonResponse
 from django.urls import reverse
+from django.utils.dateparse import parse_date
 from django.views.decorators.http import require_GET, require_POST
 from django.views.generic import TemplateView
 from django.contrib.auth import views as auth_views
@@ -63,6 +66,7 @@ ERP_MODULES = [
     {'slug': 'requisicoes', 'label': 'Requisições', 'url_name': 'requisicoes'},
     {'slug': 'emprestimos', 'label': 'Empréstimos', 'url_name': None},
     {'slug': 'chamados', 'label': 'Chamados', 'url_name': 'chamados'},
+    {'slug': 'relatorios', 'label': 'Relatórios', 'url_name': 'relatorios'},
 ]
 
 
@@ -914,6 +918,134 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
         context['ticket_meta'] = ticket_meta
 
         context['user_tickets'] = ticket_map
+        return context
+
+
+class RelatoriosView(LoginRequiredMixin, TemplateView):
+    template_name = 'core/relatorios.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        is_ti = is_ti_user(self.request)
+        context['is_ti_group'] = is_ti
+        context['modules'] = build_modules('relatorios') if is_ti else []
+        if not is_ti:
+            return context
+
+        date_from_raw = (self.request.GET.get('date_from') or '').strip()
+        date_to_raw = (self.request.GET.get('date_to') or '').strip()
+        requester_raw = (self.request.GET.get('requester') or '').strip()
+        assignee_raw = (self.request.GET.get('assignee') or '').strip()
+        status_raw = (self.request.GET.get('status') or '').strip()
+        search_raw = (self.request.GET.get('q') or '').strip()
+
+        tickets = Ticket.objects.select_related('created_by', 'assigned_to').prefetch_related('collaborators').all()
+
+        date_from = parse_date(date_from_raw) if date_from_raw else None
+        date_to = parse_date(date_to_raw) if date_to_raw else None
+        if date_from:
+            tickets = tickets.filter(created_at__date__gte=date_from)
+        if date_to:
+            tickets = tickets.filter(created_at__date__lte=date_to)
+
+        if requester_raw:
+            try:
+                tickets = tickets.filter(created_by_id=int(requester_raw))
+            except ValueError:
+                pass
+
+        if assignee_raw:
+            try:
+                assignee_id = int(assignee_raw)
+                tickets = tickets.filter(Q(assigned_to_id=assignee_id) | Q(collaborators__id=assignee_id))
+            except ValueError:
+                pass
+
+        if status_raw in {choice[0] for choice in Ticket.Status.choices}:
+            tickets = tickets.filter(status=status_raw)
+
+        if search_raw:
+            tickets = tickets.filter(Q(title__icontains=search_raw) | Q(description__icontains=search_raw))
+
+        tickets = tickets.distinct()
+        total_tickets = tickets.count()
+        status_counts_qs = tickets.values('status').annotate(total=Count('id')).order_by('status')
+        urgency_counts_qs = tickets.values('urgency').annotate(total=Count('id')).order_by('urgency')
+        type_counts_qs = tickets.values('ticket_type').annotate(total=Count('id')).order_by('ticket_type')
+        requester_counts_qs = (
+            tickets.values('created_by__username')
+            .annotate(total=Count('id'))
+            .order_by('-total', 'created_by__username')[:8]
+        )
+        day_counts_qs = (
+            tickets.annotate(day=TruncDate('created_at'))
+            .values('day')
+            .annotate(total=Count('id'))
+            .order_by('day')
+        )
+
+        status_labels_map = dict(Ticket.Status.choices)
+        urgency_labels_map = dict(Ticket.Urgency.choices)
+        type_labels_map = dict(Ticket.TicketType.choices)
+
+        status_counts = [
+            {'label': status_labels_map.get(item['status'], item['status']), 'total': item['total']}
+            for item in status_counts_qs
+        ]
+        urgency_counts = [
+            {'label': urgency_labels_map.get(item['urgency'], item['urgency']), 'total': item['total']}
+            for item in urgency_counts_qs
+        ]
+        type_counts = [
+            {'label': type_labels_map.get(item['ticket_type'], item['ticket_type']), 'total': item['total']}
+            for item in type_counts_qs
+        ]
+        requester_counts = [
+            {'label': item['created_by__username'] or '(sem usuário)', 'total': item['total']}
+            for item in requester_counts_qs
+        ]
+        day_counts = [
+            {'label': item['day'].strftime('%d/%m/%Y') if item['day'] else '-', 'total': item['total']}
+            for item in day_counts_qs
+        ]
+
+        all_requesters = (
+            Ticket.objects.select_related('created_by')
+            .exclude(created_by__isnull=True)
+            .values('created_by_id', 'created_by__username')
+            .distinct()
+            .order_by('created_by__username')
+        )
+        requesters = [
+            {'id': item['created_by_id'], 'label': item['created_by__username'] or '(sem usuário)'}
+            for item in all_requesters
+        ]
+        attendants = list(ERPUser.objects.filter(department__iexact='TI', is_active=True).order_by('full_name'))
+
+        context['filters'] = {
+            'date_from': date_from_raw,
+            'date_to': date_to_raw,
+            'requester': requester_raw,
+            'assignee': assignee_raw,
+            'status': status_raw,
+            'q': search_raw,
+        }
+        context['status_choices'] = Ticket.Status.choices
+        context['requesters'] = requesters
+        context['attendants'] = attendants
+        context['summary'] = {
+            'total': total_tickets,
+            'pending': tickets.filter(status=Ticket.Status.PENDENTE).count(),
+            'in_progress': tickets.filter(status=Ticket.Status.EM_ATENDIMENTO).count(),
+            'closed': tickets.filter(status=Ticket.Status.FECHADO).count(),
+        }
+        context['chart_data'] = {
+            'status': status_counts,
+            'urgency': urgency_counts,
+            'type': type_counts,
+            'requesters': requester_counts,
+            'days': day_counts,
+        }
         return context
 
 
