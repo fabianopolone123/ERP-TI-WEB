@@ -243,6 +243,7 @@
                 <h4 style="margin: 0;">Orçamentos</h4>
                 <div style="display: flex; gap: 8px;">
                     <button type="button" data-copy-budgets>Copiar orçamentos</button>
+                    <button type="button" data-copy-whatsapp>Copiar WhatsApp</button>
                     <button type="button" data-add-budget>Adicionar orçamento</button>
                 </div>
             </div>
@@ -409,6 +410,7 @@
         const requisitionTitle = document.querySelector('#id_requisition_title');
         const addBtn = document.querySelector('[data-add-budget]');
         const copyBtn = document.querySelector('[data-copy-budgets]');
+        const copyWhatsAppBtn = document.querySelector('[data-copy-whatsapp]');
         const budgetList = document.querySelector('[data-budget-list]');
         const subBudgetModal = document.querySelector('[data-sub-budget-modal]');
         const subBudgetTitle = document.querySelector('[data-sub-budget-title]');
@@ -1369,6 +1371,58 @@
             } catch (err) {
                 alert(`Falha ao copiar: ${err}`);
             }
+        });
+
+        copyWhatsAppBtn.addEventListener('click', () => {
+            const reqText = (requestInput.value || '').trim();
+            const reqTitle = (requisitionTitle.value || '').trim();
+            const reqCode = modeInput.value === 'update'
+                ? `TI - ${String(requisitionIdInput.value || '0').padStart(4, '0')}`
+                : '(a definir após salvar)';
+            const { mainItems, byParent } = collectBudgetData();
+
+            const lines = [
+                `*Requisição ${reqCode}*`,
+                `${reqTitle || '(sem título)'}`,
+                '',
+                `*Necessidade:*`,
+                `${reqText || '(sem texto)'}`,
+                '',
+                `*Orçamentos:*`,
+            ];
+
+            for (let i = 0; i < mainItems.length; i += 1) {
+                const main = mainItems[i];
+                const subs = byParent.get(main.idx) || [];
+                let total = parseBrNumber(main.value) + parseBrNumber(main.freight);
+                for (const sub of subs) {
+                    total += parseBrNumber(sub.value) + parseBrNumber(sub.freight);
+                }
+
+                lines.push(`${i + 1}) *${main.name || '(sem nome)'}*`);
+                lines.push(`   Valor: R$ ${main.value} | Frete: R$ ${main.freight}`);
+                lines.push(`   Total do pacote: *R$ ${toBrMoney(total)}*`);
+                if (main.link) lines.push(`   Link: ${main.linkLabel || 'site'} - ${main.link}`);
+
+                if (subs.length) {
+                    lines.push(`   Itens adicionais do pacote:`);
+                    for (const sub of subs) {
+                        lines.push(`   - ${sub.name || '(sem nome)'} | R$ ${sub.value} + frete R$ ${sub.freight}`);
+                        if (sub.link) lines.push(`     Link: ${sub.linkLabel || 'site'} - ${sub.link}`);
+                    }
+                }
+
+                if (i < mainItems.length - 1) {
+                    lines.push('');
+                    lines.push('--------------------');
+                }
+            }
+
+            const payload = lines.join('\n').trim();
+            if (!payload) return;
+            navigator.clipboard.writeText(payload)
+                .then(() => alert('Texto para WhatsApp copiado.'))
+                .catch((err) => alert(`Falha ao copiar: ${err}`));
         });
 
         form.addEventListener('submit', () => {
