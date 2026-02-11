@@ -954,13 +954,13 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
 
         ti_users = list(ERPUser.objects.filter(department__iexact='TI', is_active=True).order_by('full_name'))
         context['ti_users'] = ti_users
-        context['new_tickets'] = Ticket.objects.filter(status=Ticket.Status.NOVO).select_related('created_by').order_by('-created_at')
-        context['pending_tickets'] = Ticket.objects.filter(status=Ticket.Status.PENDENTE).select_related('created_by').order_by('-created_at')
-        context['scheduled_tickets'] = Ticket.objects.filter(status=Ticket.Status.PROGRAMADO).select_related('created_by').order_by('-created_at')
+        context['new_tickets'] = Ticket.objects.filter(status=Ticket.Status.NOVO).select_related('created_by').order_by('created_at')
+        context['pending_tickets'] = Ticket.objects.filter(status=Ticket.Status.PENDENTE).select_related('created_by').order_by('created_at')
+        context['scheduled_tickets'] = Ticket.objects.filter(status=Ticket.Status.PROGRAMADO).select_related('created_by').order_by('created_at')
         context['closed_tickets'] = Ticket.objects.filter(status=Ticket.Status.FECHADO).select_related('created_by').order_by('-created_at')
         in_progress_tickets = Ticket.objects.filter(status=Ticket.Status.EM_ATENDIMENTO).select_related('created_by').prefetch_related(
             'collaborators'
-        )
+        ).order_by('created_at')
         ticket_map = {user.id: [] for user in ti_users}
         multi_assigned_ticket_ids: set[int] = set()
         for ticket in in_progress_tickets:

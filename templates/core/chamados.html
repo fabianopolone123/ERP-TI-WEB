@@ -50,6 +50,17 @@
         line-height: 1.5;
         white-space: pre-wrap;
     }
+    .ticket-open-counter {
+        margin-left: auto;
+        font-size: 0.64rem;
+        font-weight: 700;
+        color: #99f6e4;
+        background: rgba(20, 184, 166, 0.18);
+        border: 1px solid rgba(20, 184, 166, 0.5);
+        border-radius: 999px;
+        padding: 2px 6px;
+        white-space: nowrap;
+    }
 </style>
 <div class="card">
     <div class="topbar">
@@ -116,7 +127,7 @@
                 <div class="kanban-header">Novo</div>
                 <div class="kanban-body">
                     {% for ticket in new_tickets %}
-                        <div class="ticket-card{% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %} shared-ticket{% endif %}" draggable="true" data-ticket-id="{{ ticket.id }}" data-failure-type="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'failure_type' }}">
+                        <div class="ticket-card{% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %} shared-ticket{% endif %}" draggable="true" data-ticket-id="{{ ticket.id }}" data-ticket-status="{{ ticket.status }}" data-opened-at="{{ ticket.created_at|date:'c' }}" data-failure-type="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'failure_type' }}">
                             <div class="ticket-title">
                                 <span class="urgency-dot urgency-{{ ticket.urgency }}"></span>
                                 #{{ ticket.id }} - {{ ticket.title }}
@@ -149,7 +160,7 @@
                     <div class="kanban-header">{{ user.full_name }}</div>
                     <div class="kanban-body">
                         {% for ticket in user_tickets|get_item:user.id %}
-                            <div class="ticket-card{% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %} shared-ticket{% endif %}" draggable="true" data-ticket-id="{{ ticket.id }}" data-failure-type="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'failure_type' }}">
+                            <div class="ticket-card{% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %} shared-ticket{% endif %}" draggable="true" data-ticket-id="{{ ticket.id }}" data-ticket-status="{{ ticket.status }}" data-opened-at="{{ ticket.created_at|date:'c' }}" data-failure-type="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'failure_type' }}">
                                 <div class="ticket-title">
                                     <span class="urgency-dot urgency-{{ ticket.urgency }}"></span>
                                     #{{ ticket.id }} - {{ ticket.title }}
@@ -180,7 +191,7 @@
                 <div class="kanban-header">Fechados</div>
                 <div class="kanban-body">
                     {% for ticket in closed_tickets %}
-                        <div class="ticket-card{% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %} shared-ticket{% endif %}" draggable="true" data-ticket-id="{{ ticket.id }}" data-failure-type="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'failure_type' }}">
+                        <div class="ticket-card{% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %} shared-ticket{% endif %}" draggable="true" data-ticket-id="{{ ticket.id }}" data-ticket-status="{{ ticket.status }}" data-opened-at="{{ ticket.created_at|date:'c' }}" data-failure-type="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'failure_type' }}">
                             <div class="ticket-title">
                                 <span class="urgency-dot urgency-{{ ticket.urgency }}"></span>
                                 #{{ ticket.id }} - {{ ticket.title }}
@@ -210,7 +221,7 @@
                 <div class="kanban-header">Pendente</div>
                 <div class="kanban-body">
                     {% for ticket in pending_tickets %}
-                        <div class="ticket-card{% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %} shared-ticket{% endif %}" draggable="true" data-ticket-id="{{ ticket.id }}" data-failure-type="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'failure_type' }}">
+                        <div class="ticket-card{% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %} shared-ticket{% endif %}" draggable="true" data-ticket-id="{{ ticket.id }}" data-ticket-status="{{ ticket.status }}" data-opened-at="{{ ticket.created_at|date:'c' }}" data-failure-type="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'failure_type' }}">
                             <div class="ticket-title">
                                 <span class="urgency-dot urgency-{{ ticket.urgency }}"></span>
                                 #{{ ticket.id }} - {{ ticket.title }}
@@ -242,7 +253,7 @@
                 <div class="kanban-header">Programado</div>
                 <div class="kanban-body">
                     {% for ticket in scheduled_tickets %}
-                        <div class="ticket-card{% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %} shared-ticket{% endif %}" draggable="true" data-ticket-id="{{ ticket.id }}" data-failure-type="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'failure_type' }}">
+                        <div class="ticket-card{% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %} shared-ticket{% endif %}" draggable="true" data-ticket-id="{{ ticket.id }}" data-ticket-status="{{ ticket.status }}" data-opened-at="{{ ticket.created_at|date:'c' }}" data-failure-type="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'failure_type' }}">
                             <div class="ticket-title">
                                 <span class="urgency-dot urgency-{{ ticket.urgency }}"></span>
                                 #{{ ticket.id }} - {{ ticket.title }}
@@ -281,7 +292,7 @@
                 <div class="kanban-header">Solicitações</div>
                 <div class="kanban-body">
                     {% for ticket in own_tickets %}
-                        <div class="ticket-card" data-ticket-id="{{ ticket.id }}">
+                        <div class="ticket-card" data-ticket-id="{{ ticket.id }}" data-ticket-status="{{ ticket.status }}" data-opened-at="{{ ticket.created_at|date:'c' }}">
                             <div class="ticket-title">
                                 <span class="urgency-dot urgency-{{ ticket.urgency }}"></span>
                                 #{{ ticket.id }} - {{ ticket.title }}
@@ -923,6 +934,7 @@
                         card.dataset.failureType = failureType;
                     });
                 }
+                document.dispatchEvent(new Event('tickets-updated'));
                 draggingId = null;
             });
         });
@@ -1394,6 +1406,94 @@
                 resultEl.textContent = `Erro de rede ao buscar grupo: ${error}`;
             }
         });
+    })();
+</script>
+<script>
+    (function () {
+        const board = document.querySelector('[data-board]');
+        const list = document.querySelector('[data-ticket-list]');
+        const root = board || list;
+        if (!root) return;
+
+        const parseOpenedAt = (card) => {
+            const raw = (card.dataset.openedAt || '').trim();
+            if (!raw) return null;
+            const value = new Date(raw);
+            return Number.isNaN(value.getTime()) ? null : value;
+        };
+
+        const formatElapsed = (openedAt) => {
+            const now = new Date();
+            const ms = Math.max(now.getTime() - openedAt.getTime(), 0);
+            const totalMinutes = Math.floor(ms / 60000);
+            const days = Math.floor(totalMinutes / 1440);
+            const hours = Math.floor((totalMinutes % 1440) / 60);
+            const minutes = totalMinutes % 60;
+            if (days > 0) return `${days}d ${hours}h`;
+            if (hours > 0) return `${hours}h ${minutes}m`;
+            return `${minutes}m`;
+        };
+
+        const ensureCounter = (card) => {
+            const title = card.querySelector('.ticket-title');
+            if (!title) return null;
+            let badge = title.querySelector('.ticket-open-counter');
+            if (!badge) {
+                badge = document.createElement('span');
+                badge.className = 'ticket-open-counter';
+                title.appendChild(badge);
+            }
+            return badge;
+        };
+
+        const isClosedCard = (card) => {
+            const column = card.closest('.kanban-column');
+            const target = column ? (column.dataset.target || '') : '';
+            if (target === 'fechado') return true;
+            return (card.dataset.ticketStatus || '') === 'fechado';
+        };
+
+        const sortOpenCardsInColumn = (column) => {
+            if (!column) return;
+            if ((column.dataset.target || '') === 'fechado') return;
+            const body = column.querySelector('.kanban-body');
+            if (!body) return;
+            const cards = Array.from(body.querySelectorAll('.ticket-card'));
+            cards.sort((a, b) => {
+                const ad = parseOpenedAt(a);
+                const bd = parseOpenedAt(b);
+                if (!ad && !bd) return 0;
+                if (!ad) return 1;
+                if (!bd) return -1;
+                return ad.getTime() - bd.getTime();
+            });
+            cards.forEach((card) => body.appendChild(card));
+        };
+
+        const refreshCards = () => {
+            root.querySelectorAll('.ticket-card').forEach((card) => {
+                if (isClosedCard(card)) {
+                    const existing = card.querySelector('.ticket-open-counter');
+                    if (existing) existing.remove();
+                    return;
+                }
+                const openedAt = parseOpenedAt(card);
+                if (!openedAt) return;
+                const badge = ensureCounter(card);
+                if (!badge) return;
+                badge.textContent = `aberto ${formatElapsed(openedAt)}`;
+            });
+
+            if (board) {
+                board.querySelectorAll('.kanban-column').forEach((column) => {
+                    sortOpenCardsInColumn(column);
+                });
+            }
+        };
+
+        refreshCards();
+        setInterval(refreshCards, 30000);
+        document.addEventListener('tickets-updated', refreshCards);
     })();
 </script>
 {% if is_ti_group %}
