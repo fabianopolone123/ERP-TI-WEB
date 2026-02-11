@@ -866,29 +866,33 @@
             column.addEventListener('drop', async () => {
                 column.classList.remove('drag-over');
                 if (!draggingId || !draggingCard) return;
+                const dragTicketId = draggingId;
+                const dragCard = draggingCard;
+                const dragSourceColumn = sourceColumn;
+                const dragSourceTarget = dragSourceColumn ? (dragSourceColumn.dataset.target || '') : '';
                 const target = column.dataset.target;
                 const targetBody = column.querySelector('.kanban-body');
                 if (!targetBody) return;
 
-                if (sourceColumn && sourceColumn === column) {
+                if (dragSourceColumn && dragSourceColumn === column) {
                     draggingId = null;
                     return;
                 }
 
                 const isUserTarget = target.startsWith('user_');
-                const isUserSource = sourceColumn && sourceColumn.dataset.target.startsWith('user_');
+                const isUserSource = dragSourceTarget.startsWith('user_');
                 const isClosing = target === 'fechado';
                 const isPending = target === 'pendente';
                 const isScheduled = target === 'programado';
                 const shouldClone = !isClosing && draggingMulti && isUserTarget && isUserSource;
 
-                if (targetBody.querySelector(`.ticket-card[data-ticket-id="${draggingId}"]`)) {
+                if (targetBody.querySelector(`.ticket-card[data-ticket-id="${dragTicketId}"]`)) {
                     draggingId = null;
                     return;
                 }
 
-                const previousParent = draggingCard.parentElement;
-                let movedCard = draggingCard;
+                const previousParent = dragCard.parentElement;
+                let movedCard = dragCard;
                 let resolutionText = '';
                 let progressNote = '';
                 let failureType = '';
@@ -943,7 +947,7 @@
                 }
 
                 if (shouldClone) {
-                    movedCard = draggingCard.cloneNode(true);
+                    movedCard = dragCard.cloneNode(true);
                 }
 
                 targetBody.appendChild(movedCard);
@@ -955,9 +959,9 @@
                         'X-CSRFToken': getCookie('csrftoken'),
                     },
                     body: new URLSearchParams({
-                        ticket_id: draggingId,
+                        ticket_id: dragTicketId,
                         target: target,
-                        source_target: sourceColumn ? sourceColumn.dataset.target : '',
+                        source_target: dragSourceTarget,
                         multi: draggingMulti ? '1' : '0',
                         resolution: resolutionText,
                         progress_note: progressNote,
@@ -1002,14 +1006,14 @@
                 }
 
                 if (!shouldClone) {
-                    board.querySelectorAll(`.ticket-card[data-ticket-id="${draggingId}"]`).forEach((card) => {
+                    board.querySelectorAll(`.ticket-card[data-ticket-id="${dragTicketId}"]`).forEach((card) => {
                         if (card !== movedCard) {
                             card.remove();
                         }
                     });
                 }
                 if (failureType) {
-                    board.querySelectorAll(`.ticket-card[data-ticket-id="${draggingId}"]`).forEach((card) => {
+                    board.querySelectorAll(`.ticket-card[data-ticket-id="${dragTicketId}"]`).forEach((card) => {
                         card.dataset.failureType = failureType;
                     });
                 }
