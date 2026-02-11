@@ -192,6 +192,11 @@ EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True').lower() in ('true', '1')
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'Chamados Sidertec <no-reply@sidertec>')
+EMAIL_NOTIFY_NEW_TICKET_USERNAMES = [
+    item.strip().lower()
+    for item in os.environ.get('EMAIL_NOTIFY_NEW_TICKET_USERNAMES', 'fabiano.polone').split(',')
+    if item.strip()
+]
 
 # WhatsApp (WAPI)
 WAPI_DEFAULT_GROUP_JID = os.environ.get('WAPI_DEFAULT_GROUP_JID', '')

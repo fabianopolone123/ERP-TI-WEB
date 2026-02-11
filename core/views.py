@@ -14,6 +14,7 @@ from django.utils import timezone
 from datetime import timedelta
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth import get_user_model
 from django.http import JsonResponse, FileResponse
 from django.urls import reverse
 from django.utils.dateparse import parse_date
@@ -357,6 +358,69 @@ def _notify_ticket_email(ticket, event_label="Novo chamado", extra_line=None):
         )
     except Exception:
         logger.exception("Erro ao enviar e-mail para %s", recipient)
+
+
+def _notify_new_ticket_watchers_email(ticket):
+    usernames = getattr(settings, 'EMAIL_NOTIFY_NEW_TICKET_USERNAMES', []) or []
+    if not usernames:
+        return
+
+    normalized = sorted({(item or '').strip().lower() for item in usernames if (item or '').strip()})
+    if not normalized:
+        return
+
+    erp_users = ERPUser.objects.filter(username__in=normalized)
+    erp_map = {str(u.username or '').strip().lower(): u for u in erp_users}
+    User = get_user_model()
+    auth_users = User.objects.filter(username__in=normalized)
+    auth_map = {str(u.username or '').strip().lower(): u for u in auth_users}
+
+    recipients = []
+    seen = set()
+    for username in normalized:
+        email = ''
+        erp_user = erp_map.get(username)
+        auth_user = auth_map.get(username)
+        if erp_user and erp_user.email:
+            email = erp_user.email.strip()
+        elif auth_user and auth_user.email:
+            email = auth_user.email.strip()
+        if not email:
+            continue
+        if email.lower() in seen:
+            continue
+        seen.add(email.lower())
+        recipients.append(email)
+
+    if not recipients:
+        return
+
+    templates = _get_email_templates()
+    title = shorten((ticket.title or "").strip(), width=120, placeholder='...')
+    description = shorten((ticket.description or "").strip(), width=200, placeholder='...')
+    payload = _SafeDict(
+        {
+            'id': ticket.id,
+            'title': title,
+            'description': description,
+            'status': ticket.get_status_display(),
+            'responsavel': ticket.assigned_to.full_name if ticket.assigned_to else '',
+            'message': description or title,
+        }
+    )
+    subject = (templates.new_ticket_subject or DEFAULT_EMAIL_TEMPLATES['new_ticket_subject']).format_map(payload)
+    body = (templates.new_ticket_body or DEFAULT_EMAIL_TEMPLATES['new_ticket_body']).format_map(payload)
+
+    try:
+        send_mail(
+            subject,
+            body,
+            settings.DEFAULT_FROM_EMAIL,
+            recipients,
+            fail_silently=False,
+        )
+    except Exception:
+        logger.exception("Erro ao enviar e-mail de novo chamado para observadores: %s", ', '.join(recipients))
 
 
 def is_ti_user(request) -> bool:
@@ -889,6 +953,7 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
             note=f'Chamado criado no quadro como {_timeline_status_label(initial_status)}.',
         )
         _notify_whatsapp(ticket, event_type="new_ticket", event_label="Novo chamado")
+        _notify_new_ticket_watchers_email(ticket)
         messages.success(request, 'Chamado aberto com sucesso.')
         return redirect('chamados')
 
