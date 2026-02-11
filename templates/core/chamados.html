@@ -61,6 +61,18 @@
         padding: 2px 6px;
         white-space: nowrap;
     }
+    .ticket-legend-inline {
+        margin-left: auto;
+        margin-right: 10px;
+        padding: 8px 10px;
+        font-size: 0.78rem;
+    }
+    .ticket-legend-inline .legend-items {
+        margin-top: 4px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
 </style>
 <div class="card">
     <div class="topbar">
@@ -68,6 +80,18 @@
             <h2>Chamados</h2>
             <p class="muted">Gerencie pendências e atendimentos da equipe de TI.</p>
         </div>
+        {% if is_ti_group %}
+            <div class="ticket-legend ticket-legend-inline">
+                <strong>Legenda</strong>
+                <div class="legend-items">
+                    <span><span class="urgency-dot urgency-programada"></span> Programada</span>
+                    <span><span class="urgency-dot urgency-baixa"></span> Baixa</span>
+                    <span><span class="urgency-dot urgency-media"></span> Média</span>
+                    <span><span class="urgency-dot urgency-alta"></span> Alta</span>
+                    <span><span class="urgency-dot urgency-nao_classificado"></span> Não classificado</span>
+                </div>
+            </div>
+        {% endif %}
         <form method="post" action="{% url 'logout' %}" class="inline-form">
             {% csrf_token %}
             <button type="submit">Sair</button>
@@ -111,17 +135,6 @@
                 <button type="button" data-open-modal>Abrir chamado</button>
             </div>
         </div>
-        <div class="ticket-legend" style="margin-top: 8px;">
-            <strong>Legenda</strong>
-            <div style="margin-top: 6px; display: flex; flex-wrap: wrap; gap: 12px;">
-                <span><span class="urgency-dot urgency-programada"></span> Programada</span>
-                <span><span class="urgency-dot urgency-baixa"></span> Baixa</span>
-                <span><span class="urgency-dot urgency-media"></span> Média</span>
-                <span><span class="urgency-dot urgency-alta"></span> Alta</span>
-                <span><span class="urgency-dot urgency-nao_classificado"></span> Não classificado</span>
-            </div>
-        </div>
-
         <div class="kanban" data-board>
             <div class="kanban-column" data-target="novo">
                 <div class="kanban-header">Novo</div>
