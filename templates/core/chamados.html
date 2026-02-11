@@ -795,6 +795,7 @@
     (function () {
         const board = document.querySelector('[data-board]');
         if (!board) return;
+        const plannedBody = board.querySelector('.kanban-column[data-target="programado"] .kanban-body');
 
         const getCookie = (name) => {
             const value = `; ${document.cookie}`;
@@ -802,6 +803,18 @@
             if (parts.length === 2) return parts.pop().split(';').shift();
             return '';
         };
+
+        if (plannedBody) {
+            plannedBody.addEventListener(
+                'wheel',
+                (event) => {
+                    if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
+                    plannedBody.scrollLeft += event.deltaY;
+                    event.preventDefault();
+                },
+                { passive: false }
+            );
+        }
 
         let draggingId = null;
         let draggingCard = null;
@@ -1401,6 +1414,12 @@
                         } else {
                             el.appendChild(document.createTextNode(` ${prefix}`));
                         }
+                    });
+                    document.querySelectorAll(`.ticket-card[data-ticket-id="${currentTicketId}"] .ticket-extra`).forEach((el) => {
+                        const current = (el.textContent || '').trim();
+                        const dept = current.includes('|') ? current.split('|')[0].trim() : (current || '-');
+                        const desc = (newDesc || '').trim();
+                        el.textContent = desc ? `${dept || '-'} | ${desc}` : (dept || '-');
                     });
                     await loadDetails(currentTicketId);
                 }
