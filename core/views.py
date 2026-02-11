@@ -318,7 +318,9 @@ def _notify_whatsapp(ticket, event_type="new_ticket", event_label="Novo chamado"
 
 
 def _notify_ticket_email(ticket, event_label="Novo chamado", extra_line=None):
-    recipient = getattr(ticket.created_by, 'email', '')
+    recipient = (getattr(ticket.created_by, 'email', '') or '').strip()
+    if recipient and (';' in recipient or ',' in recipient):
+        recipient = (recipient.replace(',', ';').split(';', 1)[0] or '').strip()
     if not recipient:
         return
     templates = _get_email_templates()
