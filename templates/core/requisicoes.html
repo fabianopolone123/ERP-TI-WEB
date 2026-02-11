@@ -1278,6 +1278,7 @@
                 `Requisição: ${reqText || '(sem texto)'}`,
                 '',
                 'Orçamentos:',
+                '============================================================',
             ];
 
             const htmlParts = [
@@ -1295,7 +1296,7 @@
                     total += parseBrNumber(sub.value) + parseBrNumber(sub.freight);
                 }
 
-                lines.push(`${i + 1}. ${main.name || '(sem nome)'}`);
+                lines.push(`[ORÇAMENTO ${i + 1}] ${main.name || '(sem nome)'}`);
                 lines.push(`   Valor: R$ ${main.value} | Frete: R$ ${main.freight} | Total pacote: R$ ${toBrMoney(total)}`);
                 if (main.link) lines.push(`   Link (${main.linkLabel || 'site'}): ${main.link}`);
                 let mainImageText = '';
@@ -1307,7 +1308,7 @@
                 }
                 if (mainImageText) lines.push(mainImageText);
 
-                htmlParts.push(`<li style="margin-bottom:12px;">`);
+                htmlParts.push(`<li style="margin-bottom:12px;padding:10px;border:1px solid #cbd5e1;border-radius:8px;background:#f8fafc;">`);
                 htmlParts.push(`<div><strong>${escapeHtml(main.name || '(sem nome)')}</strong></div>`);
                 htmlParts.push(`<div>Valor: <strong>R$ ${escapeHtml(main.value)}</strong> | Frete: <strong>R$ ${escapeHtml(main.freight)}</strong> | Total pacote: <strong>R$ ${escapeHtml(toBrMoney(total))}</strong></div>`);
                 if (main.link) htmlParts.push(`<div>Link: <a href="${escapeHtml(main.link)}" target="_blank" rel="noopener noreferrer">${escapeHtml(main.linkLabel || 'Abrir orçamento')}</a></div>`);
@@ -1344,6 +1345,9 @@
                 }
 
                 htmlParts.push(`</li>`);
+                if (i < mainItems.length - 1) {
+                    lines.push('------------------------------------------------------------');
+                }
             }
 
             htmlParts.push(`</ol></div>`);
