@@ -743,6 +743,40 @@
         </div>
     </div>
 {% endif %}
+{% if is_ti_group %}
+    <div class="modal" data-close-ticket-modal hidden>
+        <div class="modal-backdrop" data-close-ticket-cancel></div>
+        <div class="modal-content">
+            <div class="topbar" style="margin-bottom: 8px;">
+                <h3>Finalizar chamado</h3>
+                <button type="button" data-close-ticket-cancel>Fechar</button>
+            </div>
+            <form data-close-ticket-form>
+                <div class="form-row">
+                    <div>
+                        <label for="id_close_failure_type">Tipo de falha</label>
+                        <select id="id_close_failure_type" name="failure_type" required>
+                            <option value="">Selecione...</option>
+                            <option value="ns">N/S</option>
+                            <option value="software">Software</option>
+                            <option value="equipamento">Equipamento</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div style="flex: 1;">
+                        <label for="id_close_resolution_text">Resolução</label>
+                        <textarea id="id_close_resolution_text" name="resolution" rows="4" placeholder="Descreva a resolução..." required></textarea>
+                    </div>
+                </div>
+                <div style="display:flex; justify-content:flex-end; gap:8px;">
+                    <button type="button" data-close-ticket-cancel>Cancelar</button>
+                    <button type="submit">Finalizar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+{% endif %}
 
 <script>
     (function () {
@@ -760,6 +794,45 @@
         let draggingCard = null;
         let sourceColumn = null;
         let draggingMulti = false;
+        const closeModal = document.querySelector('[data-close-ticket-modal]');
+        const closeForm = document.querySelector('[data-close-ticket-form]');
+        const closeFailureInput = document.querySelector('#id_close_failure_type');
+        const closeResolutionInput = document.querySelector('#id_close_resolution_text');
+        const closeCancelEls = document.querySelectorAll('[data-close-ticket-cancel]');
+        let closeResolver = null;
+
+        const askClosePayload = (initialFailure) => new Promise((resolve) => {
+            if (!closeModal || !closeForm || !closeFailureInput || !closeResolutionInput) {
+                resolve({ confirmed: false, failureType: '', resolution: '' });
+                return;
+            }
+            closeResolver = resolve;
+            closeFailureInput.value = initialFailure || '';
+            closeResolutionInput.value = '';
+            closeModal.hidden = false;
+            closeResolutionInput.focus();
+        });
+
+        const closeCloseModal = (payload) => {
+            if (closeModal) closeModal.hidden = true;
+            if (closeForm) closeForm.reset();
+            const resolver = closeResolver;
+            closeResolver = null;
+            if (resolver) resolver(payload);
+        };
+
+        if (closeForm) {
+            closeForm.addEventListener('submit', (event) => {
+                event.preventDefault();
+                const failureType = (closeFailureInput?.value || '').trim();
+                const resolution = (closeResolutionInput?.value || '').trim();
+                if (!failureType || !resolution) return;
+                closeCloseModal({ confirmed: true, failureType, resolution });
+            });
+        }
+        closeCancelEls.forEach((el) => {
+            el.addEventListener('click', () => closeCloseModal({ confirmed: false, failureType: '', resolution: '' }));
+        });
 
 
         board.addEventListener('dragstart', (event) => {
@@ -839,12 +912,18 @@
                 };
 
                 if (isClosing) {
-                    resolutionText = prompt('Informe a resolução do chamado:');
-                    if (!resolutionText || !resolutionText.trim()) {
+                    if (!isUserSource) {
+                        alert('Só é permitido finalizar chamado quando ele sai da coluna de um atendente.');
                         draggingId = null;
                         return;
                     }
-                    resolutionText = resolutionText.trim();
+                    const closePayload = await askClosePayload(currentSavedFailure);
+                    if (!closePayload.confirmed) {
+                        draggingId = null;
+                        return;
+                    }
+                    resolutionText = (closePayload.resolution || '').trim();
+                    failureType = normalizeFailureType(closePayload.failureType || currentSavedFailure);
                 }
                 if (isUserSource && (isPending || isScheduled || (isUserTarget && !shouldClone))) {
                     progressNote = prompt('Ação / Correção realizada neste atendimento:');
@@ -854,7 +933,7 @@
                     }
                     progressNote = progressNote.trim();
                 }
-                if (isUserSource && (isPending || isScheduled || isClosing || (isUserTarget && !shouldClone))) {
+                if (!isClosing && isUserSource && (isPending || isScheduled || (isUserTarget && !shouldClone))) {
                     failureType = currentSavedFailure || askFailureType();
                     if (!failureType) {
                         alert('Informe um tipo de falha válido: N/S, Equipamento ou Software.');
