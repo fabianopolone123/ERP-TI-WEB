@@ -250,7 +250,7 @@
             </div>
 
             <div class="kanban-column" data-target="programado">
-                <div class="kanban-header">Programado</div>
+                <div class="kanban-header">Planejado</div>
                 <div class="kanban-body">
                     {% for ticket in scheduled_tickets %}
                         <div class="ticket-card{% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %} shared-ticket{% endif %}" draggable="true" data-ticket-id="{{ ticket.id }}" data-ticket-status="{{ ticket.status }}" data-opened-at="{{ ticket.created_at|date:'c' }}" data-failure-type="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'failure_type' }}">

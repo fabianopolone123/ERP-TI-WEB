@@ -269,11 +269,42 @@
             overflow-y: auto;
         }
 
-        /* Ordem fixa do quadro TI: Novo -> Atendentes -> Pendente -> Programado -> Fechados */
+        /* Ordem fixa do quadro TI: Programado no topo -> Novo -> Atendentes -> Pendente -> Fechados */
+        .kanban-column[data-target="programado"] {
+            order: 0;
+            grid-column: 1 / -1;
+            height: auto;
+            min-height: 170px;
+            max-height: 220px;
+        }
+        .kanban-column[data-target="programado"] .kanban-body {
+            display: flex;
+            flex-direction: row;
+            align-items: stretch;
+            gap: 8px;
+            overflow-x: auto;
+            overflow-y: hidden;
+            padding: 8px 10px 10px;
+        }
+        .kanban-column[data-target="programado"] .ticket-card {
+            min-width: 230px;
+            max-width: 260px;
+            padding: 8px;
+            border-radius: 8px;
+        }
+        .kanban-column[data-target="programado"] .ticket-title {
+            font-size: 0.8rem;
+            margin-bottom: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .kanban-column[data-target="programado"] .ticket-meta-rich {
+            display: none;
+        }
         .kanban-column[data-target="novo"] { order: 1; }
         .kanban-column[data-target^="user_"] { order: 2; }
         .kanban-column[data-target="pendente"] { order: 3; }
-        .kanban-column[data-target="programado"] { order: 4; }
         .kanban-column[data-target="fechado"] { order: 5; }
 
         .ticket-card {
