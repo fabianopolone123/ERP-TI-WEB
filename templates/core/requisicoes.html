@@ -1,7 +1,7 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 {% load core_extras %}
 
-{% block title %}Requisições | ERP TI{% endblock %}
+{% block title %}RequisiÃ§Ãµes | ERP TI{% endblock %}
 
 {% block content %}
 <style>
@@ -104,11 +104,11 @@
 <div class="card">
     <div class="topbar">
         <div>
-            <h2>Requisições</h2>
+            <h2>RequisiÃ§Ãµes</h2>
             {% if is_ti_group %}
-            <p class="muted">Cadastro de requisição com múltiplos orçamentos.</p>
+            <p class="muted">Cadastro de requisiÃ§Ã£o com mÃºltiplos orÃ§amentos.</p>
             {% else %}
-            <p class="muted">Seu usuário não está no departamento TI.</p>
+            <p class="muted">Seu usuÃ¡rio nÃ£o estÃ¡ no departamento TI.</p>
             {% endif %}
         </div>
         <form method="post" action="{% url 'logout' %}" class="inline-form">
@@ -121,20 +121,20 @@
         {% include "core/_tabs.html" %}
 
         <div class="topbar" style="margin-top: 16px;">
-            <h3>Requisições</h3>
-            <button type="button" data-open-requisition>Nova requisição</button>
+            <h3>RequisiÃ§Ãµes</h3>
+            <button type="button" data-open-requisition>Nova requisiÃ§Ã£o</button>
         </div>
 
         <div class="form-row" style="margin-bottom: 10px;">
             <div>
                 <label for="id_req_search">Busca</label>
-                <input id="id_req_search" type="text" placeholder="Pesquisar por requisição, orçamento ou status..." data-req-search />
+                <input id="id_req_search" type="text" placeholder="Pesquisar por requisiÃ§Ã£o, orÃ§amento ou status..." data-req-search />
             </div>
             <div>
                 <label for="id_req_status_filter">Status</label>
                 <select id="id_req_status_filter" data-req-status-filter>
                     <option value="">Todos</option>
-                    <option value="pending_approval">Pendente de aprovação</option>
+                    <option value="pending_approval">Pendente de aprovaÃ§Ã£o</option>
                     <option value="approved">Aprovado</option>
                     <option value="rejected">Reprovado</option>
                     <option value="received">Recebido</option>
@@ -147,10 +147,10 @@
                 <thead>
                     <tr>
                         <th>ID</th>
-                        <th>Título</th>
-                        <th>Requisição</th>
+                        <th>TÃ­tulo</th>
+                        <th>RequisiÃ§Ã£o</th>
                         <th>Status</th>
-                        <th>Orçamentos</th>
+                        <th>OrÃ§amentos</th>
                         <th>Total</th>
                         <th>Criado em</th>
                     </tr>
@@ -185,21 +185,21 @@
                                 {% if item.quotes_total is not None %}
                                     R$ {{ item.quotes_total|br_money }}
                                 {% else %}
-                                    <span class="muted">Aguardando aprovação</span>
+                                    <span class="muted">Aguardando aprovaÃ§Ã£o</span>
                                 {% endif %}
                             </td>
                             <td data-sort-value="{{ item.created_at|date:'YmdHis' }}">{{ item.created_at|date:'d/m/Y H:i' }}</td>
                         </tr>
                     {% empty %}
                         <tr>
-                            <td colspan="7" class="muted">Nenhuma requisição cadastrada.</td>
+                            <td colspan="7" class="muted">Nenhuma requisiÃ§Ã£o cadastrada.</td>
                         </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
     {% else %}
-        <p>Solicite ao administrador a inclusão no departamento <strong>TI</strong>.</p>
+        <p>Solicite ao administrador a inclusÃ£o no departamento <strong>TI</strong>.</p>
     {% endif %}
 </div>
 
@@ -208,7 +208,7 @@
     <div class="modal-backdrop" data-close-requisition></div>
     <div class="modal-content">
         <div class="topbar" style="margin-bottom: 8px;">
-            <h3 data-requisition-modal-title>Nova requisição</h3>
+            <h3 data-requisition-modal-title>Nova requisiÃ§Ã£o</h3>
             <button type="button" data-close-requisition>Fechar</button>
         </div>
         <form method="post" enctype="multipart/form-data" data-requisition-form>
@@ -217,21 +217,21 @@
             <input type="hidden" name="requisition_id" value="" data-requisition-id-input />
             <div class="form-row">
                 <div style="max-width: 520px;">
-                    <label for="id_requisition_title">Título</label>
+                    <label for="id_requisition_title">TÃ­tulo</label>
                     <input id="id_requisition_title" name="title" type="text" required placeholder="Ex.: Compra de monitores para TI" />
                 </div>
             </div>
             <div class="form-row">
                 <div style="flex: 1;">
-                    <label for="id_request_text">Requisição</label>
-                    <textarea id="id_request_text" name="request_text" rows="3" required placeholder="Descreva a necessidade da requisição..."></textarea>
+                    <label for="id_request_text">RequisiÃ§Ã£o</label>
+                    <textarea id="id_request_text" name="request_text" rows="3" required placeholder="Descreva a necessidade da requisiÃ§Ã£o..."></textarea>
                 </div>
             </div>
             <div class="form-row">
                 <div style="max-width: 320px;">
                     <label for="id_requisition_status">Status</label>
                     <select id="id_requisition_status" name="status">
-                        <option value="pending_approval">Pendente de aprovação</option>
+                        <option value="pending_approval">Pendente de aprovaÃ§Ã£o</option>
                         <option value="approved">Aprovado</option>
                         <option value="rejected">Reprovado</option>
                         <option value="received">Recebido</option>
@@ -240,10 +240,10 @@
             </div>
 
             <div class="topbar" style="margin-top: 8px; margin-bottom: 8px;">
-                <h4 style="margin: 0;">Orçamentos</h4>
+                <h4 style="margin: 0;">OrÃ§amentos</h4>
                 <div style="display: flex; gap: 8px;">
-                    <button type="button" data-copy-budgets>Copiar orçamentos</button>
-                    <button type="button" data-add-budget>Adicionar orçamento</button>
+                    <button type="button" data-copy-budgets>Copiar orÃ§amentos</button>
+                    <button type="button" data-add-budget>Adicionar orÃ§amento</button>
                 </div>
             </div>
 
@@ -253,20 +253,20 @@
                 <div class="modal-backdrop" data-close-sub-budget></div>
                 <div class="modal-content" style="width: min(980px, 96vw);">
                     <div class="topbar" style="margin-bottom: 8px;">
-                        <h3 data-sub-budget-title>Suborçamentos</h3>
+                        <h3 data-sub-budget-title>SuborÃ§amentos</h3>
                         <div style="display: flex; gap: 8px;">
-                            <button type="button" data-sub-budget-add>Adicionar sub orçamento</button>
+                            <button type="button" data-sub-budget-add>Adicionar sub orÃ§amento</button>
                             <button type="button" data-close-sub-budget>Fechar</button>
                         </div>
                     </div>
-                    <div class="muted" style="margin-bottom: 8px;">Edite os suborçamentos deste orçamento-mãe.</div>
-                    <div data-sub-budget-empty class="muted">Nenhum suborçamento cadastrado.</div>
+                    <div class="muted" style="margin-bottom: 8px;">Edite os suborÃ§amentos deste orÃ§amento-mÃ£e.</div>
+                    <div data-sub-budget-empty class="muted">Nenhum suborÃ§amento cadastrado.</div>
                     <div data-sub-budget-list style="display: grid; gap: 10px;"></div>
                 </div>
             </div>
 
             <div style="margin-top: 14px;">
-                <button type="submit">Salvar requisição</button>
+                <button type="submit">Salvar requisiÃ§Ã£o</button>
             </div>
         </form>
     </div>
@@ -276,14 +276,14 @@
     <div class="modal-backdrop" data-capture-cancel></div>
     <div class="modal-content" style="width: min(1100px, 96vw);">
         <div class="topbar" style="margin-bottom: 8px;">
-            <h3>Capturar orçamento (selecione uma área)</h3>
+            <h3>Capturar orÃ§amento (selecione uma Ã¡rea)</h3>
             <div style="display: flex; gap: 8px;">
                 <button type="button" data-capture-confirm>Usar captura</button>
                 <button type="button" data-capture-cancel>Cancelar</button>
             </div>
         </div>
         <div class="muted" style="margin-bottom: 8px;">
-            Clique e arraste para selecionar a área desejada da imagem capturada.
+            Clique e arraste para selecionar a Ã¡rea desejada da imagem capturada.
         </div>
         <div style="position: relative; border: 1px solid #1f2a44; border-radius: 10px; overflow: auto; max-height: 70vh;">
             <canvas data-capture-canvas style="display: block; max-width: 100%; height: auto;"></canvas>
@@ -295,11 +295,11 @@
     <div class="modal-backdrop" data-close-image-viewer></div>
     <div class="modal-content" style="width: min(1200px, 96vw);">
         <div class="topbar" style="margin-bottom: 8px;">
-            <h3>Foto do orçamento</h3>
+            <h3>Foto do orÃ§amento</h3>
             <button type="button" data-close-image-viewer>Fechar</button>
         </div>
         <div style="display: flex; justify-content: center; align-items: center; min-height: 220px;">
-            <img data-image-viewer-src alt="Foto do orçamento" style="max-width: 100%; max-height: 78vh; border: 1px solid #1f2a44; border-radius: 10px;" />
+            <img data-image-viewer-src alt="Foto do orÃ§amento" style="max-width: 100%; max-height: 78vh; border: 1px solid #1f2a44; border-radius: 10px;" />
         </div>
     </div>
 </div>
@@ -313,14 +313,14 @@
         <div class="budget-head">
             <div class="budget-head-meta">
                 <span class="budget-kind" data-budget-kind>Principal</span>
-                <span class="budget-title" data-budget-title>Orçamento</span>
+                <span class="budget-title" data-budget-title>OrÃ§amento</span>
             </div>
             <span class="budget-seq" data-budget-seq>#01</span>
         </div>
         <div class="muted" data-parent-label style="margin-bottom: 6px; display: none;"></div>
         <div class="form-row">
             <div style="flex: 2;">
-                <label>Nome do orçamento</label>
+                <label>Nome do orÃ§amento</label>
                 <input type="text" data-field="name" required />
             </div>
             <div>
@@ -336,7 +336,7 @@
                     <input type="radio" data-field="approved" />
                     Aprovar
                 </label>
-                <button type="button" data-add-sub-budget>Suborçamentos (0)</button>
+                <button type="button" data-add-sub-budget>SuborÃ§amentos (0)</button>
                 <button type="button" data-copy-sub-budget style="display: none;">Copiar para...</button>
                 <button type="button" data-remove-budget>Remover</button>
             </div>
@@ -364,7 +364,7 @@
             Cadastrado em: novo (data/hora atual ao salvar)
         </div>
         <div class="muted" data-budget-package-total style="margin-top: 4px; font-size: 0.82rem; font-weight: 700;">
-            Total deste orçamento: R$ 0,00
+            Total deste orÃ§amento: R$ 0,00
         </div>
     </div>
 </template>
@@ -481,7 +481,7 @@
             if (typeof navigator.getDisplayMedia === 'function') {
                 return navigator.getDisplayMedia(constraints);
             }
-            throw new Error('API de captura indisponível neste navegador/contexto.');
+            throw new Error('API de captura indisponÃ­vel neste navegador/contexto.');
         };
 
         const clearBudgetItems = () => {
@@ -534,11 +534,9 @@
             try {
                 const u = new URL(normalized);
                 const host = u.hostname.replace(/^www\./i, '');
-                const path = (u.pathname || '/').replace(/\/+$/, '');
-                const firstPath = path && path !== '/' ? path.split('/').filter(Boolean).slice(0, 2).join('/') : '';
-                return firstPath ? `${host}/${firstPath}` : host;
+                return host.length > 28 ? `${host.slice(0, 28)}...` : host;
             } catch (_) {
-                return normalized.slice(0, 50);
+                return normalized.slice(0, 28);
             }
         };
         const ensureAbsoluteMediaUrl = (value) => {
@@ -606,8 +604,8 @@
                 item.dataset.budgetRole = 'main';
                 item.style.setProperty('--budget-accent', accent);
                 if (idx) mainAccentByIdx.set(idx, accent);
-                if (kindEl) kindEl.textContent = 'Orçamento principal';
-                if (titleEl) titleEl.textContent = (item.querySelector('[data-field="name"]')?.value || '').trim() || 'Orçamento principal';
+                if (kindEl) kindEl.textContent = 'OrÃ§amento principal';
+                if (titleEl) titleEl.textContent = (item.querySelector('[data-field="name"]')?.value || '').trim() || 'OrÃ§amento principal';
                 if (seqEl) seqEl.textContent = `#${String(position + 1).padStart(2, '0')}`;
             });
 
@@ -619,8 +617,8 @@
                 const seqEl = item.querySelector('[data-budget-seq]');
                 item.dataset.budgetRole = 'sub';
                 item.style.setProperty('--budget-accent', accent);
-                if (kindEl) kindEl.textContent = 'Suborçamento';
-                if (titleEl) titleEl.textContent = (item.querySelector('[data-field="name"]')?.value || '').trim() || 'Suborçamento';
+                if (kindEl) kindEl.textContent = 'SuborÃ§amento';
+                if (titleEl) titleEl.textContent = (item.querySelector('[data-field="name"]')?.value || '').trim() || 'SuborÃ§amento';
                 if (seqEl) seqEl.textContent = `SUB-${String(subPosition + 1).padStart(2, '0')}`;
             });
         };
@@ -651,7 +649,7 @@
                     total += parseBrNumber(subItem.querySelector('[data-field="value"]')?.value || '');
                     total += parseBrNumber(subItem.querySelector('[data-field="freight"]')?.value || '');
                 });
-                packageEl.textContent = `Total deste orçamento: R$ ${toBrMoney(total)}`;
+                packageEl.textContent = `Total deste orÃ§amento: R$ ${toBrMoney(total)}`;
             });
         };
 
@@ -684,9 +682,9 @@
         const openSubBudgetModal = (parentItem) => {
             moveSubItemsBackToMainList();
             activeSubBudgetParent = parentItem;
-            const parentName = (parentItem.querySelector('[data-field="name"]')?.value || '').trim() || 'Orçamento';
+            const parentName = (parentItem.querySelector('[data-field="name"]')?.value || '').trim() || 'OrÃ§amento';
             const parentIdx = itemIdx(parentItem);
-            subBudgetTitle.textContent = `Suborçamentos - ${parentName}`;
+            subBudgetTitle.textContent = `SuborÃ§amentos - ${parentName}`;
             subBudgetModal.hidden = false;
 
             const subItems = allBudgetItems().filter((item) => itemParentIdx(item) === parentIdx);
@@ -714,7 +712,7 @@
                 const subBtn = mainItem.querySelector('[data-add-sub-budget]');
                 if (!subBtn) return;
                 const subItems = subsByParent.get(mainIdx) || [];
-                subBtn.textContent = `Suborçamentos (${subItems.length})`;
+                subBtn.textContent = `SuborÃ§amentos (${subItems.length})`;
                 subItems.forEach((subItem) => {
                     const inOpenModal = !subBudgetModal.hidden && activeSubBudgetParent && itemIdx(activeSubBudgetParent) === mainIdx && subBudgetList.contains(subItem);
                     subItem.style.display = inOpenModal ? '' : 'none';
@@ -735,14 +733,14 @@
         const askTargetMainBudget = (targets) => {
             if (!targets.length) return { item: null, cancelled: false, invalid: true };
             const lines = targets.map((item) => {
-                const name = (item.querySelector('[data-field="name"]')?.value || '').trim() || 'Orçamento sem nome';
+                const name = (item.querySelector('[data-field="name"]')?.value || '').trim() || 'OrÃ§amento sem nome';
                 const idx = itemIdx(item);
                 const quoteId = (item.querySelector('[data-field="quote-id"]')?.value || '').trim();
                 const persisted = quoteId ? ` | ID salvo: ${quoteId}` : '';
                 return `ID: ${idx}${persisted} | ${name}`;
             });
             const answer = window.prompt(
-                `Copiar suborçamento para qual orçamento principal?\nDigite o ID exibido na lista.\n\n${lines.join('\n')}`,
+                `Copiar suborÃ§amento para qual orÃ§amento principal?\nDigite o ID exibido na lista.\n\n${lines.join('\n')}`,
                 targets[0] ? itemIdx(targets[0]) : ''
             );
             if (answer === null) return { item: null, cancelled: true, invalid: false };
@@ -762,7 +760,7 @@
         const cloneSubBudgetToMain = (sourceItem, targetMainItem) => {
             const targetMainIdx = itemIdx(targetMainItem);
             const targetMainQuoteId = (targetMainItem.querySelector('[data-field="quote-id"]')?.value || '').trim();
-            const targetMainName = (targetMainItem.querySelector('[data-field="name"]')?.value || '').trim() || `Orçamento ${targetMainIdx}`;
+            const targetMainName = (targetMainItem.querySelector('[data-field="name"]')?.value || '').trim() || `OrÃ§amento ${targetMainIdx}`;
             const created = addBudgetItem(null, {
                 idx: targetMainIdx,
                 quoteId: targetMainQuoteId,
@@ -925,23 +923,23 @@
                     if (!currentParentIdx) return;
                     const targets = getMainBudgetTargets(currentParentIdx);
                     if (!targets.length) {
-                        alert('Não há outro orçamento principal para copiar.');
+                        alert('NÃ£o hÃ¡ outro orÃ§amento principal para copiar.');
                         return;
                     }
                     const pick = askTargetMainBudget(targets);
                     if (pick.cancelled) return;
                     if (pick.invalid || !pick.item) {
-                        alert('ID de orçamento inválido. Use o ID mostrado na lista do prompt.');
+                        alert('ID de orÃ§amento invÃ¡lido. Use o ID mostrado na lista do prompt.');
                         return;
                     }
                     const copied = cloneSubBudgetToMain(item, pick.item);
                     if (!copied) {
-                        alert('Não foi possível copiar o suborçamento.');
+                        alert('NÃ£o foi possÃ­vel copiar o suborÃ§amento.');
                         return;
                     }
                     applySubBudgetVisibility();
                     const targetName = (pick.item.querySelector('[data-field="name"]')?.value || '').trim() || 'destino';
-                    alert(`Suborçamento copiado com sucesso para: ${targetName}.`);
+                    alert(`SuborÃ§amento copiado com sucesso para: ${targetName}.`);
                 });
             }
 
@@ -956,7 +954,7 @@
                         const url = new URL(candidate);
                         window.open(url.toString(), '_blank', 'noopener,noreferrer');
                     } catch (err) {
-                        alert(`Link inválido: ${err}`);
+                        alert(`Link invÃ¡lido: ${err}`);
                     }
                 });
             }
@@ -1010,7 +1008,7 @@
                     approvedInput.checked = !!initialData.is_selected && !initialData.parent_id;
                 }
                 if (createdAtEl) {
-                    createdAtEl.textContent = `Cadastrado em: ${initialData.created_at || 'data indisponível'}`;
+                    createdAtEl.textContent = `Cadastrado em: ${initialData.created_at || 'data indisponÃ­vel'}`;
                 }
                 if (initialData.photo_url) {
                     preview.src = initialData.photo_url;
@@ -1075,7 +1073,7 @@
                     const secureHint = window.isSecureContext
                         ? ''
                         : ' Abra por https:// ou http://localhost para permitir captura.';
-                    alert(`Não foi possível capturar a tela: ${err}.${secureHint} Vou abrir seleção de arquivo como alternativa.`);
+                    alert(`NÃ£o foi possÃ­vel capturar a tela: ${err}.${secureHint} Vou abrir seleÃ§Ã£o de arquivo como alternativa.`);
                     photoInput.click();
                 }
             });
@@ -1185,7 +1183,7 @@
             closeSubBudgetModal();
             modeInput.value = 'create';
             requisitionIdInput.value = '';
-            modalTitle.textContent = 'Nova requisição';
+            modalTitle.textContent = 'Nova requisiÃ§Ã£o';
             requisitionTitle.value = '';
             requestInput.value = '';
             requisitionStatus.value = 'pending_approval';
@@ -1201,7 +1199,7 @@
             if (!data) return;
             modeInput.value = 'update';
             requisitionIdInput.value = String(data.id);
-            modalTitle.textContent = `Editar requisição ${data.code || ('TI - ' + String(data.id).padStart(4, '0'))}`;
+            modalTitle.textContent = `Editar requisiÃ§Ã£o ${data.code || ('TI - ' + String(data.id).padStart(4, '0'))}`;
             requisitionTitle.value = data.title || '';
             requestInput.value = data.request || '';
             requisitionStatus.value = data.status || 'pending_approval';
@@ -1272,21 +1270,20 @@
             const reqTitle = (requisitionTitle.value || '').trim();
             const reqCode = modeInput.value === 'update'
                 ? `TI - ${String(requisitionIdInput.value || '0').padStart(4, '0')}`
-                : '(a definir após salvar)';
+                : '(a definir apÃ³s salvar)';
             const { mainItems, byParent } = collectBudgetData();
 
             const lines = [
-                `Código: ${reqCode}`,
-                `Título: ${reqTitle || '(sem título)'}`,
-                `Requisição: ${reqText || '(sem texto)'}`,
+                `TÃ­tulo: ${reqCode} - ${reqTitle || '(sem tÃ­tulo)'}`,
+                `RequisiÃ§Ã£o: ${reqText || '(sem texto)'}`,
                 '',
-                'Orçamentos:',
+                'OrÃ§amentos:',
             ];
 
             const htmlParts = [
                 `<div style="font-family:Segoe UI,Arial,sans-serif;color:#0f172a;line-height:1.4;">`,
-                `<p><strong>Código:</strong> ${escapeHtml(reqCode)}<br><strong>Título:</strong> ${escapeHtml(reqTitle || '(sem título)')}<br><strong>Requisição:</strong> ${escapeHtml(reqText || '(sem texto)')}</p>`,
-                `<p><strong>Orçamentos:</strong></p>`,
+                `<p><strong>TÃ­tulo:</strong> ${escapeHtml(reqCode)} - ${escapeHtml(reqTitle || '(sem tÃ­tulo)')}<br><strong>RequisiÃ§Ã£o:</strong> ${escapeHtml(reqText || '(sem texto)')}</p>`,
+                `<p><strong>OrÃ§amentos:</strong></p>`,
                 `<ol style="margin:0;padding-left:20px;">`,
             ];
 
@@ -1304,7 +1301,7 @@
                 let mainImageText = '';
                 const mainImg = await resolveClipboardImage(main.previewSrc);
                 if (mainImg.htmlSrc) {
-                    mainImageText = '   Imagem: incorporada no conteúdo copiado.';
+                    mainImageText = '   Imagem: incorporada no conteÃºdo copiado.';
                 } else if (mainImg.fallbackLink) {
                     mainImageText = `   Imagem: ${mainImg.fallbackLink}`;
                 }
@@ -1313,22 +1310,23 @@
                 htmlParts.push(`<li style="margin-bottom:12px;">`);
                 htmlParts.push(`<div><strong>${escapeHtml(main.name || '(sem nome)')}</strong></div>`);
                 htmlParts.push(`<div>Valor: <strong>R$ ${escapeHtml(main.value)}</strong> | Frete: <strong>R$ ${escapeHtml(main.freight)}</strong> | Total pacote: <strong>R$ ${escapeHtml(toBrMoney(total))}</strong></div>`);
-                if (main.link) htmlParts.push(`<div>Link: <a href="${escapeHtml(main.link)}" target="_blank" rel="noopener noreferrer">${escapeHtml(main.linkLabel || 'Abrir orçamento')}</a></div>`);
+                if (main.link) htmlParts.push(`<div>Link: <a href="${escapeHtml(main.link)}" target="_blank" rel="noopener noreferrer">${escapeHtml(main.linkLabel || 'Abrir orÃ§amento')}</a></div>`);
                 if (mainImg.htmlSrc) {
-                    htmlParts.push(`<div style="margin-top:6px;"><img src="${escapeHtml(mainImg.htmlSrc)}" alt="Orçamento" style="margin-top:4px;max-width:360px;max-height:180px;border:1px solid #cbd5e1;border-radius:6px;"></div>`);
+                    htmlParts.push(`<div style="margin-top:6px;"><img src="${escapeHtml(mainImg.htmlSrc)}" alt="OrÃ§amento" style="margin-top:4px;max-width:360px;max-height:180px;border:1px solid #cbd5e1;border-radius:6px;"></div>`);
                 } else if (mainImg.fallbackLink) {
-                    htmlParts.push(`<div style="margin-top:6px;"><a href="${escapeHtml(mainImg.fallbackLink)}" target="_blank" rel="noopener noreferrer">Imagem do orçamento</a></div>`);
+                    htmlParts.push(`<div style="margin-top:6px;"><a href="${escapeHtml(mainImg.fallbackLink)}" target="_blank" rel="noopener noreferrer">Imagem do orÃ§amento</a></div>`);
                 }
 
                 if (subs.length) {
-                    lines.push(`   Suborçamentos:`);
+                    lines.push(`   Itens adicionais do pacote (suborÃ§amentos): necessÃ¡rios Ã  parte para compor este orÃ§amento.`);
+                    htmlParts.push(`<div style="margin-top:6px;color:#334155;"><em>Itens adicionais do pacote (suborÃ§amentos): necessÃ¡rios Ã  parte para compor este orÃ§amento.</em></div>`);
                     htmlParts.push(`<ul style="margin-top:8px;padding-left:18px;">`);
                     for (const sub of subs) {
                         lines.push(`   - ${sub.name || '(sem nome)'} | Valor: R$ ${sub.value} | Frete: R$ ${sub.freight}`);
                         if (sub.link) lines.push(`     Link (${sub.linkLabel || 'site'}): ${sub.link}`);
                         const subImg = await resolveClipboardImage(sub.previewSrc);
                         if (subImg.htmlSrc) {
-                            lines.push(`     Imagem: incorporada no conteúdo copiado.`);
+                            lines.push(`     Imagem: incorporada no conteÃºdo copiado.`);
                         } else if (subImg.fallbackLink) {
                             lines.push(`     Imagem: ${subImg.fallbackLink}`);
                         }
@@ -1336,9 +1334,9 @@
                         htmlParts.push(`<li style="margin-bottom:8px;"><strong>${escapeHtml(sub.name || '(sem nome)')}</strong> - Valor: R$ ${escapeHtml(sub.value)} | Frete: R$ ${escapeHtml(sub.freight)}`);
                         if (sub.link) htmlParts.push(`<br>Link: <a href="${escapeHtml(sub.link)}" target="_blank" rel="noopener noreferrer">${escapeHtml(sub.linkLabel || 'Abrir')}</a>`);
                         if (subImg.htmlSrc) {
-                            htmlParts.push(`<br><img src="${escapeHtml(subImg.htmlSrc)}" alt="Suborçamento" style="margin-top:4px;max-width:300px;max-height:150px;border:1px solid #cbd5e1;border-radius:6px;">`);
+                            htmlParts.push(`<br><img src="${escapeHtml(subImg.htmlSrc)}" alt="SuborÃ§amento" style="margin-top:4px;max-width:300px;max-height:150px;border:1px solid #cbd5e1;border-radius:6px;">`);
                         } else if (subImg.fallbackLink) {
-                            htmlParts.push(`<br><a href="${escapeHtml(subImg.fallbackLink)}" target="_blank" rel="noopener noreferrer">Imagem do suborçamento</a>`);
+                            htmlParts.push(`<br><a href="${escapeHtml(subImg.fallbackLink)}" target="_blank" rel="noopener noreferrer">Imagem do suborÃ§amento</a>`);
                         }
                         htmlParts.push(`</li>`);
                     }
@@ -1359,10 +1357,10 @@
                         'text/html': new Blob([payloadHtml], { type: 'text/html' }),
                     });
                     await navigator.clipboard.write([clipItem]);
-                    alert('Orçamentos copiados com formatação para e-mail (HTML + texto).');
+                    alert('OrÃ§amentos copiados com formataÃ§Ã£o para e-mail (HTML + texto).');
                 } else {
                     await navigator.clipboard.writeText(payloadText);
-                    alert('Orçamentos copiados em texto (seu navegador não suporta HTML no clipboard).');
+                    alert('OrÃ§amentos copiados em texto (seu navegador nÃ£o suporta HTML no clipboard).');
                 }
             } catch (err) {
                 alert(`Falha ao copiar: ${err}`);
@@ -1401,3 +1399,4 @@
 </script>
 {% endif %}
 {% endblock %}
+
