@@ -1579,6 +1579,77 @@
         document.addEventListener('tickets-updated', refreshCards);
     })();
 </script>
+<script>
+    (function () {
+        const board = document.querySelector('[data-board]');
+        const STORAGE_KEY = 'chamados_scroll_state_v1';
+
+        const captureState = () => {
+            const state = {
+                pageX: window.scrollX || 0,
+                pageY: window.scrollY || 0,
+                columns: {},
+            };
+            if (board) {
+                board.querySelectorAll('.kanban-column').forEach((column) => {
+                    const target = (column.dataset.target || '').trim();
+                    if (!target) return;
+                    const body = column.querySelector('.kanban-body');
+                    if (!body) return;
+                    state.columns[target] = {
+                        top: body.scrollTop || 0,
+                        left: body.scrollLeft || 0,
+                    };
+                });
+            }
+            return state;
+        };
+
+        const saveState = () => {
+            try {
+                sessionStorage.setItem(STORAGE_KEY, JSON.stringify(captureState()));
+            } catch (_) {
+                // ignore storage failures
+            }
+        };
+
+        const restoreState = () => {
+            let raw = '';
+            try {
+                raw = sessionStorage.getItem(STORAGE_KEY) || '';
+            } catch (_) {
+                raw = '';
+            }
+            if (!raw) return;
+
+            let state = null;
+            try {
+                state = JSON.parse(raw);
+            } catch (_) {
+                state = null;
+            }
+            if (!state) return;
+
+            requestAnimationFrame(() => {
+                if (board && state.columns) {
+                    board.querySelectorAll('.kanban-column').forEach((column) => {
+                        const target = (column.dataset.target || '').trim();
+                        if (!target || !state.columns[target]) return;
+                        const body = column.querySelector('.kanban-body');
+                        if (!body) return;
+                        body.scrollTop = Number(state.columns[target].top || 0);
+                        body.scrollLeft = Number(state.columns[target].left || 0);
+                    });
+                }
+                window.scrollTo(Number(state.pageX || 0), Number(state.pageY || 0));
+            });
+        };
+
+        window.__saveChamadosScrollState = saveState;
+        window.addEventListener('beforeunload', saveState);
+        restoreState();
+    })();
+</script>
 {% if is_ti_group %}
     <script>
         (function () {
@@ -1627,6 +1698,9 @@
                     if (document.hidden) return;
                     if (isTyping()) return;
                     if (hasOpenModal()) return;
+                    if (typeof window.__saveChamadosScrollState === 'function') {
+                        window.__saveChamadosScrollState();
+                    }
                     window.location.reload();
                 }, refreshSeconds * 1000);
             };
