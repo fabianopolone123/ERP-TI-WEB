@@ -93,10 +93,20 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
+_db_path_raw = (os.environ.get('ERP_DB_PATH', '') or '').strip()
+if _db_path_raw:
+    _db_path = Path(_db_path_raw)
+    if _db_path.suffix:
+        _db_name = _db_path
+    else:
+        _db_name = _db_path / 'db.sqlite3'
+else:
+    _db_name = BASE_DIR / 'db.sqlite3'
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'NAME': _db_name,
     }
 }
 
