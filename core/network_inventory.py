@@ -63,9 +63,8 @@ def _infer_mod_hd(payload: dict[str, Any], payload_mod_hd: str = '') -> str:
     if direct:
         return direct
     texts: list[str] = []
-    disk_type = payload.get('DiskType')
-    if isinstance(disk_type, str):
-        texts.append(disk_type)
+    numbers: list[str] = []
+
     physical = payload.get('PhysicalDisks') or []
     if isinstance(physical, list):
         for item in physical:
@@ -75,16 +74,34 @@ def _infer_mod_hd(payload: dict[str, Any], payload_mod_hd: str = '') -> str:
                 value = item.get(key)
                 if isinstance(value, str) and value.strip():
                     texts.append(value.strip())
+
+    physical_ex = payload.get('PhysicalDisksEx') or []
+    if isinstance(physical_ex, list):
+        for item in physical_ex:
+            if not isinstance(item, dict):
+                continue
+            for key in ('FriendlyName', 'MediaType', 'BusType'):
+                value = item.get(key)
+                if isinstance(value, str) and value.strip():
+                    texts.append(value.strip())
+            spindle = item.get('SpindleSpeed')
+            if spindle is not None:
+                numbers.append(str(spindle))
+
     joined = ' '.join(texts).lower()
-    if not joined:
-        return ''
-    if 'nvme' in joined or 'ssd' in joined or 'solid state' in joined:
+    if 'nvme' in joined:
+        return 'SSD NVMe (M.2)'
+    if 'ssd' in joined or 'solid state' in joined:
         return 'SSD'
     if 'hdd' in joined:
         return 'HDD'
-    if 'scsi' in joined or 'sata' in joined:
-        return 'HDD'
-    return ''
+    for number in numbers:
+        try:
+            if int(float(number)) > 0:
+                return 'HDD'
+        except (TypeError, ValueError):
+            continue
+    return 'Nao identificado'
 
 
 def _run_inventory_powershell(hostname: str, timeout_seconds: int = 120) -> dict[str, Any]:
@@ -103,6 +120,18 @@ try {{
 }} catch {{
     $physicalDisks = @()
 }}
+$physicalDisksEx = @()
+try {{
+    $session = New-CimSession -ComputerName $computer
+    if (Get-Command Get-PhysicalDisk -ErrorAction SilentlyContinue) {{
+        $physicalDisksEx = Get-PhysicalDisk -CimSession $session | Select-Object FriendlyName, MediaType, BusType, SpindleSpeed
+    }}
+    if ($session) {{
+        $session | Remove-CimSession
+    }}
+}} catch {{
+    $physicalDisksEx = @()
+}}
 
 $cpuGeneration = ''
 if ($cpu.Name -match 'i[3579]-([0-9]{4,5})') {{
@@ -117,13 +146,17 @@ if ($cpu.Name -match 'i[3579]-([0-9]{4,5})') {{
     $cpuGeneration = \"{0}a\" -f $digits.Substring(0,1)
 }}
 
-$diskType = ''
+$diskType = 'Nao identificado'
 $joinedDisks = (@($physicalDisks | ForEach-Object {{ ($_.Model + ' ' + $_.MediaType + ' ' + $_.InterfaceType) }}) -join ' ').ToLower()
-if ($joinedDisks -match 'nvme|ssd|solid state') {{
+$joinedDisksEx = (@($physicalDisksEx | ForEach-Object {{ ($_.FriendlyName + ' ' + $_.MediaType + ' ' + $_.BusType + ' ' + $_.SpindleSpeed) }}) -join ' ').ToLower()
+$joinedAll = ($joinedDisks + ' ' + $joinedDisksEx).Trim()
+if ($joinedAll -match 'nvme') {{
+    $diskType = 'SSD NVMe (M.2)'
+}} elseif ($joinedAll -match 'ssd|solid state') {{
     $diskType = 'SSD'
-}} elseif ($joinedDisks -match 'hdd') {{
+}} elseif ($joinedAll -match 'hdd') {{
     $diskType = 'HDD'
-}} elseif ($joinedDisks -match 'sata|scsi') {{
+}} elseif ($joinedAll -match 'spindlespeed[^0-9]*[1-9][0-9]*') {{
     $diskType = 'HDD'
 }}
 
@@ -148,6 +181,7 @@ $result = [PSCustomObject]@{{
     HD = @($disks | Select-Object DeviceID, Size)
     ModHD = $diskType
     PhysicalDisks = @($physicalDisks)
+    PhysicalDisksEx = @($physicalDisksEx)
     Windows = $os.Caption
     Software = @($softwareItems)
 }}

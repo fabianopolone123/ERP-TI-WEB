@@ -50,6 +50,14 @@ $cpu = Get-CimInstance -ClassName Win32_Processor | Select-Object -First 1
 $os = Get-CimInstance -ClassName Win32_OperatingSystem
 $disks = Get-CimInstance -ClassName Win32_LogicalDisk -Filter "DriveType=3" | Select-Object DeviceID, Size
 $physicalDisks = Get-CimInstance -ClassName Win32_DiskDrive | Select-Object Model, MediaType, InterfaceType
+$physicalDisksEx = @()
+if (Get-Command Get-PhysicalDisk -ErrorAction SilentlyContinue) {
+    try {
+        $physicalDisksEx = Get-PhysicalDisk | Select-Object FriendlyName, MediaType, BusType, SpindleSpeed
+    } catch {
+        $physicalDisksEx = @()
+    }
+}
 
 $cpuGeneration = ''
 if ($cpu.Name -match 'i[3579]-([0-9]{4,5})') {
@@ -64,13 +72,17 @@ if ($cpu.Name -match 'i[3579]-([0-9]{4,5})') {
     $cpuGeneration = "{0}a" -f $digits.Substring(0,1)
 }
 
-$diskType = ''
+$diskType = 'Nao identificado'
 $joinedDisks = (@($physicalDisks | ForEach-Object { ($_.Model + ' ' + $_.MediaType + ' ' + $_.InterfaceType) }) -join ' ').ToLower()
-if ($joinedDisks -match 'nvme|ssd|solid state') {
+$joinedDisksEx = (@($physicalDisksEx | ForEach-Object { ($_.FriendlyName + ' ' + $_.MediaType + ' ' + $_.BusType + ' ' + $_.SpindleSpeed) }) -join ' ').ToLower()
+$joinedAll = ($joinedDisks + ' ' + $joinedDisksEx).Trim()
+if ($joinedAll -match 'nvme') {
+    $diskType = 'SSD NVMe (M.2)'
+} elseif ($joinedAll -match 'ssd|solid state') {
     $diskType = 'SSD'
-} elseif ($joinedDisks -match 'hdd') {
+} elseif ($joinedAll -match 'hdd') {
     $diskType = 'HDD'
-} elseif ($joinedDisks -match 'sata|scsi') {
+} elseif ($joinedAll -match 'spindlespeed[^0-9]*[1-9][0-9]*') {
     $diskType = 'HDD'
 }
 
@@ -87,6 +99,7 @@ $payload = [PSCustomObject]@{
     HD        = @($disks)
     ModHD     = $diskType
     PhysicalDisks = @($physicalDisks)
+    PhysicalDisksEx = @($physicalDisksEx)
     Windows   = $os.Caption
     Software  = @(Get-InstalledSoftware)
 }
