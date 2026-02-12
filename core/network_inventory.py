@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import subprocess
 from datetime import datetime
 from typing import Any
@@ -37,6 +38,55 @@ def _parse_total_disk(disk_items: list[dict[str, Any]]) -> str:
     return f'{gb} GB'
 
 
+def _infer_cpu_generation(processor_name: str, payload_generation: str = '') -> str:
+    direct = (payload_generation or '').strip()
+    if direct:
+        return direct
+    name = (processor_name or '').strip()
+    if not name:
+        return ''
+    intel_match = re.search(r'i[3579]-([0-9]{4,5})', name, flags=re.IGNORECASE)
+    if intel_match:
+        digits = intel_match.group(1)
+        if len(digits) == 5:
+            return f'{digits[:2]}a'
+        return f'{digits[:1]}a'
+    ryzen_match = re.search(r'ryzen\s+\d\s+([0-9]{4,5})', name, flags=re.IGNORECASE)
+    if ryzen_match:
+        digits = ryzen_match.group(1)
+        return f'{digits[:1]}a'
+    return ''
+
+
+def _infer_mod_hd(payload: dict[str, Any], payload_mod_hd: str = '') -> str:
+    direct = (payload_mod_hd or '').strip()
+    if direct:
+        return direct
+    texts: list[str] = []
+    disk_type = payload.get('DiskType')
+    if isinstance(disk_type, str):
+        texts.append(disk_type)
+    physical = payload.get('PhysicalDisks') or []
+    if isinstance(physical, list):
+        for item in physical:
+            if not isinstance(item, dict):
+                continue
+            for key in ('Model', 'MediaType', 'InterfaceType'):
+                value = item.get(key)
+                if isinstance(value, str) and value.strip():
+                    texts.append(value.strip())
+    joined = ' '.join(texts).lower()
+    if not joined:
+        return ''
+    if 'nvme' in joined or 'ssd' in joined or 'solid state' in joined:
+        return 'SSD'
+    if 'hdd' in joined:
+        return 'HDD'
+    if 'scsi' in joined or 'sata' in joined:
+        return 'HDD'
+    return ''
+
+
 def _run_inventory_powershell(hostname: str, timeout_seconds: int = 120) -> dict[str, Any]:
     ps_script = rf"""
 $ErrorActionPreference = 'Stop'
@@ -47,6 +97,35 @@ $bios = Get-CimInstance -ClassName Win32_BIOS -ComputerName $computer
 $cpu = Get-CimInstance -ClassName Win32_Processor -ComputerName $computer | Select-Object -First 1
 $os = Get-CimInstance -ClassName Win32_OperatingSystem -ComputerName $computer
 $disks = Get-CimInstance -ClassName Win32_LogicalDisk -ComputerName $computer -Filter "DriveType=3"
+$physicalDisks = @()
+try {{
+    $physicalDisks = Get-CimInstance -ClassName Win32_DiskDrive -ComputerName $computer | Select-Object Model, MediaType, InterfaceType
+}} catch {{
+    $physicalDisks = @()
+}}
+
+$cpuGeneration = ''
+if ($cpu.Name -match 'i[3579]-([0-9]{4,5})') {{
+    $digits = $Matches[1]
+    if ($digits.Length -ge 5) {{
+        $cpuGeneration = \"{0}a\" -f $digits.Substring(0,2)
+    }} else {{
+        $cpuGeneration = \"{0}a\" -f $digits.Substring(0,1)
+    }}
+}} elseif ($cpu.Name -match 'Ryzen\\s+\\d\\s+([0-9]{4,5})') {{
+    $digits = $Matches[1]
+    $cpuGeneration = \"{0}a\" -f $digits.Substring(0,1)
+}}
+
+$diskType = ''
+$joinedDisks = (@($physicalDisks | ForEach-Object {{ ($_.Model + ' ' + $_.MediaType + ' ' + $_.InterfaceType) }}) -join ' ').ToLower()
+if ($joinedDisks -match 'nvme|ssd|solid state') {{
+    $diskType = 'SSD'
+}} elseif ($joinedDisks -match 'hdd') {{
+    $diskType = 'HDD'
+}} elseif ($joinedDisks -match 'sata|scsi') {{
+    $diskType = 'HDD'
+}}
 
 $softwareItems = @()
 try {{
@@ -65,7 +144,10 @@ $result = [PSCustomObject]@{{
     Serial = $bios.SerialNumber
     Memory = $cs.TotalPhysicalMemory
     Processor = $cpu.Name
+    Generation = $cpuGeneration
     HD = @($disks | Select-Object DeviceID, Size)
+    ModHD = $diskType
+    PhysicalDisks = @($physicalDisks)
     Windows = $os.Caption
     Software = @($softwareItems)
 }}
@@ -120,9 +202,11 @@ def upsert_inventory_from_payload(payload: dict[str, Any], source: str = 'rede')
     brand = (payload.get('Brand') or '').strip()
     serial = (payload.get('Serial') or '').strip()
     processor = (payload.get('Processor') or '').strip()
+    generation = _infer_cpu_generation(processor, str(payload.get('Generation') or ''))
     windows = (payload.get('Windows') or '').strip()
     memory = _parse_memory_gb(payload.get('Memory'))
     hd = _parse_total_disk(payload.get('HD') or [])
+    mod_hd = _infer_mod_hd(payload, str(payload.get('ModHD') or ''))
 
     equipment = (
         Equipment.objects.filter(hostname__iexact=host).first()
@@ -140,7 +224,9 @@ def upsert_inventory_from_payload(payload: dict[str, Any], source: str = 'rede')
     equipment.serial = serial
     equipment.memory = memory
     equipment.processor = processor
+    equipment.generation = generation
     equipment.hd = hd
+    equipment.mod_hd = mod_hd
     equipment.windows = windows
     equipment.hostname = host
     equipment.inventory_source = source

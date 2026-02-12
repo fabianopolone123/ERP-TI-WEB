@@ -49,6 +49,30 @@ $bios = Get-CimInstance -ClassName Win32_BIOS
 $cpu = Get-CimInstance -ClassName Win32_Processor | Select-Object -First 1
 $os = Get-CimInstance -ClassName Win32_OperatingSystem
 $disks = Get-CimInstance -ClassName Win32_LogicalDisk -Filter "DriveType=3" | Select-Object DeviceID, Size
+$physicalDisks = Get-CimInstance -ClassName Win32_DiskDrive | Select-Object Model, MediaType, InterfaceType
+
+$cpuGeneration = ''
+if ($cpu.Name -match 'i[3579]-([0-9]{4,5})') {
+    $digits = $Matches[1]
+    if ($digits.Length -ge 5) {
+        $cpuGeneration = "{0}a" -f $digits.Substring(0,2)
+    } else {
+        $cpuGeneration = "{0}a" -f $digits.Substring(0,1)
+    }
+} elseif ($cpu.Name -match 'Ryzen\s+\d\s+([0-9]{4,5})') {
+    $digits = $Matches[1]
+    $cpuGeneration = "{0}a" -f $digits.Substring(0,1)
+}
+
+$diskType = ''
+$joinedDisks = (@($physicalDisks | ForEach-Object { ($_.Model + ' ' + $_.MediaType + ' ' + $_.InterfaceType) }) -join ' ').ToLower()
+if ($joinedDisks -match 'nvme|ssd|solid state') {
+    $diskType = 'SSD'
+} elseif ($joinedDisks -match 'hdd') {
+    $diskType = 'HDD'
+} elseif ($joinedDisks -match 'sata|scsi') {
+    $diskType = 'HDD'
+}
 
 $payload = [PSCustomObject]@{
     Hostname  = $env:COMPUTERNAME
@@ -59,7 +83,10 @@ $payload = [PSCustomObject]@{
     Serial    = $bios.SerialNumber
     Memory    = $cs.TotalPhysicalMemory
     Processor = $cpu.Name
+    Generation = $cpuGeneration
     HD        = @($disks)
+    ModHD     = $diskType
+    PhysicalDisks = @($physicalDisks)
     Windows   = $os.Caption
     Software  = @(Get-InstalledSoftware)
 }
