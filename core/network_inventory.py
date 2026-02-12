@@ -55,6 +55,10 @@ def _infer_cpu_generation(processor_name: str, payload_generation: str = '') -> 
     if ryzen_match:
         digits = ryzen_match.group(1)
         return f'{digits[:1]}a'
+    if re.search(r'core\s*2', name, flags=re.IGNORECASE):
+        return 'Legado (Core 2)'
+    if re.search(r'\bpentium\b|\bceleron\b|\bxeon\b', name, flags=re.IGNORECASE):
+        return 'Legado'
     return ''
 
 
