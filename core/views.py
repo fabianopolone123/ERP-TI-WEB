@@ -1,4 +1,5 @@
 ﻿import logging
+import json
 import unicodedata
 from textwrap import shorten
 from decimal import Decimal, InvalidOperation
@@ -19,6 +20,7 @@ from django.http import JsonResponse, FileResponse
 from django.urls import reverse
 from django.utils.dateparse import parse_date
 from django.views.decorators.http import require_GET, require_POST
+from django.views.decorators.csrf import csrf_exempt
 from django.views.generic import TemplateView
 from django.contrib.auth import views as auth_views
 from ldap3 import Connection, Server, SUBTREE
@@ -45,7 +47,12 @@ from .models import (
 )
 from .wapi import find_whatsapp_groups_by_name, send_whatsapp_message
 from .access_importer import refresh_access_snapshot
-from .network_inventory import parse_hosts_text, sync_network_inventory, format_inventory_run_stamp
+from .network_inventory import (
+    parse_hosts_text,
+    sync_network_inventory,
+    format_inventory_run_stamp,
+    upsert_inventory_from_payload,
+)
 
 logger = logging.getLogger(__name__)
 DEFAULT_EMAIL_TEMPLATES = {
@@ -96,6 +103,10 @@ def build_modules(active_slug: str | None) -> list[dict[str, str | bool]]:
 
 def _inventory_default_hosts() -> str:
     return (getattr(settings, 'INVENTORY_DEFAULT_HOSTS', '') or '').strip()
+
+
+def _inventory_agent_token() -> str:
+    return (getattr(settings, 'INVENTORY_AGENT_TOKEN', '') or '').strip()
 
 
 class _SafeDict(dict):
@@ -1764,6 +1775,73 @@ def ticket_reopen(request):
 @require_GET
 def ws_tickets_ping(request):
     return JsonResponse({'ok': True, 'transport': 'http-fallback'})
+
+
+@csrf_exempt
+@require_POST
+def inventory_push_api(request):
+    token = _inventory_agent_token()
+    if not token:
+        return JsonResponse({'ok': False, 'error': 'inventory_agent_token_not_configured'}, status=503)
+
+    auth_header = (request.headers.get('Authorization') or '').strip()
+    header_token = ''
+    if auth_header.lower().startswith('bearer '):
+        header_token = auth_header[7:].strip()
+    if not header_token:
+        header_token = (request.headers.get('X-Inventory-Token') or '').strip()
+    if header_token != token:
+        return JsonResponse({'ok': False, 'error': 'unauthorized'}, status=401)
+
+    try:
+        body_text = (request.body or b'').decode('utf-8')
+        payload = json.loads(body_text or '{}')
+    except Exception:
+        return JsonResponse({'ok': False, 'error': 'invalid_json'}, status=400)
+
+    items = []
+    if isinstance(payload, list):
+        items = payload
+    elif isinstance(payload, dict):
+        if isinstance(payload.get('items'), list):
+            items = payload.get('items') or []
+        else:
+            items = [payload]
+    else:
+        return JsonResponse({'ok': False, 'error': 'invalid_payload'}, status=400)
+
+    if not items:
+        return JsonResponse({'ok': False, 'error': 'empty_payload'}, status=400)
+
+    ok_count = 0
+    failed_count = 0
+    messages_list = []
+    for item in items:
+        if not isinstance(item, dict):
+            failed_count += 1
+            messages_list.append('Item inválido no payload.')
+            continue
+        try:
+            _, message = upsert_inventory_from_payload(item, source='agent')
+            ok_count += 1
+            messages_list.append(message)
+        except Exception as exc:
+            failed_count += 1
+            host = (item.get('Hostname') or item.get('hostname') or '-')
+            messages_list.append(f'{host}: erro ({exc})')
+            logger.exception('Falha ao processar payload de inventário do agente: host=%s', host)
+
+    status = 200 if ok_count else 400
+    return JsonResponse(
+        {
+            'ok': ok_count > 0,
+            'processed': len(items),
+            'updated': ok_count,
+            'failed': failed_count,
+            'messages': messages_list[:30],
+        },
+        status=status,
+    )
 
 
 @login_required

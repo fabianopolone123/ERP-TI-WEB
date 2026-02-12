@@ -107,13 +107,15 @@ def _to_iso_br_date(raw_value: str) -> str:
     return value
 
 
-def _sync_single_host(hostname: str, timeout_seconds: int = 120) -> tuple[bool, str]:
-    payload = _run_inventory_powershell(hostname=hostname, timeout_seconds=timeout_seconds)
+def upsert_inventory_from_payload(payload: dict[str, Any], source: str = 'rede') -> tuple[bool, str]:
     now = timezone.now()
 
-    host = (payload.get('Hostname') or hostname or '').strip()
+    host = (payload.get('Hostname') or '').strip()
+    if not host:
+        raise RuntimeError('Hostname não informado no payload.')
     user_raw = (payload.get('UserName') or '').strip()
     user_name = user_raw.split('\\')[-1].strip() if user_raw else ''
+    sector = (payload.get('Sector') or '').strip()
     model = (payload.get('Model') or '').strip()
     brand = (payload.get('Brand') or '').strip()
     serial = (payload.get('Serial') or '').strip()
@@ -131,6 +133,7 @@ def _sync_single_host(hostname: str, timeout_seconds: int = 120) -> tuple[bool, 
         equipment = Equipment(hostname=host)
 
     equipment.user = user_name or equipment.user
+    equipment.sector = sector or equipment.sector
     equipment.equipment = equipment.equipment or 'Computador'
     equipment.model = model
     equipment.brand = brand
@@ -140,7 +143,7 @@ def _sync_single_host(hostname: str, timeout_seconds: int = 120) -> tuple[bool, 
     equipment.hd = hd
     equipment.windows = windows
     equipment.hostname = host
-    equipment.inventory_source = 'rede'
+    equipment.inventory_source = source
     equipment.last_inventory_at = now
     equipment.save()
 
@@ -162,7 +165,7 @@ def _sync_single_host(hostname: str, timeout_seconds: int = 120) -> tuple[bool, 
                 version=(item.get('Version') or '').strip(),
                 vendor=(item.get('Vendor') or '').strip(),
                 install_date=_to_iso_br_date(str(item.get('InstallDate') or '')),
-                source='rede',
+                source=source,
                 collected_at=now,
             )
         )
@@ -171,6 +174,13 @@ def _sync_single_host(hostname: str, timeout_seconds: int = 120) -> tuple[bool, 
         SoftwareInventory.objects.bulk_create(new_items)
 
     return True, f'{host}: {len(new_items)} software(s) atualizado(s).'
+
+
+def _sync_single_host(hostname: str, timeout_seconds: int = 120) -> tuple[bool, str]:
+    payload = _run_inventory_powershell(hostname=hostname, timeout_seconds=timeout_seconds)
+    if not payload.get('Hostname'):
+        payload['Hostname'] = hostname
+    return upsert_inventory_from_payload(payload, source='rede')
 
 
 def sync_network_inventory(hosts: list[str], timeout_seconds: int = 120) -> dict[str, Any]:

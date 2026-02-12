@@ -207,6 +207,7 @@ ACCESS_ROOT_PATH = os.environ.get('ACCESS_ROOT_PATH', r'\\SRV-FS\\Sidertec')
 # Inventario de rede (equipamentos e softwares)
 INVENTORY_DEFAULT_HOSTS = os.environ.get('INVENTORY_DEFAULT_HOSTS', '')
 INVENTORY_POWERSHELL_TIMEOUT = int(os.environ.get('INVENTORY_POWERSHELL_TIMEOUT', '120'))
+INVENTORY_AGENT_TOKEN = os.environ.get('INVENTORY_AGENT_TOKEN', '')
 
 # Exportacao de chamados para planilha mensal
 CHAMADOS_XLSX_PATH = os.environ.get(

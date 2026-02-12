@@ -22,6 +22,7 @@ from .views import (
     whatsapp_settings_update,
     ticket_reopen,
     ws_tickets_ping,
+    inventory_push_api,
     chamados_fill_spreadsheet,
 )
 
@@ -47,5 +48,6 @@ urlpatterns = [
     path('chamados/reabrir/', ticket_reopen, name='chamados_reabrir'),
     path('chamados/preencher-planilha/', chamados_fill_spreadsheet, name='chamados_preencher_planilha'),
     path('ws/tickets/', ws_tickets_ping, name='ws_tickets_ping'),
+    path('api/inventory/push/', inventory_push_api, name='inventory_push_api'),
     path('', DashboardView.as_view(), name='dashboard'),
 ]
