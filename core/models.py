@@ -110,6 +110,7 @@ class RequisitionQuote(models.Model):
         related_name='subquotes',
     )
     name = models.CharField(max_length=300)
+    quantity = models.PositiveIntegerField(default=1)
     value = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     freight = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     is_selected = models.BooleanField(default=False)

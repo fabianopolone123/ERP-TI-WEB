@@ -704,6 +704,7 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
 
             quote_id = (request.POST.get(f'budget_quote_id_{idx}') or '').strip()
             name = (request.POST.get(f'budget_name_{idx}') or '').strip()
+            quantity_raw = (request.POST.get(f'budget_quantity_{idx}') or '').strip()
             value_raw = (request.POST.get(f'budget_value_{idx}') or '').strip()
             freight_raw = (request.POST.get(f'budget_freight_{idx}') or '').strip()
             link = (request.POST.get(f'budget_link_{idx}') or '').strip()
@@ -714,6 +715,12 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
 
             if not name:
                 return 0, f'Orçamento #{idx}: informe o nome.'
+            try:
+                quantity = int(quantity_raw or '1')
+            except ValueError:
+                return 0, f'Orçamento #{idx}: quantidade inválida.'
+            if quantity <= 0:
+                return 0, f'Orçamento #{idx}: quantidade deve ser maior que zero.'
 
             try:
                 value = self._parse_decimal_br(value_raw)
@@ -727,6 +734,7 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
             if update_mode and quote_id and quote_id in existing_quotes:
                 quote = existing_quotes[quote_id]
                 quote.name = name
+                quote.quantity = quantity
                 quote.value = value
                 quote.freight = freight
                 quote.link = link
@@ -736,7 +744,7 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
                     quote.photo = photo
                     quote.save()
                 else:
-                    quote.save(update_fields=['name', 'value', 'freight', 'link', 'parent', 'is_selected'])
+                    quote.save(update_fields=['name', 'quantity', 'value', 'freight', 'link', 'parent', 'is_selected'])
                 kept_ids.add(quote.id)
                 idx_to_quote[idx] = quote
                 saved_count += 1
@@ -746,6 +754,7 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
                 requisition=requisition,
                 parent=None,
                 name=name,
+                quantity=quantity,
                 value=value,
                 freight=freight,
                 is_selected=False,
@@ -869,9 +878,9 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
             for quote in main_quotes:
                 quote.sub_items = subs_by_parent.get(quote.id, [])
                 quote.sub_items_count = len(quote.sub_items)
-                package_total = (quote.value or Decimal('0')) + (quote.freight or Decimal('0'))
+                package_total = (Decimal(quote.quantity or 1) * (quote.value or Decimal('0'))) + (quote.freight or Decimal('0'))
                 for sub_item in quote.sub_items:
-                    package_total += (sub_item.value or Decimal('0')) + (sub_item.freight or Decimal('0'))
+                    package_total += (Decimal(sub_item.quantity or 1) * (sub_item.value or Decimal('0'))) + (sub_item.freight or Decimal('0'))
                 quote.package_total = package_total
 
             req.main_quotes = main_quotes
@@ -880,9 +889,9 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
             req.approved_quote_id = selected_main.id if selected_main else None
 
             if selected_main:
-                total = (selected_main.value or Decimal('0')) + (selected_main.freight or Decimal('0'))
+                total = (Decimal(selected_main.quantity or 1) * (selected_main.value or Decimal('0'))) + (selected_main.freight or Decimal('0'))
                 for sub_item in getattr(selected_main, 'sub_items', []):
-                    total += (sub_item.value or Decimal('0')) + (sub_item.freight or Decimal('0'))
+                    total += (Decimal(sub_item.quantity or 1) * (sub_item.value or Decimal('0'))) + (sub_item.freight or Decimal('0'))
                 req.quotes_total = total
             else:
                 req.quotes_total = None

@@ -325,6 +325,10 @@
                 <input type="text" data-field="name" required />
             </div>
             <div>
+                <label>Qtd</label>
+                <input type="number" min="1" step="1" data-field="quantity" value="1" />
+            </div>
+            <div>
                 <label>Valor</label>
                 <input type="text" data-field="value" placeholder="Ex.: 18.652,22" required />
             </div>
@@ -387,6 +391,7 @@
                         parent_id: {% if quote.parent_id %}{{ quote.parent_id }}{% else %}null{% endif %},
                         parent_name: "{% if quote.parent %}{{ quote.parent.name|escapejs }}{% endif %}",
                         name: "{{ quote.name|escapejs }}",
+                        quantity: "{{ quote.quantity|default:1|escapejs }}",
                         value: "{{ quote.value|floatformat:2|escapejs }}",
                         freight: "{{ quote.freight|floatformat:2|escapejs }}",
                         is_selected: {% if quote.is_selected %}true{% else %}false{% endif %},
@@ -516,6 +521,10 @@
             const n = Number(normalized);
             return Number.isFinite(n) ? n : 0;
         };
+        const parsePositiveInt = (value) => {
+            const n = Number.parseInt((value || '').toString().trim(), 10);
+            return Number.isFinite(n) && n > 0 ? n : 1;
+        };
 
         const toBrMoney = (value) => value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         const normalizeExternalLink = (value) => {
@@ -642,13 +651,15 @@
                 if (!packageEl) return;
 
                 let total = 0;
+                const mainQty = parsePositiveInt(mainItem.querySelector('[data-field="quantity"]')?.value || '1');
                 const mainValue = parseBrNumber(mainItem.querySelector('[data-field="value"]')?.value || '');
                 const mainFreight = parseBrNumber(mainItem.querySelector('[data-field="freight"]')?.value || '');
-                total += mainValue + mainFreight;
+                total += (mainQty * mainValue) + mainFreight;
 
                 const subItems = subsByParent.get(mainIdx) || [];
                 subItems.forEach((subItem) => {
-                    total += parseBrNumber(subItem.querySelector('[data-field="value"]')?.value || '');
+                    const subQty = parsePositiveInt(subItem.querySelector('[data-field="quantity"]')?.value || '1');
+                    total += subQty * parseBrNumber(subItem.querySelector('[data-field="value"]')?.value || '');
                     total += parseBrNumber(subItem.querySelector('[data-field="freight"]')?.value || '');
                 });
                 packageEl.textContent = `Total deste orçamento: R$ ${toBrMoney(total)}`;
@@ -771,6 +782,7 @@
             if (!created?.item) return null;
 
             const srcName = sourceItem.querySelector('[data-field="name"]');
+            const srcQuantity = sourceItem.querySelector('[data-field="quantity"]');
             const srcValue = sourceItem.querySelector('[data-field="value"]');
             const srcFreight = sourceItem.querySelector('[data-field="freight"]');
             const srcLink = sourceItem.querySelector('[data-field="link"]');
@@ -778,6 +790,7 @@
             const srcPhoto = sourceItem.querySelector('[data-field="photo"]');
 
             const dstName = created.item.querySelector('[data-field="name"]');
+            const dstQuantity = created.item.querySelector('[data-field="quantity"]');
             const dstValue = created.item.querySelector('[data-field="value"]');
             const dstFreight = created.item.querySelector('[data-field="freight"]');
             const dstLink = created.item.querySelector('[data-field="link"]');
@@ -785,6 +798,7 @@
             const dstPhoto = created.item.querySelector('[data-field="photo"]');
 
             if (dstName && srcName) dstName.value = srcName.value || '';
+            if (dstQuantity && srcQuantity) dstQuantity.value = srcQuantity.value || '1';
             if (dstValue && srcValue) dstValue.value = srcValue.value || '';
             if (dstFreight && srcFreight) dstFreight.value = srcFreight.value || '';
             if (dstLink && srcLink) dstLink.value = srcLink.value || '';
@@ -812,6 +826,7 @@
                 const idx = itemIdx(item);
                 const parentIdx = itemParentIdx(item);
                 const name = (item.querySelector('[data-field="name"]')?.value || '').trim();
+                const quantity = parsePositiveInt(item.querySelector('[data-field="quantity"]')?.value || '1');
                 const value = (item.querySelector('[data-field="value"]')?.value || '').trim();
                 const freight = (item.querySelector('[data-field="freight"]')?.value || '').trim();
                 const linkRaw = (item.querySelector('[data-field="link"]')?.value || '').trim();
@@ -824,6 +839,7 @@
                     idx,
                     parentIdx,
                     name,
+                    quantity,
                     value: value || '0,00',
                     freight: freight || '0,00',
                     link,
@@ -850,6 +866,7 @@
             item.querySelector('[data-field="parent-idx"]').name = `budget_parent_idx_${idx}`;
             item.querySelector('[data-field="parent-quote-id"]').name = `budget_parent_quote_id_${idx}`;
             item.querySelector('[data-field="name"]').name = `budget_name_${idx}`;
+            item.querySelector('[data-field="quantity"]').name = `budget_quantity_${idx}`;
             item.querySelector('[data-field="value"]').name = `budget_value_${idx}`;
             item.querySelector('[data-field="freight"]').name = `budget_freight_${idx}`;
             item.querySelector('[data-field="link"]').name = `budget_link_${idx}`;
@@ -869,6 +886,7 @@
             const parentQuoteIdInput = item.querySelector('[data-field="parent-quote-id"]');
             const parentLabel = item.querySelector('[data-parent-label]');
             const nameInput = item.querySelector('[data-field="name"]');
+            const quantityInput = item.querySelector('[data-field="quantity"]');
             const valueInput = item.querySelector('[data-field="value"]');
             const freightInput = item.querySelector('[data-field="freight"]');
             const linkInput = item.querySelector('[data-field="link"]');
@@ -1003,6 +1021,7 @@
             if (initialData) {
                 quoteIdInput.value = initialData.id ? String(initialData.id) : '';
                 nameInput.value = initialData.name || '';
+                quantityInput.value = String(parsePositiveInt(initialData.quantity || '1'));
                 valueInput.value = toBrValue(initialData.value || '');
                 freightInput.value = toBrValue(initialData.freight || '');
                 linkInput.value = initialData.link || '';
@@ -1031,7 +1050,7 @@
                 preview.style.display = 'block';
             });
 
-            [valueInput, freightInput].forEach((el) => {
+            [quantityInput, valueInput, freightInput].forEach((el) => {
                 if (!el) return;
                 el.addEventListener('input', recalculateBudgetPackages);
                 el.addEventListener('change', recalculateBudgetPackages);
@@ -1293,13 +1312,15 @@
             for (let i = 0; i < mainItems.length; i += 1) {
                 const main = mainItems[i];
                 const subs = byParent.get(main.idx) || [];
-                let total = parseBrNumber(main.value) + parseBrNumber(main.freight);
+                const mainQty = parsePositiveInt(main.quantity || '1');
+                let total = (mainQty * parseBrNumber(main.value)) + parseBrNumber(main.freight);
                 for (const sub of subs) {
-                    total += parseBrNumber(sub.value) + parseBrNumber(sub.freight);
+                    const subQty = parsePositiveInt(sub.quantity || '1');
+                    total += (subQty * parseBrNumber(sub.value)) + parseBrNumber(sub.freight);
                 }
 
                 lines.push(`[ORÇAMENTO ${i + 1}] ${main.name || '(sem nome)'}`);
-                lines.push(`   Valor: R$ ${main.value} | Frete: R$ ${main.freight} | Total pacote: R$ ${toBrMoney(total)}`);
+                lines.push(`   Qtd: ${mainQty} | Valor unit.: R$ ${main.value} | Frete: R$ ${main.freight} | Total pacote: R$ ${toBrMoney(total)}`);
                 if (main.link) lines.push(`   Link (${main.linkLabel || 'site'}): ${main.link}`);
                 let mainImageText = '';
                 const mainImg = await resolveClipboardImage(main.previewSrc);
@@ -1312,7 +1333,7 @@
 
                 htmlParts.push(`<li style="margin-bottom:12px;padding:10px;border:1px solid #cbd5e1;border-radius:8px;background:#f8fafc;">`);
                 htmlParts.push(`<div><strong>${escapeHtml(main.name || '(sem nome)')}</strong></div>`);
-                htmlParts.push(`<div>Valor: <strong>R$ ${escapeHtml(main.value)}</strong> | Frete: <strong>R$ ${escapeHtml(main.freight)}</strong> | Total pacote: <strong>R$ ${escapeHtml(toBrMoney(total))}</strong></div>`);
+                htmlParts.push(`<div>Qtd: <strong>${escapeHtml(String(mainQty))}</strong> | Valor unit.: <strong>R$ ${escapeHtml(main.value)}</strong> | Frete: <strong>R$ ${escapeHtml(main.freight)}</strong> | Total pacote: <strong>R$ ${escapeHtml(toBrMoney(total))}</strong></div>`);
                 if (main.link) htmlParts.push(`<div>Link: <a href="${escapeHtml(main.link)}" target="_blank" rel="noopener noreferrer">${escapeHtml(main.linkLabel || 'Abrir orçamento')}</a></div>`);
                 if (mainImg.htmlSrc) {
                     htmlParts.push(`<div style="margin-top:6px;"><img src="${escapeHtml(mainImg.htmlSrc)}" alt="Orçamento" style="margin-top:4px;max-width:360px;max-height:180px;border:1px solid #cbd5e1;border-radius:6px;"></div>`);
@@ -1325,7 +1346,8 @@
                     htmlParts.push(`<div style="margin-top:6px;color:#334155;"><em>Itens adicionais do pacote (suborçamentos): necessários à parte para compor este orçamento.</em></div>`);
                     htmlParts.push(`<ul style="margin-top:8px;padding-left:18px;">`);
                     for (const sub of subs) {
-                        lines.push(`   - ${sub.name || '(sem nome)'} | Valor: R$ ${sub.value} | Frete: R$ ${sub.freight}`);
+                        const subQty = parsePositiveInt(sub.quantity || '1');
+                        lines.push(`   - ${sub.name || '(sem nome)'} | Qtd: ${subQty} | Valor unit.: R$ ${sub.value} | Frete: R$ ${sub.freight}`);
                         if (sub.link) lines.push(`     Link (${sub.linkLabel || 'site'}): ${sub.link}`);
                         const subImg = await resolveClipboardImage(sub.previewSrc);
                         if (subImg.htmlSrc) {
@@ -1334,7 +1356,7 @@
                             lines.push(`     Imagem: ${subImg.fallbackLink}`);
                         }
 
-                        htmlParts.push(`<li style="margin-bottom:8px;"><strong>${escapeHtml(sub.name || '(sem nome)')}</strong> - Valor: R$ ${escapeHtml(sub.value)} | Frete: R$ ${escapeHtml(sub.freight)}`);
+                        htmlParts.push(`<li style="margin-bottom:8px;"><strong>${escapeHtml(sub.name || '(sem nome)')}</strong> - Qtd: ${escapeHtml(String(subQty))} | Valor unit.: R$ ${escapeHtml(sub.value)} | Frete: R$ ${escapeHtml(sub.freight)}`);
                         if (sub.link) htmlParts.push(`<br>Link: <a href="${escapeHtml(sub.link)}" target="_blank" rel="noopener noreferrer">${escapeHtml(sub.linkLabel || 'Abrir')}</a>`);
                         if (subImg.htmlSrc) {
                             htmlParts.push(`<br><img src="${escapeHtml(subImg.htmlSrc)}" alt="Suborçamento" style="margin-top:4px;max-width:300px;max-height:150px;border:1px solid #cbd5e1;border-radius:6px;">`);
@@ -1394,20 +1416,23 @@
             for (let i = 0; i < mainItems.length; i += 1) {
                 const main = mainItems[i];
                 const subs = byParent.get(main.idx) || [];
-                let total = parseBrNumber(main.value) + parseBrNumber(main.freight);
+                const mainQty = parsePositiveInt(main.quantity || '1');
+                let total = (mainQty * parseBrNumber(main.value)) + parseBrNumber(main.freight);
                 for (const sub of subs) {
-                    total += parseBrNumber(sub.value) + parseBrNumber(sub.freight);
+                    const subQty = parsePositiveInt(sub.quantity || '1');
+                    total += (subQty * parseBrNumber(sub.value)) + parseBrNumber(sub.freight);
                 }
 
                 lines.push(`${i + 1}) *${main.name || '(sem nome)'}*`);
-                lines.push(`   Valor: R$ ${main.value} | Frete: R$ ${main.freight}`);
+                lines.push(`   Qtd: ${mainQty} | Valor unit.: R$ ${main.value} | Frete: R$ ${main.freight}`);
                 lines.push(`   Total do pacote: *R$ ${toBrMoney(total)}*`);
                 if (main.link) lines.push(`   Link: ${main.linkLabel || 'site'} - ${main.link}`);
 
                 if (subs.length) {
                     lines.push(`   Itens adicionais do pacote:`);
                     for (const sub of subs) {
-                        lines.push(`   - ${sub.name || '(sem nome)'} | R$ ${sub.value} + frete R$ ${sub.freight}`);
+                        const subQty = parsePositiveInt(sub.quantity || '1');
+                        lines.push(`   - ${sub.name || '(sem nome)'} | Qtd: ${subQty} | R$ ${sub.value} + frete R$ ${sub.freight}`);
                         if (sub.link) lines.push(`     Link: ${sub.linkLabel || 'site'} - ${sub.link}`);
                     }
                 }
