@@ -19,6 +19,7 @@ class ERPUser(models.Model):
 class Equipment(models.Model):
     sector = models.CharField(max_length=120, blank=True, default='')
     user = models.CharField(max_length=200, blank=True, default='')
+    hostname = models.CharField(max_length=120, blank=True, default='')
     equipment = models.CharField(max_length=120, blank=True, default='')
     model = models.CharField(max_length=120, blank=True, default='')
     brand = models.CharField(max_length=120, blank=True, default='')
@@ -29,10 +30,36 @@ class Equipment(models.Model):
     hd = models.CharField(max_length=120, blank=True, default='')
     mod_hd = models.CharField(max_length=120, blank=True, default='')
     windows = models.CharField(max_length=120, blank=True, default='')
+    inventory_source = models.CharField(max_length=40, blank=True, default='')
+    last_inventory_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self) -> str:
         return f'{self.equipment} - {self.user}'
+
+
+class SoftwareInventory(models.Model):
+    equipment = models.ForeignKey(
+        Equipment,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='software_items',
+    )
+    hostname = models.CharField(max_length=120, blank=True, default='')
+    sector = models.CharField(max_length=120, blank=True, default='')
+    user = models.CharField(max_length=200, blank=True, default='')
+    software_name = models.CharField(max_length=250)
+    version = models.CharField(max_length=120, blank=True, default='')
+    vendor = models.CharField(max_length=200, blank=True, default='')
+    install_date = models.CharField(max_length=40, blank=True, default='')
+    source = models.CharField(max_length=40, blank=True, default='')
+    collected_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self) -> str:
+        return f'{self.hostname} - {self.software_name}'
 
 
 class Requisition(models.Model):

@@ -29,6 +29,7 @@ from .chamados_excel import export_attendant_logs_to_excel
 from .models import (
     ERPUser,
     Equipment,
+    SoftwareInventory,
     Requisition,
     RequisitionQuote,
     AccessFolder,
@@ -44,6 +45,7 @@ from .models import (
 )
 from .wapi import find_whatsapp_groups_by_name, send_whatsapp_message
 from .access_importer import refresh_access_snapshot
+from .network_inventory import parse_hosts_text, sync_network_inventory, format_inventory_run_stamp
 
 logger = logging.getLogger(__name__)
 DEFAULT_EMAIL_TEMPLATES = {
@@ -67,7 +69,7 @@ ERP_MODULES = [
     {'slug': 'ips', 'label': 'IPs', 'url_name': None},
     {'slug': 'emails', 'label': 'Emails', 'url_name': None},
     {'slug': 'ramais', 'label': 'Ramais', 'url_name': None},
-    {'slug': 'softwares', 'label': 'Softwares', 'url_name': None},
+    {'slug': 'softwares', 'label': 'Softwares', 'url_name': 'softwares'},
     {'slug': 'insumos', 'label': 'Insumos', 'url_name': None},
     {'slug': 'requisicoes', 'label': 'Requisições', 'url_name': 'requisicoes'},
     {'slug': 'emprestimos', 'label': 'Empréstimos', 'url_name': None},
@@ -90,6 +92,10 @@ def build_modules(active_slug: str | None) -> list[dict[str, str | bool]]:
             }
         )
     return modules
+
+
+def _inventory_default_hosts() -> str:
+    return (getattr(settings, 'INVENTORY_DEFAULT_HOSTS', '') or '').strip()
 
 
 class _SafeDict(dict):
@@ -551,9 +557,34 @@ class EquipamentosView(LoginRequiredMixin, TemplateView):
             messages.error(request, 'Apenas usuários do departamento TI podem cadastrar equipamentos.')
             return self.get(request, *args, **kwargs)
 
+        action = (request.POST.get('action') or '').strip().lower()
+        if action == 'sync_inventory':
+            hosts_text = (request.POST.get('inventory_hosts') or '').strip()
+            hosts = parse_hosts_text(hosts_text) or parse_hosts_text(_inventory_default_hosts())
+            if not hosts:
+                messages.error(request, 'Informe pelo menos um host para inventariar (ex.: PC01,PC02).')
+                return self.get(request, *args, **kwargs)
+            timeout_seconds = int(getattr(settings, 'INVENTORY_POWERSHELL_TIMEOUT', 120) or 120)
+            result = sync_network_inventory(hosts=hosts, timeout_seconds=timeout_seconds)
+            stamp = format_inventory_run_stamp()
+            if result['ok']:
+                messages.success(
+                    request,
+                    f'Inventário executado em {stamp}: {result["ok"]} host(s) atualizado(s), {result["failed"]} falha(s).',
+                )
+            else:
+                messages.error(request, f'Inventário executado em {stamp}: nenhuma máquina atualizada.')
+            for line in result.get('messages', [])[:15]:
+                if 'erro' in line.lower():
+                    messages.error(request, line)
+                else:
+                    messages.info(request, line)
+            return self.get(request, *args, **kwargs)
+
         Equipment.objects.create(
             sector=request.POST.get('sector', '').strip(),
             user=request.POST.get('user', '').strip(),
+            hostname=request.POST.get('hostname', '').strip(),
             equipment=request.POST.get('equipment', '').strip(),
             model=request.POST.get('model', '').strip(),
             brand=request.POST.get('brand', '').strip(),
@@ -574,6 +605,56 @@ class EquipamentosView(LoginRequiredMixin, TemplateView):
         context['is_ti_group'] = is_ti
         context['modules'] = build_modules('equipamentos') if is_ti else []
         context['equipments'] = Equipment.objects.all().order_by('-created_at')
+        context['inventory_default_hosts'] = _inventory_default_hosts()
+        context['inventory_timeout_seconds'] = int(getattr(settings, 'INVENTORY_POWERSHELL_TIMEOUT', 120) or 120)
+        return context
+
+
+class SoftwaresView(LoginRequiredMixin, TemplateView):
+    template_name = 'core/softwares.html'
+
+    def post(self, request, *args, **kwargs):
+        if not is_ti_user(request):
+            messages.error(request, 'Apenas usuários do departamento TI podem atualizar inventário de software.')
+            return self.get(request, *args, **kwargs)
+
+        action = (request.POST.get('action') or '').strip().lower()
+        if action != 'sync_inventory':
+            return self.get(request, *args, **kwargs)
+
+        hosts_text = (request.POST.get('inventory_hosts') or '').strip()
+        hosts = parse_hosts_text(hosts_text) or parse_hosts_text(_inventory_default_hosts())
+        if not hosts:
+            messages.error(request, 'Informe pelo menos um host para inventariar (ex.: PC01,PC02).')
+            return self.get(request, *args, **kwargs)
+
+        timeout_seconds = int(getattr(settings, 'INVENTORY_POWERSHELL_TIMEOUT', 120) or 120)
+        result = sync_network_inventory(hosts=hosts, timeout_seconds=timeout_seconds)
+        stamp = format_inventory_run_stamp()
+        if result['ok']:
+            messages.success(
+                request,
+                f'Inventário executado em {stamp}: {result["ok"]} host(s) atualizado(s), {result["failed"]} falha(s).',
+            )
+        else:
+            messages.error(request, f'Inventário executado em {stamp}: nenhuma máquina atualizada.')
+        for line in result.get('messages', [])[:15]:
+            if 'erro' in line.lower():
+                messages.error(request, line)
+            else:
+                messages.info(request, line)
+        return self.get(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        is_ti = is_ti_user(self.request)
+        context['is_ti_group'] = is_ti
+        context['modules'] = build_modules('softwares') if is_ti else []
+        context['software_items'] = SoftwareInventory.objects.select_related('equipment').order_by(
+            '-collected_at', '-updated_at', 'hostname', 'software_name'
+        )
+        context['inventory_default_hosts'] = _inventory_default_hosts()
+        context['inventory_timeout_seconds'] = int(getattr(settings, 'INVENTORY_POWERSHELL_TIMEOUT', 120) or 120)
         return context
 
 
