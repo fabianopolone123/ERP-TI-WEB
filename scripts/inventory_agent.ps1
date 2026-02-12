@@ -70,12 +70,12 @@ $headers = @{
     Authorization = "Bearer $Token"
 }
 
-$response = Invoke-RestMethod \
-    -Method Post \
-    -Uri $ServerUrl \
-    -Headers $headers \
-    -ContentType 'application/json; charset=utf-8' \
-    -Body $json \
+$response = Invoke-RestMethod `
+    -Method Post `
+    -Uri $ServerUrl `
+    -Headers $headers `
+    -ContentType 'application/json; charset=utf-8' `
+    -Body $json `
     -TimeoutSec $TimeoutSec
 
 Write-Output ("Inventario enviado com sucesso. Updated=" + $response.updated + " Failed=" + $response.failed)

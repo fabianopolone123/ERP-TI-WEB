@@ -27,12 +27,12 @@ $triggerDaily = New-ScheduledTaskTrigger -Daily -At 08:00
 $principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -RunLevel Highest
 $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -RunOnlyIfNetworkAvailable -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Minutes 30)
 
-Register-ScheduledTask \
-    -TaskName $TaskName \
-    -Action $action \
-    -Trigger @($triggerBoot, $triggerDaily) \
-    -Principal $principal \
-    -Settings $settings \
+Register-ScheduledTask `
+    -TaskName $TaskName `
+    -Action $action `
+    -Trigger @($triggerBoot, $triggerDaily) `
+    -Principal $principal `
+    -Settings $settings `
     -Force | Out-Null
 
 Write-Output "Tarefa '$TaskName' registrada com sucesso."
