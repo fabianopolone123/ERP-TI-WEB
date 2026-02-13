@@ -336,6 +336,11 @@ def _notify_whatsapp(ticket, event_type="new_ticket", event_label="Novo chamado"
 
 
 def _notify_ticket_email(ticket, event_label="Novo chamado", extra_line=None):
+    creator_username = (getattr(ticket.created_by, 'username', '') or '').strip()
+    if creator_username:
+        ti_user = ERPUser.objects.filter(username__iexact=creator_username).first()
+        if ti_user and (ti_user.department or '').strip().upper() == 'TI':
+            return
     recipient = (getattr(ticket.created_by, 'email', '') or '').strip()
     if recipient and (';' in recipient or ',' in recipient):
         recipient = (recipient.replace(',', ';').split(';', 1)[0] or '').strip()
@@ -398,6 +403,8 @@ def _notify_new_ticket_watchers_email(ticket):
         email = ''
         erp_user = erp_map.get(username)
         auth_user = auth_map.get(username)
+        if erp_user and (erp_user.department or '').strip().upper() == 'TI':
+            continue
         if erp_user and erp_user.email:
             email = erp_user.email.strip()
         elif auth_user and auth_user.email:
