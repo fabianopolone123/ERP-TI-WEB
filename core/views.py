@@ -519,6 +519,11 @@ def _create_ticket_work_log(
 class DashboardView(LoginRequiredMixin, TemplateView):
     template_name = 'core/dashboard.html'
 
+    def get(self, request, *args, **kwargs):
+        if not is_ti_user(request):
+            return redirect('chamados')
+        return super().get(request, *args, **kwargs)
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         is_ti = is_ti_user(self.request)
