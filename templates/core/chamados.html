@@ -761,7 +761,7 @@
         <div class="modal-backdrop" data-close-ticket-cancel></div>
         <div class="modal-content">
             <div class="topbar" style="margin-bottom: 8px;">
-                <h3>Finalizar chamado</h3>
+                <h3 data-close-ticket-title>Finalizar chamado</h3>
                 <button type="button" data-close-ticket-cancel>Fechar</button>
             </div>
             <form data-close-ticket-form>
@@ -778,13 +778,13 @@
                 </div>
                 <div class="form-row">
                     <div style="flex: 1;">
-                        <label for="id_close_resolution_text">Resolução</label>
+                        <label for="id_close_resolution_text" data-close-ticket-text-label>Resolução</label>
                         <textarea id="id_close_resolution_text" name="resolution" rows="4" placeholder="Descreva a resolução..." required></textarea>
                     </div>
                 </div>
                 <div style="display:flex; justify-content:flex-end; gap:8px;">
                     <button type="button" data-close-ticket-cancel>Cancelar</button>
-                    <button type="submit">Finalizar</button>
+                    <button type="submit" data-close-ticket-submit>Finalizar</button>
                 </div>
             </form>
         </div>
@@ -822,16 +822,26 @@
         let draggingMulti = false;
         const closeModal = document.querySelector('[data-close-ticket-modal]');
         const closeForm = document.querySelector('[data-close-ticket-form]');
+        const closeTitle = document.querySelector('[data-close-ticket-title]');
+        const closeTextLabel = document.querySelector('[data-close-ticket-text-label]');
+        const closeSubmitBtn = document.querySelector('[data-close-ticket-submit]');
         const closeFailureInput = document.querySelector('#id_close_failure_type');
         const closeResolutionInput = document.querySelector('#id_close_resolution_text');
         const closeCancelEls = document.querySelectorAll('[data-close-ticket-cancel]');
         let closeResolver = null;
 
-        const askClosePayload = (initialFailure) => new Promise((resolve) => {
+        const askClosePayload = (initialFailure, mode = 'close') => new Promise((resolve) => {
             if (!closeModal || !closeForm || !closeFailureInput || !closeResolutionInput) {
-                resolve({ confirmed: false, failureType: '', resolution: '' });
+                resolve({ confirmed: false, failureType: '', text: '' });
                 return;
             }
+            const isCloseMode = mode === 'close';
+            if (closeTitle) closeTitle.textContent = isCloseMode ? 'Finalizar chamado' : 'Registrar ação';
+            if (closeTextLabel) closeTextLabel.textContent = isCloseMode ? 'Resolução' : 'Ação / Correção';
+            if (closeSubmitBtn) closeSubmitBtn.textContent = isCloseMode ? 'Finalizar' : 'Salvar ação';
+            closeResolutionInput.placeholder = isCloseMode
+                ? 'Descreva a resolução...'
+                : 'Descreva a ação/correção realizada...';
             closeResolver = resolve;
             closeFailureInput.value = initialFailure || '';
             closeResolutionInput.value = '';
@@ -851,13 +861,13 @@
             closeForm.addEventListener('submit', (event) => {
                 event.preventDefault();
                 const failureType = (closeFailureInput?.value || '').trim();
-                const resolution = (closeResolutionInput?.value || '').trim();
-                if (!failureType || !resolution) return;
-                closeCloseModal({ confirmed: true, failureType, resolution });
+                const text = (closeResolutionInput?.value || '').trim();
+                if (!failureType || !text) return;
+                closeCloseModal({ confirmed: true, failureType, text });
             });
         }
         closeCancelEls.forEach((el) => {
-            el.addEventListener('click', () => closeCloseModal({ confirmed: false, failureType: '', resolution: '' }));
+            el.addEventListener('click', () => closeCloseModal({ confirmed: false, failureType: '', text: '' }));
         });
 
 
@@ -922,6 +932,7 @@
                 let resolutionText = '';
                 let progressNote = '';
                 let failureType = '';
+                let actionCapturedByModal = false;
                 const normalizeFailureType = (rawValue) => {
                     const raw = (rawValue || '').trim().toLowerCase();
                     if (!raw) return '';
@@ -947,24 +958,38 @@
                         draggingId = null;
                         return;
                     }
-                    const closePayload = await askClosePayload(currentSavedFailure);
+                    const closePayload = await askClosePayload(currentSavedFailure, 'close');
                     if (!closePayload.confirmed) {
                         draggingId = null;
                         return;
                     }
-                    resolutionText = (closePayload.resolution || '').trim();
+                    resolutionText = (closePayload.text || '').trim();
                     failureType = normalizeFailureType(closePayload.failureType || currentSavedFailure);
                 }
-                if (isUserSource && (isPending || isScheduled || (isUserTarget && !shouldClone))) {
-                    progressNote = prompt('Ação / Correção realizada neste atendimento:');
-                    if (!progressNote || !progressNote.trim()) {
+                if (!isClosing && isUserSource && (isPending || isScheduled)) {
+                    const actionPayload = await askClosePayload(currentSavedFailure, 'action');
+                    if (!actionPayload.confirmed) {
                         draggingId = null;
                         return;
                     }
-                    progressNote = progressNote.trim();
+                    progressNote = (actionPayload.text || '').trim();
+                    failureType = normalizeFailureType(actionPayload.failureType || currentSavedFailure);
+                    actionCapturedByModal = true;
+                }
+                if (isUserSource && (isPending || isScheduled || (isUserTarget && !shouldClone))) {
+                    if (!actionCapturedByModal) {
+                        progressNote = prompt('Ação / Correção realizada neste atendimento:');
+                        if (!progressNote || !progressNote.trim()) {
+                            draggingId = null;
+                            return;
+                        }
+                        progressNote = progressNote.trim();
+                    }
                 }
                 if (!isClosing && isUserSource && (isPending || isScheduled || (isUserTarget && !shouldClone))) {
-                    failureType = currentSavedFailure || askFailureType();
+                    if (!actionCapturedByModal) {
+                        failureType = currentSavedFailure || askFailureType();
+                    }
                     if (!failureType) {
                         alert('Informe um tipo de falha válido: N/S, Equipamento ou Software.');
                         draggingId = null;
