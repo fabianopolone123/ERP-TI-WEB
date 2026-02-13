@@ -212,6 +212,11 @@ class Ticket(models.Model):
         blank=True,
         related_name='collaborating_tickets',
     )
+    historical_attendants = models.ManyToManyField(
+        ERPUser,
+        blank=True,
+        related_name='handled_tickets',
+    )
     attachment = models.FileField(upload_to='tickets/', null=True, blank=True)
     resolution = models.TextField(blank=True, default='')
     current_cycle_started_at = models.DateTimeField(null=True, blank=True)

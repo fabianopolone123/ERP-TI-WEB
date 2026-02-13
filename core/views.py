@@ -1501,6 +1501,7 @@ def move_ticket(request):
         if is_clone_assignment:
             ticket.save()
             ticket.collaborators.add(assignee)
+            ticket.historical_attendants.add(assignee)
             timeline_note = f'{assignee.full_name} foi adicionado como colaborador no chamado.'
         else:
             ticket.assigned_to = assignee
@@ -1510,6 +1511,7 @@ def move_ticket(request):
             ticket.last_failure_type = failure_type if source_is_user else ticket.last_failure_type
             ticket.save()
             ticket.collaborators.clear()
+            ticket.historical_attendants.add(assignee)
             if was_closed:
                 timeline_event = TicketTimelineEvent.EventType.REOPENED
                 timeline_note = f'Chamado reaberto e atribuído para {assignee.full_name}.'
@@ -1561,7 +1563,7 @@ def ticket_detail(request, ticket_id: int):
     ticket = (
         Ticket.objects.filter(id=ticket_id)
         .select_related('assigned_to', 'created_by')
-        .prefetch_related('collaborators', 'timeline_events__actor_user', 'timeline_events__actor_ti')
+        .prefetch_related('collaborators', 'historical_attendants', 'timeline_events__actor_user', 'timeline_events__actor_ti')
         .first()
     )
     if not ticket:
@@ -1609,6 +1611,20 @@ def ticket_detail(request, ticket_id: int):
             }
         )
 
+    historical_names: list[str] = []
+    seen_names: set[str] = set()
+    for user in list(ticket.historical_attendants.all()) + ([ticket.assigned_to] if ticket.assigned_to else []) + list(ticket.collaborators.all()):
+        if not user:
+            continue
+        name = (user.full_name or '').strip()
+        if not name:
+            continue
+        key = name.lower()
+        if key in seen_names:
+            continue
+        seen_names.add(key)
+        historical_names.append(name)
+
     can_edit = is_ti and ticket.created_by_id == request.user.id
     data = {
         'ok': True,
@@ -1624,16 +1640,7 @@ def ticket_detail(request, ticket_id: int):
             'status_code': ticket.status,
             'created_by': ticket.created_by.username if ticket.created_by else '-',
             'resolution': ticket.resolution,
-            'assignees': ', '.join(
-                [
-                    name
-                    for name in (
-                        [ticket.assigned_to.full_name] if ticket.assigned_to else []
-                    )
-                    + [u.full_name for u in ticket.collaborators.all() if not ticket.assigned_to or u.id != ticket.assigned_to_id]
-                ]
-            )
-            or '-',
+            'assignees': ', '.join(historical_names) or '-',
             'attachment_url': ticket.attachment.url if ticket.attachment else '',
             'created_at': timezone.localtime(ticket.created_at).strftime('%d/%m/%Y %H:%M'),
             'can_edit': can_edit,
