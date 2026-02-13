@@ -820,6 +820,7 @@
         let draggingCard = null;
         let sourceColumn = null;
         let draggingMulti = false;
+        let moveInFlight = false;
         const closeModal = document.querySelector('[data-close-ticket-modal]');
         const closeForm = document.querySelector('[data-close-ticket-form]');
         const closeTitle = document.querySelector('[data-close-ticket-title]');
@@ -874,6 +875,11 @@
         board.addEventListener('dragstart', (event) => {
             const card = event.target.closest('.ticket-card');
             if (!card) return;
+            if (event.dataTransfer) {
+                event.dataTransfer.effectAllowed = 'move';
+                event.dataTransfer.setData('text/plain', card.dataset.ticketId || '');
+            }
+            window.__ticketDragInProgress = true;
             draggingId = card.dataset.ticketId;
             draggingCard = card;
             sourceColumn = card.closest('.kanban-column');
@@ -884,6 +890,8 @@
         board.addEventListener('dragend', (event) => {
             const card = event.target.closest('.ticket-card');
             if (card) card.classList.remove('dragging');
+            window.__ticketDragInProgress = false;
+            draggingId = null;
             draggingCard = null;
             sourceColumn = null;
             draggingMulti = false;
@@ -899,9 +907,11 @@
                 column.classList.remove('drag-over');
             });
 
-            column.addEventListener('drop', async () => {
+            column.addEventListener('drop', async (event) => {
+                event.preventDefault();
                 column.classList.remove('drag-over');
                 if (!draggingId || !draggingCard) return;
+                if (moveInFlight) return;
                 const dragTicketId = draggingId;
                 const dragCard = draggingCard;
                 const dragSourceColumn = sourceColumn;
@@ -1003,73 +1013,80 @@
 
                 targetBody.appendChild(movedCard);
 
-                const response = await fetch('{% url "chamados_mover" %}', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                        'X-CSRFToken': getCookie('csrftoken'),
-                    },
-                    body: new URLSearchParams({
-                        ticket_id: dragTicketId,
-                        target: target,
-                        source_target: dragSourceTarget,
-                        multi: draggingMulti ? '1' : '0',
-                        resolution: resolutionText,
-                        progress_note: progressNote,
-                        failure_type: failureType,
-                    }),
-                });
-
-                let responseData = {};
+                moveInFlight = true;
+                window.__ticketDragInProgress = true;
                 try {
-                    responseData = await response.json();
-                } catch (err) {
-                    responseData = {};
-                }
+                    const response = await fetch('{% url "chamados_mover" %}', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                            'X-CSRFToken': getCookie('csrftoken'),
+                        },
+                        body: new URLSearchParams({
+                            ticket_id: dragTicketId,
+                            target: target,
+                            source_target: dragSourceTarget,
+                            multi: draggingMulti ? '1' : '0',
+                            resolution: resolutionText,
+                            progress_note: progressNote,
+                            failure_type: failureType,
+                        }),
+                    });
 
-                if (!response.ok) {
-                    if (responseData.error === 'progress_note_required') {
-                        alert('Informe o que foi feito antes de mover para Pendente.');
-                    } else if (responseData.error === 'resolution_required') {
-                        alert('Informe a resolução para finalizar o chamado.');
-                    } else if (responseData.error === 'cannot_return_to_new') {
-                        alert('Chamado que já saiu de Novo não pode voltar para Novo.');
-                    } else if (responseData.error === 'close_only_from_attendant') {
-                        alert('Só é permitido finalizar chamado quando ele sai da coluna de um atendente.');
-                    } else if (responseData.error === 'failure_required') {
-                        alert('Informe o tipo de falha: N/S, Equipamento ou Software.');
-                    } else if (responseData.error === 'action_required') {
-                        alert('Informe a ação/correção ao mover o chamado.');
+                    let responseData = {};
+                    try {
+                        responseData = await response.json();
+                    } catch (err) {
+                        responseData = {};
                     }
-                    if (shouldClone) {
-                        movedCard.remove();
-                    } else if (previousParent) {
-                        previousParent.appendChild(draggingCard);
-                    }
-                    draggingId = null;
-                    return;
-                }
 
-                if (responseData.partial_unassign) {
-                    movedCard.remove();
-                    draggingId = null;
-                    return;
-                }
-
-                if (!shouldClone) {
-                    board.querySelectorAll(`.ticket-card[data-ticket-id="${dragTicketId}"]`).forEach((card) => {
-                        if (card !== movedCard) {
-                            card.remove();
+                    if (!response.ok) {
+                        if (responseData.error === 'progress_note_required') {
+                            alert('Informe o que foi feito antes de mover para Pendente.');
+                        } else if (responseData.error === 'resolution_required') {
+                            alert('Informe a resolução para finalizar o chamado.');
+                        } else if (responseData.error === 'cannot_return_to_new') {
+                            alert('Chamado que já saiu de Novo não pode voltar para Novo.');
+                        } else if (responseData.error === 'close_only_from_attendant') {
+                            alert('Só é permitido finalizar chamado quando ele sai da coluna de um atendente.');
+                        } else if (responseData.error === 'failure_required') {
+                            alert('Informe o tipo de falha: N/S, Equipamento ou Software.');
+                        } else if (responseData.error === 'action_required') {
+                            alert('Informe a ação/correção ao mover o chamado.');
                         }
-                    });
+                        if (shouldClone) {
+                            movedCard.remove();
+                        } else if (previousParent) {
+                            previousParent.appendChild(draggingCard);
+                        }
+                        draggingId = null;
+                        return;
+                    }
+
+                    if (responseData.partial_unassign) {
+                        movedCard.remove();
+                        draggingId = null;
+                        return;
+                    }
+
+                    if (!shouldClone) {
+                        board.querySelectorAll(`.ticket-card[data-ticket-id="${dragTicketId}"]`).forEach((card) => {
+                            if (card !== movedCard) {
+                                card.remove();
+                            }
+                        });
+                    }
+                    if (failureType) {
+                        board.querySelectorAll(`.ticket-card[data-ticket-id="${dragTicketId}"]`).forEach((card) => {
+                            card.dataset.failureType = failureType;
+                        });
+                    }
+                    document.dispatchEvent(new Event('tickets-updated'));
+                    draggingId = null;
+                } finally {
+                    moveInFlight = false;
+                    window.__ticketDragInProgress = false;
                 }
-                if (failureType) {
-                    board.querySelectorAll(`.ticket-card[data-ticket-id="${dragTicketId}"]`).forEach((card) => {
-                        card.dataset.failureType = failureType;
-                    });
-                }
-                document.dispatchEvent(new Event('tickets-updated'));
-                draggingId = null;
             });
         });
     })();
@@ -1754,6 +1771,8 @@
             };
             const hasOpenModal = () =>
                 Array.from(document.querySelectorAll('.modal')).some((modal) => !modal.hidden);
+            const isDraggingTicket = () =>
+                !!window.__ticketDragInProgress || document.querySelector('.ticket-card.dragging');
 
             let timerId = null;
             const restartTimer = () => {
@@ -1764,6 +1783,7 @@
                     if (document.hidden) return;
                     if (isTyping()) return;
                     if (hasOpenModal()) return;
+                    if (isDraggingTicket()) return;
                     if (typeof window.__saveChamadosScrollState === 'function') {
                         window.__saveChamadosScrollState();
                     }
