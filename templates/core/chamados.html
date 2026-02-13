@@ -9,6 +9,31 @@
     [data-ticket-list] .ticket-card {
         padding: 8px 9px;
     }
+    [data-board] .ticket-card.urgency-bg-programada,
+    [data-ticket-list] .ticket-card.urgency-bg-programada {
+        background: linear-gradient(135deg, rgba(14, 116, 144, 0.34) 0%, rgba(15, 23, 42, 0.94) 100%) !important;
+        border-color: rgba(34, 211, 238, 0.55) !important;
+    }
+    [data-board] .ticket-card.urgency-bg-baixa,
+    [data-ticket-list] .ticket-card.urgency-bg-baixa {
+        background: linear-gradient(135deg, rgba(21, 128, 61, 0.32) 0%, rgba(15, 23, 42, 0.94) 100%) !important;
+        border-color: rgba(74, 222, 128, 0.52) !important;
+    }
+    [data-board] .ticket-card.urgency-bg-media,
+    [data-ticket-list] .ticket-card.urgency-bg-media {
+        background: linear-gradient(135deg, rgba(180, 83, 9, 0.34) 0%, rgba(15, 23, 42, 0.94) 100%) !important;
+        border-color: rgba(251, 191, 36, 0.55) !important;
+    }
+    [data-board] .ticket-card.urgency-bg-alta,
+    [data-ticket-list] .ticket-card.urgency-bg-alta {
+        background: linear-gradient(135deg, rgba(153, 27, 27, 0.38) 0%, rgba(15, 23, 42, 0.94) 100%) !important;
+        border-color: rgba(248, 113, 113, 0.58) !important;
+    }
+    [data-board] .ticket-card.urgency-bg-nao_classificado,
+    [data-ticket-list] .ticket-card.urgency-bg-nao_classificado {
+        background: linear-gradient(135deg, rgba(51, 65, 85, 0.38) 0%, rgba(15, 23, 42, 0.94) 100%) !important;
+        border-color: rgba(148, 163, 184, 0.52) !important;
+    }
     [data-board] .ticket-title,
     [data-ticket-list] .ticket-title {
         margin-bottom: 4px;
@@ -158,7 +183,7 @@
                 <div class="kanban-header">Novo</div>
                 <div class="kanban-body">
                     {% for ticket in new_tickets %}
-                        <div class="ticket-card{% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %} shared-ticket{% endif %}" draggable="true" data-ticket-id="{{ ticket.id }}" data-ticket-status="{{ ticket.status }}" data-opened-at="{{ ticket.created_at|date:'c' }}" data-failure-type="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'failure_type' }}">
+                        <div class="ticket-card urgency-bg-{{ ticket.urgency }}{% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %} shared-ticket{% endif %}" draggable="true" data-ticket-id="{{ ticket.id }}" data-ticket-status="{{ ticket.status }}" data-opened-at="{{ ticket.created_at|date:'c' }}" data-failure-type="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'failure_type' }}">
                             <div class="ticket-title">
                                 <span class="urgency-dot urgency-{{ ticket.urgency }}"></span>
                                 #{{ ticket.id }} - {{ ticket.title }}
@@ -188,7 +213,7 @@
                     <div class="kanban-header">{{ user.full_name }}</div>
                     <div class="kanban-body">
                         {% for ticket in user_tickets|get_item:user.id %}
-                            <div class="ticket-card{% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %} shared-ticket{% endif %}" draggable="true" data-ticket-id="{{ ticket.id }}" data-ticket-status="{{ ticket.status }}" data-opened-at="{{ ticket.created_at|date:'c' }}" data-failure-type="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'failure_type' }}">
+                            <div class="ticket-card urgency-bg-{{ ticket.urgency }}{% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %} shared-ticket{% endif %}" draggable="true" data-ticket-id="{{ ticket.id }}" data-ticket-status="{{ ticket.status }}" data-opened-at="{{ ticket.created_at|date:'c' }}" data-failure-type="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'failure_type' }}">
                                 <div class="ticket-title">
                                     <span class="urgency-dot urgency-{{ ticket.urgency }}"></span>
                                     #{{ ticket.id }} - {{ ticket.title }}
@@ -216,7 +241,7 @@
                 <div class="kanban-header">Fechados</div>
                 <div class="kanban-body">
                     {% for ticket in closed_tickets %}
-                        <div class="ticket-card{% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %} shared-ticket{% endif %}" draggable="true" data-ticket-id="{{ ticket.id }}" data-ticket-status="{{ ticket.status }}" data-opened-at="{{ ticket.created_at|date:'c' }}" data-failure-type="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'failure_type' }}">
+                        <div class="ticket-card urgency-bg-{{ ticket.urgency }}{% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %} shared-ticket{% endif %}" draggable="true" data-ticket-id="{{ ticket.id }}" data-ticket-status="{{ ticket.status }}" data-opened-at="{{ ticket.created_at|date:'c' }}" data-failure-type="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'failure_type' }}">
                             <div class="ticket-title">
                                 <span class="urgency-dot urgency-{{ ticket.urgency }}"></span>
                                 #{{ ticket.id }} - {{ ticket.title }}
@@ -243,7 +268,7 @@
                 <div class="kanban-header">Pendente</div>
                 <div class="kanban-body">
                     {% for ticket in pending_tickets %}
-                        <div class="ticket-card{% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %} shared-ticket{% endif %}" draggable="true" data-ticket-id="{{ ticket.id }}" data-ticket-status="{{ ticket.status }}" data-opened-at="{{ ticket.created_at|date:'c' }}" data-failure-type="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'failure_type' }}">
+                        <div class="ticket-card urgency-bg-{{ ticket.urgency }}{% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %} shared-ticket{% endif %}" draggable="true" data-ticket-id="{{ ticket.id }}" data-ticket-status="{{ ticket.status }}" data-opened-at="{{ ticket.created_at|date:'c' }}" data-failure-type="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'failure_type' }}">
                             <div class="ticket-title">
                                 <span class="urgency-dot urgency-{{ ticket.urgency }}"></span>
                                 #{{ ticket.id }} - {{ ticket.title }}
@@ -272,7 +297,7 @@
                 <div class="kanban-header">Planejado</div>
                 <div class="kanban-body">
                     {% for ticket in scheduled_tickets %}
-                        <div class="ticket-card{% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %} shared-ticket{% endif %}" draggable="true" data-ticket-id="{{ ticket.id }}" data-ticket-status="{{ ticket.status }}" data-opened-at="{{ ticket.created_at|date:'c' }}" data-failure-type="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'failure_type' }}">
+                        <div class="ticket-card urgency-bg-{{ ticket.urgency }}{% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %} shared-ticket{% endif %}" draggable="true" data-ticket-id="{{ ticket.id }}" data-ticket-status="{{ ticket.status }}" data-opened-at="{{ ticket.created_at|date:'c' }}" data-failure-type="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'failure_type' }}">
                             <div class="ticket-title">
                                 <span class="urgency-dot urgency-{{ ticket.urgency }}"></span>
                                 #{{ ticket.id }} - {{ ticket.title }}
@@ -308,7 +333,7 @@
                 <div class="kanban-header">Solicitações</div>
                 <div class="kanban-body">
                     {% for ticket in own_tickets %}
-                        <div class="ticket-card" data-ticket-id="{{ ticket.id }}" data-ticket-status="{{ ticket.status }}" data-opened-at="{{ ticket.created_at|date:'c' }}">
+                        <div class="ticket-card urgency-bg-{{ ticket.urgency }}" data-ticket-id="{{ ticket.id }}" data-ticket-status="{{ ticket.status }}" data-opened-at="{{ ticket.created_at|date:'c' }}">
                             <div class="ticket-title">
                                 <span class="urgency-dot urgency-{{ ticket.urgency }}"></span>
                                 #{{ ticket.id }} - {{ ticket.title }}
