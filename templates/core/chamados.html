@@ -777,6 +777,32 @@
     (function () {
         const board = document.querySelector('[data-board]');
         if (!board) return;
+        const MIN_COL_PX = 320;
+        const MAX_COL_PX = 460;
+
+        const refreshUniformColumns = () => {
+            const regularColumns = Array.from(board.querySelectorAll('.kanban-column')).filter((column) => {
+                const target = (column.dataset.target || '').trim();
+                return target !== 'programado' && target !== 'pendente';
+            });
+            const totalRegular = regularColumns.length || 1;
+            const width = board.clientWidth || window.innerWidth || 1280;
+            const byMin = Math.max(1, Math.floor(width / MIN_COL_PX));
+            const byMax = Math.max(1, Math.ceil(width / MAX_COL_PX));
+            const cols = Math.min(totalRegular, Math.max(byMax, byMin));
+            board.style.setProperty('--regular-cols', String(cols));
+        };
+
+        refreshUniformColumns();
+        window.addEventListener('resize', refreshUniformColumns);
+        document.addEventListener('tickets-updated', refreshUniformColumns);
+    })();
+</script>
+
+<script>
+    (function () {
+        const board = document.querySelector('[data-board]');
+        if (!board) return;
         const plannedBody = board.querySelector('.kanban-column[data-target="programado"] .kanban-body');
         const pendingBody = board.querySelector('.kanban-column[data-target="pendente"] .kanban-body');
 
