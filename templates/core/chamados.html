@@ -5,11 +5,22 @@
 
 {% block content %}
 <style>
+    [data-board] .ticket-card,
+    [data-ticket-list] .ticket-card {
+        padding: 8px 9px;
+    }
+    [data-board] .ticket-title,
+    [data-ticket-list] .ticket-title {
+        margin-bottom: 4px;
+        font-size: 0.86rem;
+        line-height: 1.2;
+    }
     .ticket-meta-rich {
         display: flex;
-        flex-direction: column;
-        gap: 4px;
-        font-size: 0.8rem;
+        align-items: center;
+        gap: 6px;
+        min-width: 0;
+        font-size: 0.72rem;
         text-transform: none;
     }
     .ticket-requester {
@@ -18,13 +29,20 @@
         background: rgba(56, 189, 248, 0.14);
         border: 1px solid rgba(56, 189, 248, 0.4);
         border-radius: 8px;
-        padding: 2px 8px;
+        padding: 1px 6px;
         display: inline-flex;
-        width: fit-content;
+        max-width: 56%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
     .ticket-extra {
         color: #93a4bf;
-        line-height: 1.25;
+        line-height: 1.1;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 44%;
     }
     .detail-description-block {
         margin-top: 6px;
