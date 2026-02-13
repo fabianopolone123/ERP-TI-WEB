@@ -269,7 +269,7 @@
             overflow-y: auto;
         }
 
-        /* Ordem fixa do quadro TI: Programado no topo -> Novo -> Atendentes -> Pendente -> Fechados */
+        /* Ordem fixa do quadro TI: Programado no topo -> Pendente horizontal -> Novo -> Atendentes -> Fechados */
         .kanban-column[data-target="programado"] {
             order: 0;
             grid-column: 1 / -1;
@@ -277,7 +277,8 @@
             min-height: 170px;
             max-height: none;
         }
-        .kanban-column[data-target="programado"] .kanban-body {
+        .kanban-column[data-target="programado"] .kanban-body,
+        .kanban-column[data-target="pendente"] .kanban-body {
             display: flex;
             flex-direction: row;
             align-items: flex-start;
@@ -286,13 +287,20 @@
             overflow-y: auto;
             padding: 8px 10px 10px;
         }
-        .kanban-column[data-target="programado"] .ticket-card {
+        .kanban-column[data-target="programado"] .ticket-card,
+        .kanban-column[data-target="pendente"] .ticket-card {
             min-width: 300px;
             max-width: 360px;
         }
-        .kanban-column[data-target="novo"] { order: 1; }
-        .kanban-column[data-target^="user_"] { order: 2; }
-        .kanban-column[data-target="pendente"] { order: 3; }
+        .kanban-column[data-target="pendente"] {
+            order: 1;
+            grid-column: 1 / -1;
+            height: auto;
+            min-height: 170px;
+            max-height: none;
+        }
+        .kanban-column[data-target="novo"] { order: 2; }
+        .kanban-column[data-target^="user_"] { order: 3; }
         .kanban-column[data-target="fechado"] { order: 5; }
 
         .ticket-card {

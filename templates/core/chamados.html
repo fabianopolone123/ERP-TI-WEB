@@ -1,4 +1,4 @@
-﻿{% extends "base.html" %}
+{% extends "base.html" %}
 {% load core_extras %}
 
 {% block title %}Chamados | ERP TI{% endblock %}
@@ -157,9 +157,6 @@
                                         {% else %}
                                             -
                                         {% endif %}
-                                        {% if ticket_meta|get_item:ticket.id|default:""|get_item:'description' %}
-                                            | {{ ticket_meta|get_item:ticket.id|default:""|get_item:'description' }}
-                                        {% endif %}
                                     </span>
                                 </div>
                             {% endif %}
@@ -189,9 +186,6 @@
                                         {% else %}
                                             -
                                         {% endif %}
-                                        {% if ticket_meta|get_item:ticket.id|default:""|get_item:'description' %}
-                                            | {{ ticket_meta|get_item:ticket.id|default:""|get_item:'description' }}
-                                        {% endif %}
                                     </span>
                                 </div>
                             </div>
@@ -219,9 +213,6 @@
                                         {{ ticket_meta|get_item:ticket.id|default:""|get_item:'department' }}
                                     {% else %}
                                         -
-                                    {% endif %}
-                                    {% if ticket_meta|get_item:ticket.id|default:""|get_item:'description' %}
-                                        | {{ ticket_meta|get_item:ticket.id|default:""|get_item:'description' }}
                                     {% endif %}
                                 </span>
                             </div>
@@ -251,9 +242,6 @@
                                         {% else %}
                                             -
                                         {% endif %}
-                                        {% if ticket_meta|get_item:ticket.id|default:""|get_item:'description' %}
-                                            | {{ ticket_meta|get_item:ticket.id|default:""|get_item:'description' }}
-                                        {% endif %}
                                     </span>
                                 </div>
                             {% endif %}
@@ -282,9 +270,6 @@
                                             {{ ticket_meta|get_item:ticket.id|default:""|get_item:'department' }}
                                         {% else %}
                                             -
-                                        {% endif %}
-                                        {% if ticket_meta|get_item:ticket.id|default:""|get_item:'description' %}
-                                            | {{ ticket_meta|get_item:ticket.id|default:""|get_item:'description' }}
                                         {% endif %}
                                     </span>
                                 </div>
@@ -318,9 +303,6 @@
                                         {{ ticket_meta|get_item:ticket.id|default:""|get_item:'department' }}
                                     {% else %}
                                         -
-                                    {% endif %}
-                                    {% if ticket_meta|get_item:ticket.id|default:""|get_item:'description' %}
-                                        | {{ ticket_meta|get_item:ticket.id|default:""|get_item:'description' }}
                                     {% endif %}
                                 </span>
                             </div>
@@ -796,6 +778,7 @@
         const board = document.querySelector('[data-board]');
         if (!board) return;
         const plannedBody = board.querySelector('.kanban-column[data-target="programado"] .kanban-body');
+        const pendingBody = board.querySelector('.kanban-column[data-target="pendente"] .kanban-body');
 
         const getCookie = (name) => {
             const value = `; ${document.cookie}`;
@@ -804,17 +787,21 @@
             return '';
         };
 
-        if (plannedBody) {
-            plannedBody.addEventListener(
+        const bindHorizontalWheel = (container) => {
+            if (!container) return;
+            container.addEventListener(
                 'wheel',
                 (event) => {
                     if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
-                    plannedBody.scrollLeft += event.deltaY;
+                    container.scrollLeft += event.deltaY;
                     event.preventDefault();
                 },
                 { passive: false }
             );
-        }
+        };
+
+        bindHorizontalWheel(plannedBody);
+        bindHorizontalWheel(pendingBody);
 
         let draggingId = null;
         let draggingCard = null;
@@ -1465,12 +1452,6 @@
                         } else {
                             el.appendChild(document.createTextNode(` ${prefix}`));
                         }
-                    });
-                    document.querySelectorAll(`.ticket-card[data-ticket-id="${currentTicketId}"] .ticket-extra`).forEach((el) => {
-                        const current = (el.textContent || '').trim();
-                        const dept = current.includes('|') ? current.split('|')[0].trim() : (current || '-');
-                        const desc = (newDesc || '').trim();
-                        el.textContent = desc ? `${dept || '-'} | ${desc}` : (dept || '-');
                     });
                     await loadDetails(currentTicketId);
                 }
