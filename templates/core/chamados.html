@@ -1360,21 +1360,30 @@
             form.addEventListener('submit', async (event) => {
                 event.preventDefault();
                 if (!currentTicketId) return;
+                if (form.dataset.sending === '1') return;
+                form.dataset.sending = '1';
+                const submitBtn = form.querySelector('button[type="submit"]');
+                if (submitBtn) submitBtn.disabled = true;
                 const formData = new FormData(form);
                 formData.append('ticket_id', currentTicketId);
                 formData.append('internal', form.dataset.internal || '0');
 
-                const response = await fetch('{% url "chamados_mensagem" %}', {
-                    method: 'POST',
-                    headers: {
-                        'X-CSRFToken': getCookie('csrftoken'),
-                    },
-                    body: formData,
-                });
+                try {
+                    const response = await fetch('{% url "chamados_mensagem" %}', {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRFToken': getCookie('csrftoken'),
+                        },
+                        body: formData,
+                    });
 
-                if (response.ok) {
-                    form.reset();
-                    await loadDetails(currentTicketId);
+                    if (response.ok) {
+                        form.reset();
+                        await loadDetails(currentTicketId);
+                    }
+                } finally {
+                    form.dataset.sending = '0';
+                    if (submitBtn) submitBtn.disabled = false;
                 }
             });
         });

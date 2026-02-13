@@ -1700,6 +1700,24 @@ def ticket_message(request):
     if not message and not attachment:
         return JsonResponse({'ok': False, 'error': 'empty'}, status=400)
 
+    # Protecao contra duplo submit: se a mesma mensagem textual do mesmo usuario
+    # for enviada para o mesmo chamado em poucos segundos, reaproveita a existente.
+    if message and not attachment:
+        duplicate_cutoff = timezone.now() - timedelta(seconds=8)
+        duplicate_msg = (
+            TicketMessage.objects.filter(
+                ticket=ticket,
+                created_by=request.user,
+                is_internal=internal,
+                message=message,
+                created_at__gte=duplicate_cutoff,
+            )
+            .order_by('-created_at')
+            .first()
+        )
+        if duplicate_msg:
+            return JsonResponse({'ok': True, 'duplicate': True, 'id': duplicate_msg.id})
+
     ticket_message = TicketMessage.objects.create(
         ticket=ticket,
         created_by=request.user,
