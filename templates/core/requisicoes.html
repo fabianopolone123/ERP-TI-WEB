@@ -153,6 +153,7 @@
                         <th>Orçamentos</th>
                         <th>Total</th>
                         <th>Criado em</th>
+                        <th>Ações</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -189,10 +190,13 @@
                                 {% endif %}
                             </td>
                             <td data-sort-value="{{ item.created_at|date:'YmdHis' }}">{{ item.created_at|date:'d/m/Y H:i' }}</td>
+                            <td>
+                                <button type="button" data-duplicate-requisition data-requisition-id="{{ item.id }}">Duplicar</button>
+                            </td>
                         </tr>
                     {% empty %}
                         <tr>
-                            <td colspan="7" class="muted">Nenhuma requisição cadastrada.</td>
+                            <td colspan="8" class="muted">Nenhuma requisição cadastrada.</td>
                         </tr>
                     {% endfor %}
                 </tbody>
@@ -1019,7 +1023,7 @@
             }
 
             if (initialData) {
-                quoteIdInput.value = initialData.id ? String(initialData.id) : '';
+                quoteIdInput.value = initialData.id && !initialData._noPersistId ? String(initialData.id) : '';
                 nameInput.value = initialData.name || '';
                 quantityInput.value = String(parsePositiveInt(initialData.quantity || '1'));
                 valueInput.value = toBrValue(initialData.value || '');
@@ -1269,6 +1273,67 @@
             modal.hidden = false;
         };
 
+        const openDuplicate = (id) => {
+            closeSubBudgetModal();
+            const data = requisitionData[String(id)];
+            if (!data) return;
+            modeInput.value = 'create';
+            requisitionIdInput.value = '';
+            modalTitle.textContent = `Duplicar requisição ${data.code || ('TI - ' + String(data.id).padStart(4, '0'))}`;
+            requisitionTitle.value = data.title || '';
+            requestInput.value = data.request || '';
+            requisitionStatus.value = 'pending_approval';
+            clearBudgetItems();
+            budgetIndex = 0;
+            if (Array.isArray(data.quotes) && data.quotes.length) {
+                const byId = {};
+                const byQuoteIdToIdx = {};
+                const pending = data.quotes.map((q) => ({
+                    ...q,
+                    id: q.id,
+                    parent_id: q.parent_id,
+                    is_selected: false,
+                    _noPersistId: true,
+                }));
+                let guard = 0;
+                while (pending.length && guard < 500) {
+                    guard += 1;
+                    let progressed = false;
+                    for (let i = pending.length - 1; i >= 0; i -= 1) {
+                        const q = pending[i];
+                        const parentId = q.parent_id;
+                        if (!parentId || byQuoteIdToIdx[parentId]) {
+                            const parentMeta = parentId
+                                ? byQuoteIdToIdx[parentId]
+                                : null;
+                            const created = addBudgetItem(q, parentMeta);
+                            byId[q.id] = created;
+                            byQuoteIdToIdx[q.id] = {
+                                idx: created.idx,
+                                quoteId: '',
+                                name: q.name || `Orcamento ${created.idx}`,
+                            };
+                            pending.splice(i, 1);
+                            progressed = true;
+                        }
+                    }
+                    if (!progressed) {
+                        const q = pending.shift();
+                        const created = addBudgetItem(q, null);
+                        byId[q.id] = created;
+                        byQuoteIdToIdx[q.id] = {
+                            idx: created.idx,
+                            quoteId: '',
+                            name: q.name || `Orcamento ${created.idx}`,
+                        };
+                    }
+                }
+            } else {
+                addBudgetItem();
+            }
+            modal.hidden = false;
+        };
+
         const close = () => {
             closeSubBudgetModal();
             modal.hidden = true;
@@ -1283,6 +1348,15 @@
                 const id = row.getAttribute('data-requisition-id');
                 if (!id) return;
                 openEdit(id);
+            });
+        });
+        document.querySelectorAll('[data-duplicate-requisition]').forEach((btn) => {
+            btn.addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                const id = btn.getAttribute('data-requisition-id');
+                if (!id) return;
+                openDuplicate(id);
             });
         });
 
