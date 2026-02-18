@@ -153,6 +153,30 @@ class AccessMember(models.Model):
         return f'{self.group.name} - {self.name}'
 
 
+class Dica(models.Model):
+    class Category(models.TextChoices):
+        GERAL = 'geral', 'Geral'
+        RESOLUCAO = 'resolucao', 'Resolução de problema'
+        ACESSO = 'acesso', 'Acesso / permissão'
+        CONFIGURACAO = 'configuracao', 'Configuração'
+
+    category = models.CharField(max_length=20, choices=Category.choices, default=Category.GERAL)
+    title = models.CharField(max_length=200)
+    content = models.TextField()
+    created_by = models.ForeignKey(
+        'auth.User',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='dicas_criadas',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self) -> str:
+        return self.title
+
+
 class Ticket(models.Model):
     class TicketType(models.TextChoices):
         NAO_CLASSIFICADO = 'nao_classificado', 'Não classificado'

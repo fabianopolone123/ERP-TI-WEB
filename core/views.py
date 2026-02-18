@@ -34,6 +34,7 @@ from .models import (
     RequisitionQuote,
     AccessFolder,
     AccessMember,
+    Dica,
     Ticket,
     TicketMessage,
     TicketTimelineEvent,
@@ -77,6 +78,7 @@ ERP_MODULES = [
     {'slug': 'softwares', 'label': 'Softwares', 'url_name': 'softwares'},
     {'slug': 'insumos', 'label': 'Insumos', 'url_name': None},
     {'slug': 'requisicoes', 'label': 'Requisições', 'url_name': 'requisicoes'},
+    {'slug': 'dicas', 'label': 'Dicas', 'url_name': 'dicas'},
     {'slug': 'emprestimos', 'label': 'Empréstimos', 'url_name': None},
     {'slug': 'chamados', 'label': 'Chamados', 'url_name': 'chamados'},
     {'slug': 'relatorios', 'label': 'Relatórios', 'url_name': 'relatorios'},
@@ -958,6 +960,58 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
             else:
                 req.quotes_total = None
         context['requisitions'] = requisitions
+        return context
+
+
+class DicasView(LoginRequiredMixin, TemplateView):
+    template_name = 'core/dicas.html'
+
+    def post(self, request, *args, **kwargs):
+        if not is_ti_user(request):
+            messages.error(request, 'Apenas usuários do departamento TI podem gerenciar dicas.')
+            return self.get(request, *args, **kwargs)
+
+        action = (request.POST.get('action') or 'create').strip().lower()
+        if action == 'delete':
+            dica_id = (request.POST.get('dica_id') or '').strip()
+            dica = Dica.objects.filter(id=dica_id).first()
+            if not dica:
+                messages.error(request, 'Dica não encontrada.')
+                return redirect('dicas')
+            dica.delete()
+            messages.success(request, 'Dica removida com sucesso.')
+            return redirect('dicas')
+
+        title = (request.POST.get('title') or '').strip()
+        content = (request.POST.get('content') or '').strip()
+        category = (request.POST.get('category') or Dica.Category.GERAL).strip()
+        valid_categories = {choice[0] for choice in Dica.Category.choices}
+        if category not in valid_categories:
+            category = Dica.Category.GERAL
+
+        if not title:
+            messages.error(request, 'Informe o título da dica.')
+            return self.get(request, *args, **kwargs)
+        if not content:
+            messages.error(request, 'Informe a descrição da dica.')
+            return self.get(request, *args, **kwargs)
+
+        Dica.objects.create(
+            category=category,
+            title=title,
+            content=content,
+            created_by=request.user,
+        )
+        messages.success(request, 'Dica cadastrada com sucesso.')
+        return redirect('dicas')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        is_ti = is_ti_user(self.request)
+        context['is_ti_group'] = is_ti
+        context['modules'] = build_modules('dicas') if is_ti else []
+        context['dicas'] = Dica.objects.select_related('created_by').order_by('-updated_at', '-id') if is_ti else []
+        context['dica_categories'] = Dica.Category.choices
         return context
 
 
