@@ -638,8 +638,7 @@
                     const query = input.value.trim().toLowerCase();
                     const rows = Array.from(tbody.querySelectorAll('tr'));
                     rows.forEach((row) => {
-                        const firstCell = row.children[0];
-                        const text = firstCell ? firstCell.textContent.toLowerCase() : '';
+                        const text = (row.textContent || '').toLowerCase();
                         row.style.display = text.includes(query) ? '' : 'none';
                     });
                 };
