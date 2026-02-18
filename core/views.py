@@ -85,6 +85,19 @@ ERP_MODULES = [
 ]
 
 
+def _normalize_failure_type(raw_value: str) -> str:
+    raw = (raw_value or '').strip().lower()
+    if raw in {'n/s', 'ns', 'n-s', 'n/a', 'na', 'n-a'}:
+        return Ticket.FailureType.NA
+    if raw in {'equipamento', 'hardware'}:
+        return Ticket.FailureType.EQUIPAMENTO
+    if raw == 'software':
+        return Ticket.FailureType.SOFTWARE
+    if raw in {'humana', 'falha humana', 'falha_humana'}:
+        return Ticket.FailureType.HUMANA
+    return raw
+
+
 def build_modules(active_slug: str | None) -> list[dict[str, str | bool]]:
     modules = []
     for module in ERP_MODULES:
@@ -1368,10 +1381,10 @@ def move_ticket(request):
     source_target = (request.POST.get('source_target') or '').strip()
     progress_note = (request.POST.get('progress_note') or '').strip()
     resolution_note = (request.POST.get('resolution') or '').strip()
-    failure_type = (request.POST.get('failure_type') or '').strip().lower()
+    failure_type = _normalize_failure_type(request.POST.get('failure_type') or '')
     valid_failures = {choice[0] for choice in Ticket.FailureType.choices}
     if failure_type not in valid_failures:
-        saved_failure = (ticket.last_failure_type or '').strip().lower()
+        saved_failure = _normalize_failure_type(ticket.last_failure_type or '')
         if saved_failure in valid_failures:
             failure_type = saved_failure
     previous_status = ticket.status

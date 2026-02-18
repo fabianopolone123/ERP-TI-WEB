@@ -176,9 +176,10 @@ class Ticket(models.Model):
         FECHADO = 'fechado', 'Fechado'
 
     class FailureType(models.TextChoices):
-        NS = 'ns', 'N/S'
+        NA = 'na', 'N/A'
         EQUIPAMENTO = 'equipamento', 'Equipamento'
         SOFTWARE = 'software', 'Software'
+        HUMANA = 'humana', 'Falha humana'
 
     title = models.CharField(max_length=200)
     description = models.TextField()
@@ -284,7 +285,7 @@ class TicketWorkLog(models.Model):
     attendant = models.ForeignKey(ERPUser, on_delete=models.CASCADE, related_name='ticket_work_logs')
     opened_at = models.DateTimeField()
     closed_at = models.DateTimeField()
-    failure_type = models.CharField(max_length=20, choices=Ticket.FailureType.choices, default=Ticket.FailureType.NS)
+    failure_type = models.CharField(max_length=20, choices=Ticket.FailureType.choices, default=Ticket.FailureType.NA)
     action_text = models.TextField(blank=True, default='')
     priority_label = models.CharField(max_length=60, blank=True, default='')
     exported_at = models.DateTimeField(null=True, blank=True)

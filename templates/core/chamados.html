@@ -795,9 +795,10 @@
                         <label for="id_close_failure_type">Tipo de falha</label>
                         <select id="id_close_failure_type" name="failure_type" required>
                             <option value="">Selecione...</option>
-                            <option value="ns">N/S</option>
+                            <option value="na">N/A</option>
                             <option value="software">Software</option>
                             <option value="equipamento">Equipamento</option>
+                            <option value="humana">Falha humana</option>
                         </select>
                     </div>
                 </div>
@@ -1002,19 +1003,21 @@
                 const normalizeFailureType = (rawValue) => {
                     const raw = (rawValue || '').trim().toLowerCase();
                     if (!raw) return '';
-                    if (raw === 'n/s' || raw === 'ns' || raw === 'n-s') return 'ns';
-                    if (raw === 'equipamento') return 'equipamento';
+                    if (raw === 'n/s' || raw === 'ns' || raw === 'n-s' || raw === 'n/a' || raw === 'na' || raw === 'n-a') return 'na';
+                    if (raw === 'equipamento' || raw === 'hardware') return 'equipamento';
                     if (raw === 'software') return 'software';
+                    if (raw === 'humana' || raw === 'falha humana' || raw === 'falha_humana') return 'humana';
                     return '';
                 };
                 const currentSavedFailure = normalizeFailureType(draggingCard.dataset.failureType || '');
 
                 const askFailureType = () => {
-                    const raw = (prompt('Tipo de falha (N/S, Equipamento ou Software):') || '').trim().toLowerCase();
+                    const raw = (prompt('Tipo de falha (N/A, Equipamento, Software ou Falha humana):') || '').trim().toLowerCase();
                     if (!raw) return '';
-                    if (raw === 'n/s' || raw === 'ns' || raw === 'n-s') return 'ns';
-                    if (raw === 'equipamento') return 'equipamento';
+                    if (raw === 'n/s' || raw === 'ns' || raw === 'n-s' || raw === 'n/a' || raw === 'na' || raw === 'n-a') return 'na';
+                    if (raw === 'equipamento' || raw === 'hardware') return 'equipamento';
                     if (raw === 'software') return 'software';
+                    if (raw === 'humana' || raw === 'falha humana' || raw === 'falha_humana') return 'humana';
                     return '';
                 };
 
@@ -1057,7 +1060,7 @@
                         failureType = currentSavedFailure || askFailureType();
                     }
                     if (!failureType) {
-                        alert('Informe um tipo de falha válido: N/S, Equipamento ou Software.');
+                        alert('Informe um tipo de falha válido: N/A, Equipamento, Software ou Falha humana.');
                         draggingId = null;
                         return;
                     }
@@ -1106,7 +1109,7 @@
                         } else if (responseData.error === 'close_only_from_attendant') {
                             alert('Só é permitido finalizar chamado quando ele sai da coluna de um atendente.');
                         } else if (responseData.error === 'failure_required') {
-                            alert('Informe o tipo de falha: N/S, Equipamento ou Software.');
+                            alert('Informe o tipo de falha: N/A, Equipamento, Software ou Falha humana.');
                         } else if (responseData.error === 'action_required') {
                             alert('Informe a ação/correção ao mover o chamado.');
                         }
