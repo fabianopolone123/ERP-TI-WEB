@@ -824,6 +824,24 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
         if requisition.status != status_before:
             requisition.save(update_fields=['status', 'updated_at'])
 
+    @staticmethod
+    def _sync_requisition_timeline_dates(requisition: Requisition) -> None:
+        update_fields: list[str] = []
+        if not requisition.requested_at:
+            requisition.requested_at = requisition.created_at.date() if requisition.created_at else timezone.localdate()
+            update_fields.append('requested_at')
+
+        if requisition.status in {Requisition.Status.APPROVED, Requisition.Status.RECEIVED} and not requisition.approved_at:
+            requisition.approved_at = timezone.localdate()
+            update_fields.append('approved_at')
+
+        if requisition.status == Requisition.Status.RECEIVED and not requisition.received_at:
+            requisition.received_at = timezone.localdate()
+            update_fields.append('received_at')
+
+        if update_fields:
+            requisition.save(update_fields=update_fields)
+
     def post(self, request, *args, **kwargs):
         if not is_ti_user(request):
             messages.error(request, 'Apenas usuários do departamento TI podem cadastrar requisições.')
@@ -862,6 +880,7 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
                 messages.error(request, error)
                 return self.get(request, *args, **kwargs)
             self._sync_requisition_status_with_approved_quote(requisition)
+            self._sync_requisition_timeline_dates(requisition)
 
             messages.success(request, f'Requisição atualizada com sucesso com {saved_count} orçamento(s).')
             return redirect('requisicoes')
@@ -879,6 +898,7 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
             messages.error(request, error)
             return self.get(request, *args, **kwargs)
         self._sync_requisition_status_with_approved_quote(requisition)
+        self._sync_requisition_timeline_dates(requisition)
 
         messages.success(request, f'Requisição cadastrada com sucesso com {created_quotes} orçamento(s).')
         return redirect('requisicoes')

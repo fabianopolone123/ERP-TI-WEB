@@ -152,7 +152,7 @@
                         <th>Status</th>
                         <th>Orçamentos</th>
                         <th>Total</th>
-                        <th>Criado em</th>
+                        <th>Timeline</th>
                         <th>Ações</th>
                     </tr>
                 </thead>
@@ -189,7 +189,11 @@
                                     <span class="muted">Aguardando aprovação</span>
                                 {% endif %}
                             </td>
-                            <td data-sort-value="{{ item.created_at|date:'YmdHis' }}">{{ item.created_at|date:'d/m/Y H:i' }}</td>
+                            <td data-sort-value="{{ item.created_at|date:'YmdHis' }}">
+                                <div class="muted">Feita: {{ item.created_at|date:'d/m/Y H:i' }}</div>
+                                <div class="muted">Aprovada: {% if item.approved_at %}{{ item.approved_at|date:'d/m/Y' }}{% else %}-{% endif %}</div>
+                                <div class="muted">Recebida: {% if item.received_at %}{{ item.received_at|date:'d/m/Y' }}{% else %}-{% endif %}</div>
+                            </td>
                             <td>
                                 <button type="button" data-duplicate-requisition data-requisition-id="{{ item.id }}">Duplicar</button>
                             </td>
