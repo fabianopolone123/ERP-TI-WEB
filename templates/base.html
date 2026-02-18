@@ -93,8 +93,8 @@
         }
 
         .tabs {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            display: flex;
+            flex-wrap: nowrap;
             gap: 8px;
             margin-top: 16px;
             border-bottom: 1px solid #1f2a44;
@@ -102,6 +102,7 @@
             background: #0b1324;
             padding: 8px 8px 0;
             border-radius: 10px 10px 0 0;
+            overflow: hidden;
         }
 
         .tab-button {
@@ -114,10 +115,15 @@
             font-size: 0.92rem;
             cursor: pointer;
             text-decoration: none;
-            display: inline-block;
+            display: block;
             text-align: center;
             position: relative;
             top: 1px;
+            flex: 1 1 0;
+            min-width: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .tab-button.active {
@@ -521,7 +527,7 @@
 
         @media (max-width: 600px) {
             .topbar { flex-direction: column; align-items: flex-start; gap: 10px; }
-            .tabs { gap: 6px; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
+            .tabs { gap: 6px; }
             .tab-button { padding: 6px 10px; font-size: 0.9rem; }
         }
     </style>
