@@ -70,6 +70,10 @@ if ($cpu.Name -match 'i[3579]-([0-9]{4,5})') {
 } elseif ($cpu.Name -match 'Ryzen\s+\d\s+([0-9]{4,5})') {
     $digits = $Matches[1]
     $cpuGeneration = "{0}a" -f $digits.Substring(0,1)
+} elseif ($cpu.Name -match 'core\s*(\(\s*tm\s*\)\s*)?2\b') {
+    $cpuGeneration = 'Legado (Core 2)'
+} elseif ($cpu.Name -match '\b(Pentium|Celeron|Xeon)\b') {
+    $cpuGeneration = 'Legado'
 }
 
 $diskType = 'Nao identificado'
