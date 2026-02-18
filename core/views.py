@@ -807,6 +807,17 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
             requisition.quotes.exclude(id__in=kept_ids).delete()
         return saved_count, None
 
+    @staticmethod
+    def _sync_requisition_status_with_approved_quote(requisition: Requisition) -> None:
+        has_selected_main = requisition.quotes.filter(parent__isnull=True, is_selected=True).exists()
+        status_before = requisition.status
+        if has_selected_main and requisition.status == Requisition.Status.PENDING_APPROVAL:
+            requisition.status = Requisition.Status.APPROVED
+        elif not has_selected_main and requisition.status == Requisition.Status.APPROVED:
+            requisition.status = Requisition.Status.PENDING_APPROVAL
+        if requisition.status != status_before:
+            requisition.save(update_fields=['status', 'updated_at'])
+
     def post(self, request, *args, **kwargs):
         if not is_ti_user(request):
             messages.error(request, 'Apenas usuários do departamento TI podem cadastrar requisições.')
@@ -844,6 +855,7 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
             if error:
                 messages.error(request, error)
                 return self.get(request, *args, **kwargs)
+            self._sync_requisition_status_with_approved_quote(requisition)
 
             messages.success(request, f'Requisição atualizada com sucesso com {saved_count} orçamento(s).')
             return redirect('requisicoes')
@@ -860,6 +872,7 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
             requisition.delete()
             messages.error(request, error)
             return self.get(request, *args, **kwargs)
+        self._sync_requisition_status_with_approved_quote(requisition)
 
         messages.success(request, f'Requisição cadastrada com sucesso com {created_quotes} orçamento(s).')
         return redirect('requisicoes')
