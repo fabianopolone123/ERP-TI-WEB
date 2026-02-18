@@ -715,6 +715,7 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
                 continue
 
             quote_id = (request.POST.get(f'budget_quote_id_{idx}') or '').strip()
+            source_quote_id = (request.POST.get(f'budget_source_quote_id_{idx}') or '').strip()
             name = (request.POST.get(f'budget_name_{idx}') or '').strip()
             quantity_raw = (request.POST.get(f'budget_quantity_{idx}') or '').strip()
             value_raw = (request.POST.get(f'budget_value_{idx}') or '').strip()
@@ -773,6 +774,11 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
                 link=link,
                 photo=photo,
             )
+            if not photo and source_quote_id:
+                source_quote = RequisitionQuote.objects.filter(id=source_quote_id).first()
+                if source_quote and source_quote.photo:
+                    created.photo = source_quote.photo.name
+                    created.save(update_fields=['photo'])
             kept_ids.add(created.id)
             idx_to_quote[idx] = created
             saved_count += 1

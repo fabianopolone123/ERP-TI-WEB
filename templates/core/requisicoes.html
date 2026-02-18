@@ -313,6 +313,7 @@
     <div class="ticket-legend budget-item" data-budget-item>
         <input type="hidden" name="budget_index" data-budget-index />
         <input type="hidden" data-field="quote-id" />
+        <input type="hidden" data-field="source-quote-id" />
         <input type="hidden" data-field="parent-idx" />
         <input type="hidden" data-field="parent-quote-id" />
         <div class="budget-head">
@@ -867,6 +868,7 @@
         const setBudgetFieldNames = (item, idx) => {
             item.querySelector('[data-budget-index]').value = String(idx);
             item.querySelector('[data-field="quote-id"]').name = `budget_quote_id_${idx}`;
+            item.querySelector('[data-field="source-quote-id"]').name = `budget_source_quote_id_${idx}`;
             item.querySelector('[data-field="parent-idx"]').name = `budget_parent_idx_${idx}`;
             item.querySelector('[data-field="parent-quote-id"]').name = `budget_parent_quote_id_${idx}`;
             item.querySelector('[data-field="name"]').name = `budget_name_${idx}`;
@@ -886,6 +888,7 @@
             setBudgetFieldNames(item, idx);
 
             const quoteIdInput = item.querySelector('[data-field="quote-id"]');
+            const sourceQuoteIdInput = item.querySelector('[data-field="source-quote-id"]');
             const parentIdxInput = item.querySelector('[data-field="parent-idx"]');
             const parentQuoteIdInput = item.querySelector('[data-field="parent-quote-id"]');
             const parentLabel = item.querySelector('[data-parent-label]');
@@ -1024,6 +1027,7 @@
 
             if (initialData) {
                 quoteIdInput.value = initialData.id && !initialData._noPersistId ? String(initialData.id) : '';
+                sourceQuoteIdInput.value = initialData.source_quote_id ? String(initialData.source_quote_id) : '';
                 nameInput.value = initialData.name || '';
                 quantityInput.value = String(parsePositiveInt(initialData.quantity || '1'));
                 valueInput.value = toBrValue(initialData.value || '');
@@ -1291,6 +1295,7 @@
                 const pending = data.quotes.map((q) => ({
                     ...q,
                     id: q.id,
+                    source_quote_id: q.id,
                     parent_id: q.parent_id,
                     is_selected: false,
                     _noPersistId: true,
