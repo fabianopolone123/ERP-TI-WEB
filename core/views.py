@@ -3,8 +3,6 @@ import json
 import unicodedata
 from textwrap import shorten
 from decimal import Decimal, InvalidOperation
-from pathlib import Path
-from uuid import uuid4
 from django.conf import settings
 from django.contrib import messages
 from django.core.mail import send_mail
@@ -16,7 +14,7 @@ from datetime import timedelta
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth import get_user_model
-from django.http import JsonResponse, FileResponse
+from django.http import JsonResponse
 from django.urls import reverse
 from django.utils.dateparse import parse_date
 from django.views.decorators.http import require_GET, require_POST
@@ -1186,6 +1184,24 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
 
         ti_users = list(ERPUser.objects.filter(department__iexact='TI', is_active=True).order_by('full_name'))
         context['ti_users'] = ti_users
+        last_paths: dict[int, str] = {}
+        ti_ids = [u.id for u in ti_users]
+        if ti_ids:
+            logs_with_path = (
+                TicketWorkLog.objects.filter(attendant_id__in=ti_ids)
+                .exclude(exported_path__isnull=True)
+                .exclude(exported_path='')
+                .order_by('attendant_id', '-exported_at', '-id')
+                .values('attendant_id', 'exported_path')
+            )
+            for row in logs_with_path:
+                aid = row.get('attendant_id')
+                if aid in last_paths:
+                    continue
+                path_value = (row.get('exported_path') or '').strip()
+                if path_value:
+                    last_paths[aid] = path_value
+        context['attendant_last_workbook_paths'] = last_paths
         context['new_tickets'] = Ticket.objects.filter(status=Ticket.Status.NOVO).select_related('created_by').order_by('created_at')
         context['pending_tickets'] = Ticket.objects.filter(status=Ticket.Status.PENDENTE).select_related('created_by').order_by('created_at')
         context['scheduled_tickets'] = Ticket.objects.filter(status=Ticket.Status.PROGRAMADO).select_related('created_by').order_by('created_at')
@@ -1950,7 +1966,6 @@ def chamados_fill_spreadsheet(request):
 
     attendant_id = (request.POST.get('attendant_id') or '').strip()
     workbook_path = (request.POST.get('workbook_path') or '').strip()
-    workbook_file = request.FILES.get('workbook_file')
     if not attendant_id:
         messages.error(request, 'Informe o atendente.')
         return redirect('chamados')
@@ -1967,21 +1982,8 @@ def chamados_fill_spreadsheet(request):
         return redirect('chamados')
 
     export_path = workbook_path
-    output_filename = ''
-    if workbook_file:
-        upload_dir = settings.MEDIA_ROOT / 'exports'
-        upload_dir.mkdir(parents=True, exist_ok=True)
-        suffix = Path(workbook_file.name or '').suffix.lower() or '.xlsx'
-        tmp_name = f'planilha_{uuid4().hex}{suffix}'
-        tmp_path = upload_dir / tmp_name
-        with tmp_path.open('wb') as stream:
-            for chunk in workbook_file.chunks():
-                stream.write(chunk)
-        export_path = str(tmp_path)
-        output_filename = workbook_file.name or f'planilha_{attendant_id_int}.xlsx'
-
     if not export_path:
-        messages.error(request, 'Informe o caminho da planilha ou selecione um arquivo.')
+        messages.error(request, 'Informe o caminho da planilha.')
         return redirect('chamados')
 
     ok, exported_count, detail = export_attendant_logs_to_excel(
@@ -1989,10 +1991,6 @@ def chamados_fill_spreadsheet(request):
         workbook_path=export_path,
     )
     if ok:
-        if workbook_file:
-            response = FileResponse(open(export_path, 'rb'), as_attachment=True, filename=output_filename)
-            response['X-Export-Result'] = detail
-            return response
         messages.success(request, f'{attendant.full_name}: {detail}')
     else:
         messages.error(request, f'{attendant.full_name}: {detail}')

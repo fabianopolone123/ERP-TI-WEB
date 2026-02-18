@@ -744,7 +744,7 @@
                 <h3>Preencher planilha</h3>
                 <button type="button" data-close-planilha>Fechar</button>
             </div>
-            <form method="post" action="{% url 'chamados_preencher_planilha' %}" enctype="multipart/form-data">
+            <form method="post" action="{% url 'chamados_preencher_planilha' %}">
                 {% csrf_token %}
                 <div class="form-row">
                     <div>
@@ -752,7 +752,7 @@
                         <select id="id_planilha_atendente" name="attendant_id" required>
                             <option value="">Selecione...</option>
                             {% for user in ti_users %}
-                                <option value="{{ user.id }}">{{ user.full_name }}</option>
+                                <option value="{{ user.id }}" data-last-path="{{ attendant_last_workbook_paths|get_item:user.id|default:'' }}">{{ user.full_name }}</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -764,15 +764,6 @@
                             type="text"
                             value="{{ chamados_xlsx_default_path }}"
                             placeholder="S:\TI\Documentos\Chamados\Chamados 2026 - Fabiano.xlsx"
-                        />
-                    </div>
-                    <div style="flex: 2;">
-                        <label for="id_planilha_arquivo">Ou escolher arquivo (.xlsx)</label>
-                        <input
-                            id="id_planilha_arquivo"
-                            name="workbook_file"
-                            type="file"
-                            accept=".xlsx,.xlsm,.xltx,.xltm"
                         />
                     </div>
                 </div>
@@ -1554,12 +1545,21 @@
         const modal = document.querySelector('[data-planilha-modal]');
         const openBtn = document.querySelector('[data-open-planilha]');
         const closeEls = document.querySelectorAll('[data-close-planilha]');
-        const fileInput = document.querySelector('#id_planilha_arquivo');
+        const attendantInput = document.querySelector('#id_planilha_atendente');
         const pathInput = document.querySelector('#id_planilha_caminho');
+        const defaultPath = "{{ chamados_xlsx_default_path|default:''|escapejs }}";
         if (!modal || !openBtn) return;
+
+        const syncPathByAttendant = () => {
+            if (!pathInput || !attendantInput) return;
+            const opt = attendantInput.options[attendantInput.selectedIndex];
+            const attendantPath = (opt?.dataset?.lastPath || '').trim();
+            pathInput.value = attendantPath || defaultPath;
+        };
 
         const open = () => {
             modal.hidden = false;
+            syncPathByAttendant();
         };
         const close = () => {
             modal.hidden = true;
@@ -1567,13 +1567,8 @@
 
         openBtn.addEventListener('click', open);
         closeEls.forEach((el) => el.addEventListener('click', close));
-        if (fileInput && pathInput) {
-            fileInput.addEventListener('change', () => {
-                const selected = fileInput.files && fileInput.files[0] ? fileInput.files[0].name : '';
-                if (selected) {
-                    pathInput.value = selected;
-                }
-            });
+        if (attendantInput) {
+            attendantInput.addEventListener('change', syncPathByAttendant);
         }
     })();
 </script>

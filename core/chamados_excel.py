@@ -168,7 +168,7 @@ def export_attendant_logs_to_excel(*, attendant: ERPUser, workbook_path: str) ->
             failure_label = dict(Ticket.FailureType.choices).get(log.failure_type, log.failure_type or '')
 
             values = {
-                'ti': '',
+                'ti': ticket.id,
                 'data': _format_dt(log.opened_at),
                 'contato': contato,
                 'setor': setor,
