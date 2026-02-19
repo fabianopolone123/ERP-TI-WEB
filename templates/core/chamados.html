@@ -180,7 +180,7 @@
         </div>
         <div class="kanban" data-board>
             <div class="kanban-column" data-target="novo">
-                <div class="kanban-header">Novo</div>
+                <div class="kanban-header">Pendente</div>
                 <div class="kanban-body">
                     {% for ticket in new_tickets %}
                         <div class="ticket-card urgency-bg-{{ ticket.urgency }}{% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %} shared-ticket{% endif %}" draggable="true" data-ticket-id="{{ ticket.id }}" data-ticket-status="{{ ticket.status }}" data-opened-at="{{ ticket.created_at|date:'c' }}" data-failure-type="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'failure_type' }}">
@@ -213,7 +213,7 @@
                     <div class="kanban-header">{{ user.full_name }}</div>
                     <div class="kanban-body">
                         {% for ticket in user_tickets|get_item:user.id %}
-                            <div class="ticket-card urgency-bg-{{ ticket.urgency }}{% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %} shared-ticket{% endif %}" draggable="true" data-ticket-id="{{ ticket.id }}" data-ticket-status="{{ ticket.status }}" data-opened-at="{{ ticket.created_at|date:'c' }}" data-failure-type="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'failure_type' }}">
+                            <div class="ticket-card urgency-bg-{{ ticket.urgency }}{% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %} shared-ticket{% endif %}" draggable="true" data-ticket-id="{{ ticket.id }}" data-ticket-status="{{ ticket.status }}" data-opened-at="{{ ticket.created_at|date:'c' }}" data-failure-type="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'failure_type' }}" data-cycle-running="{% if ticket.current_cycle_started_at %}1{% else %}0{% endif %}">
                                 <div class="ticket-title">
                                     <span class="urgency-dot urgency-{{ ticket.urgency }}"></span>
                                     #{{ ticket.id }} - {{ ticket.title }}
@@ -230,6 +230,10 @@
                                             -
                                         {% endif %}
                                     </span>
+                                </div>
+                                <div class="ticket-meta" style="margin-top: 6px;">
+                                    <button type="button" data-ticket-play data-ticket-id="{{ ticket.id }}" {% if ticket.current_cycle_started_at %}style="display:none;"{% endif %}>Play</button>
+                                    <button type="button" data-ticket-pause data-ticket-id="{{ ticket.id }}" {% if not ticket.current_cycle_started_at %}style="display:none;"{% endif %}>Pause</button>
                                 </div>
                             </div>
                         {% endfor %}
@@ -273,63 +277,6 @@
                 </div>
             </div>
 
-            <div class="kanban-column" data-target="pendente">
-                <div class="kanban-header">Pendente</div>
-                <div class="kanban-body">
-                    {% for ticket in pending_tickets %}
-                        <div class="ticket-card urgency-bg-{{ ticket.urgency }}{% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %} shared-ticket{% endif %}" draggable="true" data-ticket-id="{{ ticket.id }}" data-ticket-status="{{ ticket.status }}" data-opened-at="{{ ticket.created_at|date:'c' }}" data-failure-type="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'failure_type' }}">
-                            <div class="ticket-title">
-                                <span class="urgency-dot urgency-{{ ticket.urgency }}"></span>
-                                #{{ ticket.id }} - {{ ticket.title }}
-                                {% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %}
-                                    <span class="status-pill status-shared">Compartilhado</span>
-                                {% endif %}
-                            </div>
-                            {% if is_ti_group %}
-                                <div class="ticket-meta ticket-meta-rich">
-                                    <span class="ticket-requester">{{ ticket_meta|get_item:ticket.id|default:""|get_item:'requester' }}</span>
-                                    <span class="ticket-extra">
-                                        {% if ticket_meta|get_item:ticket.id|default:""|get_item:'department' %}
-                                            {{ ticket_meta|get_item:ticket.id|default:""|get_item:'department' }}
-                                        {% else %}
-                                            -
-                                        {% endif %}
-                                    </span>
-                                </div>
-                            {% endif %}
-                        </div>
-                    {% endfor %}
-                </div>
-            </div>
-
-            <div class="kanban-column" data-target="programado">
-                <div class="kanban-header">Planejado</div>
-                <div class="kanban-body">
-                    {% for ticket in scheduled_tickets %}
-                        <div class="ticket-card urgency-bg-{{ ticket.urgency }}{% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %} shared-ticket{% endif %}" draggable="true" data-ticket-id="{{ ticket.id }}" data-ticket-status="{{ ticket.status }}" data-opened-at="{{ ticket.created_at|date:'c' }}" data-failure-type="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'failure_type' }}">
-                            <div class="ticket-title">
-                                <span class="urgency-dot urgency-{{ ticket.urgency }}"></span>
-                                #{{ ticket.id }} - {{ ticket.title }}
-                                {% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %}
-                                    <span class="status-pill status-shared">Compartilhado</span>
-                                {% endif %}
-                            </div>
-                            {% if is_ti_group %}
-                                <div class="ticket-meta ticket-meta-rich">
-                                    <span class="ticket-requester">{{ ticket_meta|get_item:ticket.id|default:""|get_item:'requester' }}</span>
-                                    <span class="ticket-extra">
-                                        {% if ticket_meta|get_item:ticket.id|default:""|get_item:'department' %}
-                                            {{ ticket_meta|get_item:ticket.id|default:""|get_item:'department' }}
-                                        {% else %}
-                                            -
-                                        {% endif %}
-                                    </span>
-                                </div>
-                            {% endif %}
-                        </div>
-                    {% endfor %}
-                </div>
-            </div>
         </div>
     {% else %}
         <div class="topbar" style="margin-top: 16px;">
@@ -825,10 +772,7 @@
         const MAX_COL_PX = 460;
 
         const refreshUniformColumns = () => {
-            const regularColumns = Array.from(board.querySelectorAll('.kanban-column')).filter((column) => {
-                const target = (column.dataset.target || '').trim();
-                return target !== 'programado' && target !== 'pendente';
-            });
+            const regularColumns = Array.from(board.querySelectorAll('.kanban-column'));
             const totalRegular = regularColumns.length || 1;
             const width = board.clientWidth || window.innerWidth || 1280;
             const byMin = Math.max(1, Math.floor(width / MIN_COL_PX));
@@ -847,8 +791,6 @@
     (function () {
         const board = document.querySelector('[data-board]');
         if (!board) return;
-        const plannedBody = board.querySelector('.kanban-column[data-target="programado"] .kanban-body');
-        const pendingBody = board.querySelector('.kanban-column[data-target="pendente"] .kanban-body');
 
         const getCookie = (name) => {
             const value = `; ${document.cookie}`;
@@ -856,22 +798,6 @@
             if (parts.length === 2) return parts.pop().split(';').shift();
             return '';
         };
-
-        const bindHorizontalWheel = (container) => {
-            if (!container) return;
-            container.addEventListener(
-                'wheel',
-                (event) => {
-                    if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
-                    container.scrollLeft += event.deltaY;
-                    event.preventDefault();
-                },
-                { passive: false }
-            );
-        };
-
-        bindHorizontalWheel(plannedBody);
-        bindHorizontalWheel(pendingBody);
 
         let draggingId = null;
         let draggingCard = null;
@@ -927,6 +853,19 @@
         closeCancelEls.forEach((el) => {
             el.addEventListener('click', () => closeCloseModal({ confirmed: false, failureType: '', text: '' }));
         });
+
+        const ensureTimerControls = (card) => {
+            if (!card) return;
+            if (card.querySelector('[data-ticket-play]') || card.querySelector('[data-ticket-pause]')) return;
+            const controls = document.createElement('div');
+            controls.className = 'ticket-meta';
+            controls.style.marginTop = '6px';
+            controls.innerHTML = `
+                <button type="button" data-ticket-play data-ticket-id="${card.dataset.ticketId || ''}">Play</button>
+                <button type="button" data-ticket-pause data-ticket-id="${card.dataset.ticketId || ''}" style="display:none;">Pause</button>
+            `;
+            card.appendChild(controls);
+        };
 
 
         board.addEventListener('dragstart', (event) => {
@@ -985,8 +924,7 @@
                 const isUserTarget = target.startsWith('user_');
                 const isUserSource = dragSourceTarget.startsWith('user_');
                 const isClosing = target === 'fechado';
-                const isPending = target === 'pendente';
-                const isScheduled = target === 'programado';
+                const isQueue = target === 'novo';
                 const shouldClone = !isClosing && draggingMulti && isUserTarget && isUserSource;
 
                 if (targetBody.querySelector(`.ticket-card[data-ticket-id="${dragTicketId}"]`)) {
@@ -1035,7 +973,7 @@
                     resolutionText = (closePayload.text || '').trim();
                     failureType = normalizeFailureType(closePayload.failureType || currentSavedFailure);
                 }
-                if (!isClosing && isUserSource && (isPending || isScheduled)) {
+                if (!isClosing && isUserSource && isQueue) {
                     const actionPayload = await askClosePayload(currentSavedFailure, 'action');
                     if (!actionPayload.confirmed) {
                         draggingId = null;
@@ -1045,17 +983,19 @@
                     failureType = normalizeFailureType(actionPayload.failureType || currentSavedFailure);
                     actionCapturedByModal = true;
                 }
-                if (isUserSource && (isPending || isScheduled || (isUserTarget && !shouldClone))) {
+                if (isUserSource && (isQueue || (isUserTarget && !shouldClone))) {
                     if (!actionCapturedByModal) {
-                        progressNote = prompt('Ação / Correção realizada neste atendimento:');
-                        if (!progressNote || !progressNote.trim()) {
+                        const actionPayload = await askClosePayload(currentSavedFailure, 'action');
+                        if (!actionPayload.confirmed) {
                             draggingId = null;
                             return;
                         }
-                        progressNote = progressNote.trim();
+                        progressNote = (actionPayload.text || '').trim();
+                        failureType = normalizeFailureType(actionPayload.failureType || currentSavedFailure);
+                        actionCapturedByModal = true;
                     }
                 }
-                if (!isClosing && isUserSource && (isPending || isScheduled || (isUserTarget && !shouldClone))) {
+                if (!isClosing && isUserSource && (isQueue || (isUserTarget && !shouldClone))) {
                     if (!actionCapturedByModal) {
                         failureType = currentSavedFailure || askFailureType();
                     }
@@ -1104,10 +1044,10 @@
                             alert('Informe o que foi feito antes de mover para Pendente.');
                         } else if (responseData.error === 'resolution_required') {
                             alert('Informe a resolução para finalizar o chamado.');
-                        } else if (responseData.error === 'cannot_return_to_new') {
-                            alert('Chamado que já saiu de Novo não pode voltar para Novo.');
                         } else if (responseData.error === 'close_only_from_attendant') {
                             alert('Só é permitido finalizar chamado quando ele sai da coluna de um atendente.');
+                        } else if (responseData.error === 'play_required') {
+                            alert('Para finalizar, inicie o atendimento com Play e depois finalize.');
                         } else if (responseData.error === 'failure_required') {
                             alert('Informe o tipo de falha: N/A, Equipamento, Software ou Falha humana.');
                         } else if (responseData.error === 'action_required') {
@@ -1135,9 +1075,28 @@
                             }
                         });
                     }
+                    if (target.startsWith('user_')) {
+                        board.querySelectorAll(`.ticket-card[data-ticket-id="${dragTicketId}"]`).forEach((card) => {
+                            ensureTimerControls(card);
+                            card.dataset.cycleRunning = '0';
+                            const playBtn = card.querySelector('[data-ticket-play]');
+                            const pauseBtn = card.querySelector('[data-ticket-pause]');
+                            if (playBtn) playBtn.style.display = '';
+                            if (pauseBtn) pauseBtn.style.display = 'none';
+                        });
+                    }
                     if (failureType) {
                         board.querySelectorAll(`.ticket-card[data-ticket-id="${dragTicketId}"]`).forEach((card) => {
                             card.dataset.failureType = failureType;
+                        });
+                    }
+                    if (target === 'novo') {
+                        board.querySelectorAll(`.ticket-card[data-ticket-id="${dragTicketId}"]`).forEach((card) => {
+                            card.dataset.cycleRunning = '0';
+                            const playBtn = card.querySelector('[data-ticket-play]');
+                            const pauseBtn = card.querySelector('[data-ticket-pause]');
+                            if (playBtn) playBtn.style.display = 'none';
+                            if (pauseBtn) pauseBtn.style.display = 'none';
                         });
                     }
                     document.dispatchEvent(new Event('tickets-updated'));
@@ -1147,6 +1106,79 @@
                     window.__ticketDragInProgress = false;
                 }
             });
+        });
+
+        const syncPlayPauseButtons = (ticketId, running) => {
+            board.querySelectorAll(`.ticket-card[data-ticket-id="${ticketId}"]`).forEach((card) => {
+                card.dataset.cycleRunning = running ? '1' : '0';
+                const playBtn = card.querySelector('[data-ticket-play]');
+                const pauseBtn = card.querySelector('[data-ticket-pause]');
+                if (playBtn) playBtn.style.display = running ? 'none' : '';
+                if (pauseBtn) pauseBtn.style.display = running ? '' : 'none';
+            });
+        };
+
+        board.addEventListener('click', async (event) => {
+            const playBtn = event.target.closest('[data-ticket-play]');
+            const pauseBtn = event.target.closest('[data-ticket-pause]');
+            if (!playBtn && !pauseBtn) return;
+
+            const card = event.target.closest('.ticket-card');
+            const column = event.target.closest('.kanban-column');
+            if (!card || !column) return;
+            const sourceTarget = column.dataset.target || '';
+            if (!sourceTarget.startsWith('user_')) {
+                alert('Play/Pause só pode ser usado em coluna de atendente.');
+                return;
+            }
+
+            const ticketId = card.dataset.ticketId || '';
+            if (!ticketId) return;
+
+            const action = playBtn ? 'play' : 'pause';
+            let actionNote = '';
+            let failureType = '';
+
+            if (action === 'pause') {
+                const currentSavedFailure = (card.dataset.failureType || '').trim().toLowerCase();
+                const payload = await askClosePayload(currentSavedFailure, 'action');
+                if (!payload.confirmed) return;
+                actionNote = (payload.text || '').trim();
+                failureType = (payload.failureType || '').trim();
+            }
+
+            const response = await fetch('{% url "chamados_timer" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-CSRFToken': getCookie('csrftoken'),
+                },
+                body: new URLSearchParams({
+                    ticket_id: ticketId,
+                    action,
+                    source_target: sourceTarget,
+                    action_note: actionNote,
+                    failure_type: failureType,
+                }),
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                if (data.error === 'action_required') {
+                    alert('Informe a ação/correção ao pausar.');
+                } else if (data.error === 'failure_required') {
+                    alert('Informe o tipo de falha ao pausar.');
+                } else if (data.error === 'not_running') {
+                    alert('Este chamado não está em execução.');
+                } else {
+                    alert('Não foi possível processar Play/Pause.');
+                }
+                return;
+            }
+
+            if (action === 'pause' && data.failure_type) {
+                card.dataset.failureType = data.failure_type;
+            }
+            syncPlayPauseButtons(ticketId, !!data.running);
         });
     })();
 </script>
@@ -1404,6 +1436,7 @@
 
         clickRoot.addEventListener('click', (event) => {
             if (dragging) return;
+            if (event.target.closest('[data-ticket-play]') || event.target.closest('[data-ticket-pause]')) return;
             const card = event.target.closest('.ticket-card');
             if (!card) return;
             openDetails(card.dataset.ticketId);

@@ -7,7 +7,7 @@ from decimal import Decimal, InvalidOperation
 from django.conf import settings
 from django.contrib import messages
 from django.core.mail import send_mail
-from django.db.models import Count, Q
+from django.db.models import Count, Q, Case, When, Value, IntegerField
 from django.db.models.functions import TruncDate
 from django.shortcuts import redirect
 from django.utils import timezone
@@ -546,6 +546,15 @@ def _create_ticket_work_log(
         action_text=(action_text or '').strip(),
         priority_label=ticket.get_urgency_display(),
     )
+
+
+def _extract_source_user_id(source_target: str) -> int | None:
+    if not (source_target or '').startswith('user_'):
+        return None
+    try:
+        return int(str(source_target).replace('user_', ''))
+    except ValueError:
+        return None
 
 
 class DashboardView(LoginRequiredMixin, TemplateView):
@@ -1395,7 +1404,7 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
             messages.info(request, 'Chamado idêntico detectado recentemente. Não foi criado novamente.')
             return redirect('chamados')
 
-        initial_status = Ticket.Status.PROGRAMADO if is_ti else Ticket.Status.NOVO
+        initial_status = Ticket.Status.PENDENTE if is_ti else Ticket.Status.NOVO
         ticket = Ticket.objects.create(
             title=title,
             description=description,
@@ -1499,9 +1508,19 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
                 if path_value:
                     last_paths[aid] = path_value
         context['attendant_last_workbook_paths'] = last_paths
-        context['new_tickets'] = Ticket.objects.filter(status=Ticket.Status.NOVO).select_related('created_by').order_by('created_at')
-        context['pending_tickets'] = Ticket.objects.filter(status=Ticket.Status.PENDENTE).select_related('created_by').order_by('created_at')
-        context['scheduled_tickets'] = Ticket.objects.filter(status=Ticket.Status.PROGRAMADO).select_related('created_by').order_by('created_at')
+        context['new_tickets'] = (
+            Ticket.objects.filter(status__in=[Ticket.Status.NOVO, Ticket.Status.PENDENTE, Ticket.Status.PROGRAMADO])
+            .select_related('created_by')
+            .annotate(
+                queue_order=Case(
+                    When(status=Ticket.Status.NOVO, then=Value(0)),
+                    When(status=Ticket.Status.PENDENTE, then=Value(1)),
+                    default=Value(2),
+                    output_field=IntegerField(),
+                )
+            )
+            .order_by('queue_order', '-created_at')
+        )
         context['closed_tickets'] = Ticket.objects.filter(status=Ticket.Status.FECHADO).select_related('created_by').order_by('-created_at')
         in_progress_tickets = Ticket.objects.filter(status=Ticket.Status.EM_ATENDIMENTO).select_related('created_by').prefetch_related(
             'collaborators'
@@ -1521,8 +1540,6 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
 
         all_tickets = (
             list(context['new_tickets'])
-            + list(context['pending_tickets'])
-            + list(context['scheduled_tickets'])
             + list(context['closed_tickets'])
             + list(in_progress_tickets)
         )
@@ -1705,14 +1722,7 @@ def move_ticket(request):
     source_is_user = source_target.startswith('user_')
 
     if target in {'novo', 'pendente', 'programado'}:
-        status_map = {
-            'novo': Ticket.Status.NOVO,
-            'pendente': Ticket.Status.PENDENTE,
-            'programado': Ticket.Status.PROGRAMADO,
-        }
-        destination_status = status_map[target]
-        if destination_status == Ticket.Status.NOVO and previous_status != Ticket.Status.NOVO:
-            return JsonResponse({'ok': False, 'error': 'cannot_return_to_new'}, status=400)
+        destination_status = Ticket.Status.PENDENTE
         source_user_id = None
         if source_target.startswith('user_'):
             try:
@@ -1763,24 +1773,24 @@ def move_ticket(request):
             )
             return JsonResponse({'ok': True, 'partial_unassign': True})
 
-        if source_target.startswith('user_') and destination_status == Ticket.Status.PENDENTE and not progress_note:
+        if source_target.startswith('user_') and not progress_note:
             return JsonResponse({'ok': False, 'error': 'progress_note_required'}, status=400)
         if source_is_user:
             if failure_type not in valid_failures:
                 return JsonResponse({'ok': False, 'error': 'failure_required'}, status=400)
             if not progress_note:
                 return JsonResponse({'ok': False, 'error': 'action_required'}, status=400)
-
-            cycle_start = ticket.current_cycle_started_at or ticket.created_at
-            closed_at = timezone.now()
-            _create_ticket_work_log(
-                ticket=ticket,
-                source_target=source_target,
-                opened_at=cycle_start,
-                closed_at=closed_at,
-                failure_type=failure_type,
-                action_text=progress_note,
-            )
+            if ticket.current_cycle_started_at:
+                cycle_start = ticket.current_cycle_started_at
+                closed_at = timezone.now()
+                _create_ticket_work_log(
+                    ticket=ticket,
+                    source_target=source_target,
+                    opened_at=cycle_start,
+                    closed_at=closed_at,
+                    failure_type=failure_type,
+                    action_text=progress_note,
+                )
 
         ticket.status = destination_status
         ticket.assigned_to = None
@@ -1820,7 +1830,9 @@ def move_ticket(request):
             return JsonResponse({'ok': False, 'error': 'resolution_required'}, status=400)
         if failure_type not in valid_failures:
             return JsonResponse({'ok': False, 'error': 'failure_required'}, status=400)
-        cycle_start = ticket.current_cycle_started_at or ticket.created_at
+        if not ticket.current_cycle_started_at:
+            return JsonResponse({'ok': False, 'error': 'play_required'}, status=400)
+        cycle_start = ticket.current_cycle_started_at
         closed_at = timezone.now()
         _create_ticket_work_log(
             ticket=ticket,
@@ -1864,16 +1876,17 @@ def move_ticket(request):
                 return JsonResponse({'ok': False, 'error': 'failure_required'}, status=400)
             if not progress_note:
                 return JsonResponse({'ok': False, 'error': 'action_required'}, status=400)
-            cycle_start = ticket.current_cycle_started_at or ticket.created_at
-            closed_at = timezone.now()
-            _create_ticket_work_log(
-                ticket=ticket,
-                source_target=source_target,
-                opened_at=cycle_start,
-                closed_at=closed_at,
-                failure_type=failure_type,
-                action_text=progress_note,
-            )
+            if ticket.current_cycle_started_at:
+                cycle_start = ticket.current_cycle_started_at
+                closed_at = timezone.now()
+                _create_ticket_work_log(
+                    ticket=ticket,
+                    source_target=source_target,
+                    opened_at=cycle_start,
+                    closed_at=closed_at,
+                    failure_type=failure_type,
+                    action_text=progress_note,
+                )
 
         if is_clone_assignment:
             ticket.save()
@@ -1884,7 +1897,7 @@ def move_ticket(request):
             ticket.assigned_to = assignee
             if was_closed:
                 ticket.resolution = ''
-            ticket.current_cycle_started_at = timezone.now()
+            ticket.current_cycle_started_at = None
             ticket.last_failure_type = failure_type if source_is_user else ticket.last_failure_type
             ticket.save()
             ticket.collaborators.clear()
@@ -1932,6 +1945,85 @@ def move_ticket(request):
         return JsonResponse({'ok': True})
 
     return JsonResponse({'ok': False, 'error': 'invalid_target'}, status=400)
+
+
+@login_required
+@require_POST
+def ticket_timer_action(request):
+    if not is_ti_user(request):
+        return JsonResponse({'ok': False, 'error': 'forbidden'}, status=403)
+
+    ticket_id = (request.POST.get('ticket_id') or '').strip()
+    action = (request.POST.get('action') or '').strip().lower()
+    source_target = (request.POST.get('source_target') or '').strip()
+    action_note = (request.POST.get('action_note') or '').strip()
+    failure_type = _normalize_failure_type(request.POST.get('failure_type') or '')
+    valid_failures = {choice[0] for choice in Ticket.FailureType.choices}
+
+    if not ticket_id or action not in {'play', 'pause'}:
+        return JsonResponse({'ok': False, 'error': 'invalid'}, status=400)
+
+    ticket = Ticket.objects.filter(id=ticket_id).first()
+    if not ticket:
+        return JsonResponse({'ok': False, 'error': 'not_found'}, status=404)
+    if ticket.status != Ticket.Status.EM_ATENDIMENTO:
+        return JsonResponse({'ok': False, 'error': 'not_in_progress'}, status=400)
+
+    source_user_id = _extract_source_user_id(source_target)
+    if not source_user_id:
+        return JsonResponse({'ok': False, 'error': 'invalid_source'}, status=400)
+
+    assignee_ids = set()
+    if ticket.assigned_to_id:
+        assignee_ids.add(ticket.assigned_to_id)
+    assignee_ids.update(ticket.collaborators.values_list('id', flat=True))
+    if source_user_id not in assignee_ids:
+        return JsonResponse({'ok': False, 'error': 'invalid_source'}, status=400)
+
+    if action == 'play':
+        if ticket.current_cycle_started_at:
+            return JsonResponse({'ok': True, 'running': True})
+        ticket.current_cycle_started_at = timezone.now()
+        ticket.save(update_fields=['current_cycle_started_at', 'updated_at'])
+        _log_ticket_timeline(
+            ticket=ticket,
+            event_type=TicketTimelineEvent.EventType.STATUS_CHANGED,
+            request_user=request.user,
+            from_status=ticket.status,
+            to_status=ticket.status,
+            note='Atendimento iniciado (Play).',
+        )
+        return JsonResponse({'ok': True, 'running': True})
+
+    # pause
+    if not ticket.current_cycle_started_at:
+        return JsonResponse({'ok': False, 'error': 'not_running'}, status=400)
+    if not action_note:
+        return JsonResponse({'ok': False, 'error': 'action_required'}, status=400)
+    if failure_type not in valid_failures:
+        return JsonResponse({'ok': False, 'error': 'failure_required'}, status=400)
+
+    closed_at = timezone.now()
+    _create_ticket_work_log(
+        ticket=ticket,
+        source_target=source_target,
+        opened_at=ticket.current_cycle_started_at,
+        closed_at=closed_at,
+        failure_type=failure_type,
+        action_text=action_note,
+    )
+    ticket.current_cycle_started_at = None
+    ticket.last_failure_type = failure_type
+    ticket.save(update_fields=['current_cycle_started_at', 'last_failure_type', 'updated_at'])
+    _log_ticket_timeline(
+        ticket=ticket,
+        event_type=TicketTimelineEvent.EventType.STATUS_CHANGED,
+        request_user=request.user,
+        from_status=ticket.status,
+        to_status=ticket.status,
+        note=f'Atendimento pausado (Pause): {action_note}',
+    )
+    return JsonResponse({'ok': True, 'running': False, 'failure_type': failure_type})
 
 
 @login_required
