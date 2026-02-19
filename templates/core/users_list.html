@@ -48,6 +48,10 @@
                                 <button type="submit">Aplicar</button>
                             </form>
                         </div>
+                        <div class="ticket-legend" style="margin-bottom: 10px;">
+                            <strong>Usuários ativos (pessoas):</strong> {{ active_people_count|default:0 }}
+                            <span class="muted">| Ativos totais: {{ active_total_count|default:0 }} | Contas técnicas estimadas: {{ active_non_people_count|default:0 }}</span>
+                        </div>
                         <div style="overflow-x: auto;">
                             <table class="data-table" data-table-name="usuarios">
                                 <thead>

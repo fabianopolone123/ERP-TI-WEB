@@ -132,6 +132,31 @@ def _normalize_text(value: str) -> str:
     return unicodedata.normalize('NFKD', raw).encode('ascii', 'ignore').decode('ascii')
 
 
+def _is_probably_person_name(full_name: str) -> bool:
+    normalized = _normalize_text(full_name or '')
+    if not normalized:
+        return False
+
+    blocked_tokens = {
+        'admin', 'administrator', 'administration',
+        'server', 'servico', 'service', 'account', 'system', 'sistema',
+        'fortigate', 'firewall', 'backup', 'monitoramento', 'robot', 'bot',
+    }
+    if any(token in normalized for token in blocked_tokens):
+        return False
+
+    raw_tokens = [t for t in normalized.replace('.', ' ').replace('_', ' ').replace('-', ' ').split() if t]
+    if len(raw_tokens) < 2:
+        return False
+
+    connectors = {'da', 'de', 'do', 'das', 'dos', 'e'}
+    valid_name_tokens = [t for t in raw_tokens if t not in connectors]
+    if len(valid_name_tokens) < 2:
+        return False
+
+    return all(any(ch.isalpha() for ch in token) for token in valid_name_tokens[:3])
+
+
 def _get_user_ad_groups(username: str) -> list[str]:
     server_uri = getattr(settings, 'AD_LDAP_SERVER_URI', '')
     base_dn = getattr(settings, 'AD_LDAP_BASE_DN', '')
@@ -579,6 +604,11 @@ class UsersListView(LoginRequiredMixin, TemplateView):
         context['modules'] = build_modules('usuarios') if is_ti else []
         show_inactive = self.request.GET.get('show_inactive') == '1'
         queryset = ERPUser.objects.all()
+        active_users = list(ERPUser.objects.filter(is_active=True))
+        active_people = [u for u in active_users if _is_probably_person_name(u.full_name)]
+        context['active_total_count'] = len(active_users)
+        context['active_people_count'] = len(active_people)
+        context['active_non_people_count'] = max(0, len(active_users) - len(active_people))
         if not show_inactive:
             queryset = queryset.filter(is_active=True)
         context['show_inactive'] = show_inactive
