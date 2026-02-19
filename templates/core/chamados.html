@@ -119,10 +119,16 @@
         font-size: 0.78rem;
     }
     .ticket-legend-inline .legend-items {
-        margin-top: 4px;
         display: flex;
         flex-wrap: wrap;
         gap: 10px;
+    }
+    .ticket-legend-inline .legend-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-top: 4px;
     }
 </style>
 <div class="card">
@@ -134,26 +140,28 @@
             {% if is_ti_group %}
                 <div class="ticket-legend ticket-legend-inline">
                     <strong>Legenda</strong>
-                    <div class="legend-items">
-                        <span><span class="urgency-dot urgency-programada"></span> Programada</span>
-                        <span><span class="urgency-dot urgency-baixa"></span> Baixa</span>
-                        <span><span class="urgency-dot urgency-media"></span> Média</span>
-                        <span><span class="urgency-dot urgency-alta"></span> Alta</span>
-                        <span><span class="urgency-dot urgency-nao_classificado"></span> Não classificado</span>
+                    <div class="legend-row">
+                        <div class="legend-items">
+                            <span><span class="urgency-dot urgency-programada"></span> Programada</span>
+                            <span><span class="urgency-dot urgency-baixa"></span> Baixa</span>
+                            <span><span class="urgency-dot urgency-media"></span> Média</span>
+                            <span><span class="urgency-dot urgency-alta"></span> Alta</span>
+                            <span><span class="urgency-dot urgency-nao_classificado"></span> Não classificado</span>
+                        </div>
+                        <label for="id_refresh_seconds" style="display:flex; align-items:center; gap:6px; font-size:0.82rem; color:#93a4bf;">
+                            Atualizar a cada
+                            <input
+                                id="id_refresh_seconds"
+                                type="number"
+                                min="3"
+                                max="300"
+                                step="1"
+                                value="10"
+                                style="width:70px; padding:6px 8px; margin: 0;"
+                            />
+                            s
+                        </label>
                     </div>
-                    <label for="id_refresh_seconds" style="display:flex; align-items:center; gap:6px; font-size:0.82rem; color:#93a4bf; margin-top:8px;">
-                        Atualizar a cada
-                        <input
-                            id="id_refresh_seconds"
-                            type="number"
-                            min="3"
-                            max="300"
-                            step="1"
-                            value="10"
-                            style="width:70px; padding:6px 8px; margin: 0;"
-                        />
-                        s
-                    </label>
                 </div>
                 <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
                     <button type="button" data-open-whatsapp>WhatsApp</button>
