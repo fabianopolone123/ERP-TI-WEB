@@ -141,24 +141,26 @@
                         <span><span class="urgency-dot urgency-alta"></span> Alta</span>
                         <span><span class="urgency-dot urgency-nao_classificado"></span> Não classificado</span>
                     </div>
+                    <label for="id_refresh_seconds" style="display:flex; align-items:center; gap:6px; font-size:0.82rem; color:#93a4bf; margin-top:8px;">
+                        Atualizar a cada
+                        <input
+                            id="id_refresh_seconds"
+                            type="number"
+                            min="3"
+                            max="300"
+                            step="1"
+                            value="10"
+                            style="width:70px; padding:6px 8px; margin: 0;"
+                        />
+                        s
+                    </label>
                 </div>
-                <button type="button" data-open-whatsapp>WhatsApp</button>
-                <button type="button" data-open-email>E-mail</button>
-                <button type="button" data-open-planilha>Planilha</button>
-                <label for="id_refresh_seconds" style="display:flex; align-items:center; gap:6px; font-size:0.82rem; color:#93a4bf;">
-                    Atualizar a cada
-                    <input
-                        id="id_refresh_seconds"
-                        type="number"
-                        min="3"
-                        max="300"
-                        step="1"
-                        value="10"
-                        style="width:70px; padding:6px 8px;"
-                    />
-                    s
-                </label>
-                <button type="button" data-open-modal>Abrir chamado</button>
+                <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+                    <button type="button" data-open-whatsapp>WhatsApp</button>
+                    <button type="button" data-open-email>E-mail</button>
+                    <button type="button" data-open-planilha>Planilha</button>
+                    <button type="button" data-open-modal>Abrir chamado</button>
+                </div>
             {% endif %}
             <form method="post" action="{% url 'logout' %}" class="inline-form">
                 {% csrf_token %}
