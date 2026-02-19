@@ -45,20 +45,12 @@
                                     <input type="checkbox" name="show_inactive" value="1" {% if show_inactive %}checked{% endif %} />
                                     Mostrar inativos
                                 </label>
-                                <label class="muted" style="display: inline-flex; align-items: center; gap: 6px; margin-left: 8px;">
-                                    <input type="checkbox" name="only_people" value="1" {% if only_people %}checked{% endif %} />
-                                    Somente pessoas
-                                </label>
-                                <label class="muted" style="display: inline-flex; align-items: center; gap: 6px; margin-left: 8px;">
-                                    <input type="checkbox" name="only_non_people" value="1" {% if only_non_people %}checked{% endif %} />
-                                    Somente AD não-pessoa
-                                </label>
                                 <button type="submit">Aplicar</button>
                             </form>
                         </div>
                         <div class="ticket-legend" style="margin-bottom: 10px;">
-                            <strong>Usuários ativos (pessoas):</strong> {{ active_people_count|default:0 }}
-                            <span class="muted">| Ativos totais: {{ active_total_count|default:0 }} | Contas técnicas estimadas: {{ active_non_people_count|default:0 }}</span>
+                            <strong>Usuários ativos marcados com e-mail:</strong> {{ active_people_count|default:0 }}
+                            <span class="muted">| Ativos totais: {{ active_total_count|default:0 }} | Ativos não marcados: {{ active_non_people_count|default:0 }}</span>
                         </div>
                         <div style="overflow-x: auto;">
                             <table class="data-table" data-table-name="usuarios">
@@ -71,6 +63,7 @@
                                         <th>Email</th>
                                         <th>Ramal</th>
                                         <th>Ativo</th>
+                                        <th>Usuário com e-mail</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -83,10 +76,22 @@
                                             <td>{{ user.email }}</td>
                                             <td>{{ user.extension }}</td>
                                             <td>{% if user.is_active %}Sim{% else %}Não{% endif %}</td>
+                                            <td>
+                                                <form method="post" class="inline-form">
+                                                    {% csrf_token %}
+                                                    <input type="hidden" name="action" value="update_email_user" />
+                                                    <input type="hidden" name="user_id" value="{{ user.id }}" />
+                                                    <input type="hidden" name="show_inactive" value="{% if show_inactive %}1{% else %}0{% endif %}" />
+                                                    <label class="muted" style="display: inline-flex; align-items: center; gap: 6px;">
+                                                        <input type="checkbox" name="is_email_user" value="1" {% if user.is_email_user %}checked{% endif %} onchange="this.form.submit()" />
+                                                        Marcar
+                                                    </label>
+                                                </form>
+                                            </td>
                                         </tr>
                                     {% empty %}
                                         <tr>
-                                            <td colspan="7" class="muted">
+                                            <td colspan="8" class="muted">
                                                 Nenhum usuário cadastrado.
                                             </td>
                                         </tr>

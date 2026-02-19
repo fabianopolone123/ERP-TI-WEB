@@ -132,33 +132,6 @@ def _normalize_text(value: str) -> str:
     return unicodedata.normalize('NFKD', raw).encode('ascii', 'ignore').decode('ascii')
 
 
-def _is_probably_person_name(full_name: str) -> bool:
-    normalized = _normalize_text(full_name or '')
-    if not normalized:
-        return False
-
-    blocked_tokens = {
-        'admin', 'administrator', 'administration',
-        'server', 'servico', 'service', 'account', 'system', 'sistema',
-        'fortigate', 'firewall', 'backup', 'monitoramento', 'robot', 'bot',
-        'fsso', 'agent', 'mecano', 'glpi', 'ldap', 'impressora', 'impressoras', 'impress', 'suporte',
-        'producao', 'sidertec',
-    }
-    if any(token in normalized for token in blocked_tokens):
-        return False
-
-    raw_tokens = [t for t in normalized.replace('.', ' ').replace('_', ' ').replace('-', ' ').split() if t]
-    if len(raw_tokens) < 2:
-        return False
-
-    connectors = {'da', 'de', 'do', 'das', 'dos', 'e'}
-    valid_name_tokens = [t for t in raw_tokens if t not in connectors]
-    if len(valid_name_tokens) < 2:
-        return False
-
-    return all(any(ch.isalpha() for ch in token) for token in valid_name_tokens[:3])
-
-
 def _get_user_ad_groups(username: str) -> list[str]:
     server_uri = getattr(settings, 'AD_LDAP_SERVER_URI', '')
     base_dn = getattr(settings, 'AD_LDAP_BASE_DN', '')
@@ -592,6 +565,19 @@ class UsersListView(LoginRequiredMixin, TemplateView):
             messages.error(request, 'Apenas usuários do departamento TI podem importar do AD.')
             return self.get(request, *args, **kwargs)
 
+        action = (request.POST.get('action') or '').strip().lower()
+        if action == 'update_email_user':
+            user_id = (request.POST.get('user_id') or '').strip()
+            user = ERPUser.objects.filter(id=user_id).first()
+            if not user:
+                messages.error(request, 'Usuário não encontrado.')
+            else:
+                user.is_email_user = bool(request.POST.get('is_email_user'))
+                user.save(update_fields=['is_email_user'])
+                messages.success(request, f'Marcação de e-mail atualizada para {user.full_name}.')
+            show_inactive = '1' if request.POST.get('show_inactive') == '1' else '0'
+            return redirect(f"{reverse('usuarios')}?show_inactive={show_inactive}")
+
         try:
             created, updated = import_ad_users()
             messages.success(request, f'Importação concluída: {created} novos, {updated} atualizados.')
@@ -605,28 +591,15 @@ class UsersListView(LoginRequiredMixin, TemplateView):
         context['is_ti_group'] = is_ti
         context['modules'] = build_modules('usuarios') if is_ti else []
         show_inactive = self.request.GET.get('show_inactive') == '1'
-        only_people = self.request.GET.get('only_people') == '1'
-        only_non_people = self.request.GET.get('only_non_people') == '1'
         queryset = ERPUser.objects.all()
         active_users = list(ERPUser.objects.filter(is_active=True))
-        active_people = [u for u in active_users if _is_probably_person_name(u.full_name)]
         context['active_total_count'] = len(active_users)
-        context['active_people_count'] = len(active_people)
-        context['active_non_people_count'] = max(0, len(active_users) - len(active_people))
+        active_marked = [u for u in active_users if u.is_email_user]
+        context['active_people_count'] = len(active_marked)
+        context['active_non_people_count'] = max(0, len(active_users) - len(active_marked))
         if not show_inactive:
             queryset = queryset.filter(is_active=True)
-        if only_people and not only_non_people:
-            people_ids = [u.id for u in queryset if _is_probably_person_name(u.full_name)]
-            queryset = queryset.filter(id__in=people_ids)
-        elif only_non_people and not only_people:
-            non_people_ids = [
-                u.id for u in queryset
-                if (u.username or '').strip() and not _is_probably_person_name(u.full_name)
-            ]
-            queryset = queryset.filter(id__in=non_people_ids)
         context['show_inactive'] = show_inactive
-        context['only_people'] = only_people
-        context['only_non_people'] = only_non_people
         context['users'] = queryset.order_by('full_name')
         return context
 

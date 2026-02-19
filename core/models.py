@@ -10,6 +10,7 @@ class ERPUser(models.Model):
     mobile = models.CharField(max_length=30, blank=True, default='')
     email = models.EmailField(blank=True, default='')
     extension = models.CharField(max_length=4, blank=True, default='')
+    is_email_user = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
 
     def __str__(self) -> str:
