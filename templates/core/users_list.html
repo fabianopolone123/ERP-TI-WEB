@@ -28,64 +28,13 @@
                     {% if module.slug == "usuarios" %}
                         <div class="topbar" style="margin-bottom: 10px;">
                             <h3>Lista de usuários</h3>
-                            <form method="post" class="inline-form">
-                                {% csrf_token %}
-                                <button type="submit">Importar do AD</button>
-                            </form>
-                        </div>
-                        <div class="ticket-form" style="margin-bottom: 12px;">
-                            <div class="topbar" style="margin-bottom: 8px;">
-                                <h3 style="margin: 0;">Novo usuário manual</h3>
+                            <div style="display: flex; gap: 8px;">
+                                <button type="button" data-open-user-manual>Adicionar usuário</button>
+                                <form method="post" class="inline-form">
+                                    {% csrf_token %}
+                                    <button type="submit">Importar do AD</button>
+                                </form>
                             </div>
-                            <form method="post">
-                                {% csrf_token %}
-                                <input type="hidden" name="action" value="create_manual_user" />
-                                <div class="form-row">
-                                    <div>
-                                        <label for="id_manual_full_name">Nome completo</label>
-                                        <input id="id_manual_full_name" name="full_name" type="text" required />
-                                    </div>
-                                    <div>
-                                        <label for="id_manual_username">Login (opcional)</label>
-                                        <input id="id_manual_username" name="username" type="text" />
-                                    </div>
-                                    <div>
-                                        <label for="id_manual_department">Departamento</label>
-                                        <input id="id_manual_department" name="department" type="text" />
-                                    </div>
-                                </div>
-                                <div class="form-row">
-                                    <div>
-                                        <label for="id_manual_phone">Telefone</label>
-                                        <input id="id_manual_phone" name="phone" type="text" />
-                                    </div>
-                                    <div>
-                                        <label for="id_manual_mobile">Celular</label>
-                                        <input id="id_manual_mobile" name="mobile" type="text" />
-                                    </div>
-                                    <div>
-                                        <label for="id_manual_email">E-mail</label>
-                                        <input id="id_manual_email" name="email" type="email" />
-                                    </div>
-                                    <div>
-                                        <label for="id_manual_extension">Ramal</label>
-                                        <input id="id_manual_extension" name="extension" type="text" />
-                                    </div>
-                                </div>
-                                <div class="form-row">
-                                    <div style="display: flex; gap: 16px; align-items: center;">
-                                        <label class="muted" style="display: inline-flex; align-items: center; gap: 6px;">
-                                            <input type="checkbox" name="is_active" value="1" checked />
-                                            Ativo
-                                        </label>
-                                        <label class="muted" style="display: inline-flex; align-items: center; gap: 6px;">
-                                            <input type="checkbox" name="is_email_user" value="1" />
-                                            Usuário com e-mail
-                                        </label>
-                                    </div>
-                                </div>
-                                <button type="submit">Salvar usuário manual</button>
-                            </form>
                         </div>
                         <div class="topbar" style="margin-bottom: 10px;">
                             <input
@@ -174,6 +123,66 @@
         <p>Solicite ao administrador a inclusão no departamento <strong>TI</strong>.</p>
     {% endif %}
 </div>
+{% if is_ti_group %}
+<div class="modal" data-user-manual-modal hidden>
+    <div class="modal-backdrop" data-close-user-manual></div>
+    <div class="modal-content">
+        <div class="topbar" style="margin-bottom: 8px;">
+            <h3>Novo usuário manual</h3>
+            <button type="button" data-close-user-manual>Fechar</button>
+        </div>
+        <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="create_manual_user" />
+            <div class="form-row">
+                <div>
+                    <label for="id_manual_full_name">Nome completo</label>
+                    <input id="id_manual_full_name" name="full_name" type="text" required />
+                </div>
+                <div>
+                    <label for="id_manual_username">Login (opcional)</label>
+                    <input id="id_manual_username" name="username" type="text" />
+                </div>
+                <div>
+                    <label for="id_manual_department">Departamento</label>
+                    <input id="id_manual_department" name="department" type="text" />
+                </div>
+            </div>
+            <div class="form-row">
+                <div>
+                    <label for="id_manual_phone">Telefone</label>
+                    <input id="id_manual_phone" name="phone" type="text" />
+                </div>
+                <div>
+                    <label for="id_manual_mobile">Celular</label>
+                    <input id="id_manual_mobile" name="mobile" type="text" />
+                </div>
+                <div>
+                    <label for="id_manual_email">E-mail</label>
+                    <input id="id_manual_email" name="email" type="email" />
+                </div>
+                <div>
+                    <label for="id_manual_extension">Ramal</label>
+                    <input id="id_manual_extension" name="extension" type="text" />
+                </div>
+            </div>
+            <div class="form-row">
+                <div style="display: flex; gap: 16px; align-items: center;">
+                    <label class="muted" style="display: inline-flex; align-items: center; gap: 6px;">
+                        <input type="checkbox" name="is_active" value="1" checked />
+                        Ativo
+                    </label>
+                    <label class="muted" style="display: inline-flex; align-items: center; gap: 6px;">
+                        <input type="checkbox" name="is_email_user" value="1" />
+                        Usuário com e-mail
+                    </label>
+                </div>
+            </div>
+            <button type="submit">Salvar usuário manual</button>
+        </form>
+    </div>
+</div>
+{% endif %}
 <script>
     (function () {
         const STORAGE_KEY = 'usuarios_scroll_restore_v1';
@@ -207,4 +216,20 @@
         });
     })();
 </script>
+{% if is_ti_group %}
+<script>
+    (function () {
+        const modal = document.querySelector('[data-user-manual-modal]');
+        const openBtn = document.querySelector('[data-open-user-manual]');
+        const closeEls = document.querySelectorAll('[data-close-user-manual]');
+        if (!modal || !openBtn) return;
+
+        const open = () => { modal.hidden = false; };
+        const close = () => { modal.hidden = true; };
+
+        openBtn.addEventListener('click', open);
+        closeEls.forEach((el) => el.addEventListener('click', close));
+    })();
+</script>
+{% endif %}
 {% endblock %}
