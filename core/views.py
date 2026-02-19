@@ -618,6 +618,7 @@ class EquipamentosView(LoginRequiredMixin, TemplateView):
             return self.get(request, *args, **kwargs)
 
         Equipment.objects.create(
+            tag_code=request.POST.get('tag_code', '').strip(),
             sector=request.POST.get('sector', '').strip(),
             user=request.POST.get('user', '').strip(),
             hostname=request.POST.get('hostname', '').strip(),

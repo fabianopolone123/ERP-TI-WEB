@@ -38,6 +38,7 @@
             <table class="data-table" data-table-name="equipamentos">
                 <thead>
                     <tr>
+                        <th>Etiqueta</th>
                         <th>Host</th>
                         <th>Setor</th>
                         <th>Usuário</th>
@@ -58,6 +59,7 @@
                 <tbody>
                     {% for item in equipments %}
                         <tr>
+                            <td>{{ item.tag_code|default:"-" }}</td>
                             <td>{{ item.hostname|default:"-" }}</td>
                             <td>{{ item.sector }}</td>
                             <td>{{ item.user }}</td>
@@ -76,7 +78,7 @@
                         </tr>
                     {% empty %}
                         <tr>
-                            <td colspan="15" class="muted">Nenhum equipamento cadastrado.</td>
+                            <td colspan="16" class="muted">Nenhum equipamento cadastrado.</td>
                         </tr>
                     {% endfor %}
                 </tbody>
@@ -98,6 +100,10 @@
             <form method="post">
                 {% csrf_token %}
                 <div class="form-row">
+                    <div>
+                        <label for="id_tag_code">Etiqueta</label>
+                        <input id="id_tag_code" name="tag_code" type="text" placeholder="Ex.: TI-000123" />
+                    </div>
                     <div>
                         <label for="id_hostname">Host</label>
                         <input id="id_hostname" name="hostname" type="text" />

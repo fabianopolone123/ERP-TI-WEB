@@ -17,6 +17,7 @@ class ERPUser(models.Model):
 
 
 class Equipment(models.Model):
+    tag_code = models.CharField(max_length=80, blank=True, default='')
     sector = models.CharField(max_length=120, blank=True, default='')
     user = models.CharField(max_length=200, blank=True, default='')
     hostname = models.CharField(max_length=120, blank=True, default='')
