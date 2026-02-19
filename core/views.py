@@ -29,6 +29,7 @@ from .ldap_importer import import_ad_users
 from .chamados_excel import export_attendant_logs_to_excel
 from .models import (
     ERPUser,
+    EmailAlias,
     Equipment,
     SoftwareInventory,
     Requisition,
@@ -76,6 +77,7 @@ ERP_MODULES = [
     {'slug': 'equipamentos', 'label': 'Equipamentos', 'url_name': 'equipamentos'},
     {'slug': 'ips', 'label': 'IPs', 'url_name': None},
     {'slug': 'emails', 'label': 'Emails', 'url_name': None},
+    {'slug': 'alias', 'label': 'Alias', 'url_name': None},
     {'slug': 'ramais', 'label': 'Ramais', 'url_name': None},
     {'slug': 'softwares', 'label': 'Softwares', 'url_name': 'softwares'},
     {'slug': 'insumos', 'label': 'Insumos', 'url_name': None},
@@ -131,6 +133,18 @@ class _SafeDict(dict):
 def _normalize_text(value: str) -> str:
     raw = (value or '').strip().lower()
     return unicodedata.normalize('NFKD', raw).encode('ascii', 'ignore').decode('ascii')
+
+
+def _split_email_tokens(raw_email: str) -> list[str]:
+    raw = (raw_email or '').strip()
+    if not raw:
+        return []
+    parts = []
+    for chunk in raw.replace(',', ';').split(';'):
+        token = chunk.strip()
+        if token and '@' in token:
+            parts.append(token)
+    return parts
 
 
 def _get_user_ad_groups(username: str) -> list[str]:
@@ -261,7 +275,8 @@ def _build_whatsapp_summary(ticket, event_label="Novo chamado", extra_line=None)
     detail = shorten(((extra_line or "").replace('\n', ' ')).strip(), width=180, placeholder='...')
     requester_name = (getattr(ticket.created_by, 'get_full_name', lambda: '')() or getattr(ticket.created_by, 'username', '') or '').strip()
     requester_username = (getattr(ticket.created_by, 'username', '') or '').strip()
-    requester_email = (getattr(ticket.created_by, 'email', '') or '').strip()
+    requester_email = _split_email_tokens((getattr(ticket.created_by, 'email', '') or '').strip())
+    requester_email = requester_email[0] if requester_email else ''
     responsible_name = ticket.assigned_to.full_name if ticket.assigned_to else ''
     collaborators = ', '.join(
         [u.full_name for u in ticket.collaborators.all() if (u.full_name or '').strip()]
@@ -356,9 +371,8 @@ def _notify_ticket_email(ticket, event_label="Novo chamado", extra_line=None):
         ti_user = ERPUser.objects.filter(username__iexact=creator_username).first()
         if ti_user and (ti_user.department or '').strip().upper() == 'TI':
             return
-    recipient = (getattr(ticket.created_by, 'email', '') or '').strip()
-    if recipient and (';' in recipient or ',' in recipient):
-        recipient = (recipient.replace(',', ';').split(';', 1)[0] or '').strip()
+    recipient_tokens = _split_email_tokens((getattr(ticket.created_by, 'email', '') or '').strip())
+    recipient = recipient_tokens[0] if recipient_tokens else ''
     if not recipient:
         return
     templates = _get_email_templates()
@@ -421,7 +435,8 @@ def _notify_new_ticket_watchers_email(ticket):
         if erp_user and (erp_user.department or '').strip().upper() == 'TI':
             continue
         if erp_user and erp_user.email:
-            email = erp_user.email.strip()
+            tokens = _split_email_tokens(erp_user.email.strip())
+            email = tokens[0] if tokens else ''
         elif auth_user and auth_user.email:
             email = auth_user.email.strip()
         if not email:
@@ -586,7 +601,9 @@ class UsersListView(LoginRequiredMixin, TemplateView):
             department = (request.POST.get('department') or '').strip()
             phone = (request.POST.get('phone') or '').strip()
             mobile = (request.POST.get('mobile') or '').strip()
-            email = (request.POST.get('email') or '').strip()
+            email_raw = (request.POST.get('email') or '').strip()
+            email_tokens = _split_email_tokens(email_raw)
+            email = email_tokens[0] if email_tokens else ''
             extension = (request.POST.get('extension') or '').strip()
             is_active = bool(request.POST.get('is_active'))
             is_email_user = bool(request.POST.get('is_email_user'))
@@ -599,7 +616,7 @@ class UsersListView(LoginRequiredMixin, TemplateView):
                 messages.error(request, 'Já existe um usuário com esse login.')
                 return self.get(request, *args, **kwargs)
 
-            ERPUser.objects.create(
+            user = ERPUser.objects.create(
                 full_name=full_name,
                 username=username,
                 department=department,
@@ -612,6 +629,8 @@ class UsersListView(LoginRequiredMixin, TemplateView):
                 is_email_user=is_email_user,
                 is_manual=True,
             )
+            for alias_email in email_tokens[1:]:
+                EmailAlias.objects.get_or_create(user=user, email=alias_email)
             messages.success(request, f'Usuário manual cadastrado com sucesso: {full_name}.')
             return redirect('usuarios')
 
@@ -650,6 +669,10 @@ class UsersListView(LoginRequiredMixin, TemplateView):
             ERPUser.objects.exclude(email__isnull=True)
             .exclude(email='')
             .order_by('full_name', 'username')
+        )
+        context['email_aliases'] = (
+            EmailAlias.objects.select_related('user')
+            .order_by('user__full_name', 'email')
         )
         return context
 

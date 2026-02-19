@@ -6,7 +6,7 @@ import uuid
 from django.conf import settings
 from ldap3 import Connection, Server, SUBTREE
 
-from .models import ERPUser
+from .models import ERPUser, EmailAlias
 
 
 def _guid_to_str(value) -> str:
@@ -45,6 +45,18 @@ def _format_br_phone(value: str) -> str:
     return value.strip()
 
 
+def _split_email_tokens(raw_email: str) -> list[str]:
+    raw = (raw_email or '').strip()
+    if not raw:
+        return []
+    tokens = []
+    for chunk in raw.replace(',', ';').split(';'):
+        token = chunk.strip()
+        if token and '@' in token:
+            tokens.append(token)
+    return tokens
+
+
 def import_ad_users() -> tuple[int, int]:
     server_uri = getattr(settings, 'AD_LDAP_SERVER_URI', '')
     base_dn = getattr(settings, 'AD_LDAP_BASE_DN', '')
@@ -73,6 +85,9 @@ def import_ad_users() -> tuple[int, int]:
         phone_raw = entry[attr_map['phone']].value if attr_map.get('phone') in entry else ''
         mobile_raw = entry[attr_map['mobile']].value if attr_map.get('mobile') in entry else ''
         email = entry[attr_map['email']].value if attr_map.get('email') in entry else ''
+        email_tokens = _split_email_tokens(email)
+        primary_email = email_tokens[0] if email_tokens else ''
+        secondary_emails = email_tokens[1:]
 
         if not username:
             continue
@@ -88,7 +103,7 @@ def import_ad_users() -> tuple[int, int]:
             'department': department or '',
             'phone': phone or '',
             'mobile': mobile or '',
-            'email': email or '',
+            'email': primary_email,
             'extension': extension,
             'is_active': is_active,
             'username': username,
@@ -103,7 +118,9 @@ def import_ad_users() -> tuple[int, int]:
             existing = ERPUser.objects.filter(username=username).first()
 
         if existing is None:
-            ERPUser.objects.create(**defaults)
+            created_user = ERPUser.objects.create(**defaults)
+            for alias_email in secondary_emails:
+                EmailAlias.objects.get_or_create(user=created_user, email=alias_email)
             created += 1
             continue
 
@@ -119,6 +136,10 @@ def import_ad_users() -> tuple[int, int]:
         if changed:
             existing.save()
             updated += 1
+        if not existing.is_manual:
+            EmailAlias.objects.filter(user=existing).exclude(email__in=secondary_emails).delete()
+            for alias_email in secondary_emails:
+                EmailAlias.objects.get_or_create(user=existing, email=alias_email)
 
     conn.unbind()
     return created, updated

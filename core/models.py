@@ -18,6 +18,19 @@ class ERPUser(models.Model):
         return self.full_name
 
 
+class EmailAlias(models.Model):
+    user = models.ForeignKey(ERPUser, on_delete=models.CASCADE, related_name='email_aliases')
+    email = models.EmailField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('user', 'email')
+        ordering = ['email']
+
+    def __str__(self) -> str:
+        return f'{self.user.full_name} - {self.email}'
+
+
 class Equipment(models.Model):
     tag_code = models.CharField(max_length=80, blank=True, default='')
     sector = models.CharField(max_length=120, blank=True, default='')
