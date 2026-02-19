@@ -106,7 +106,10 @@ def build_modules(active_slug: str | None) -> list[dict[str, str | bool]]:
     modules = []
     for module in ERP_MODULES:
         url_name = module.get('url_name')
-        url = reverse(url_name) if url_name else '#'
+        if module['slug'] in {'emails', 'alias'}:
+            url = f"{reverse('usuarios')}?tab={module['slug']}"
+        else:
+            url = reverse(url_name) if url_name else '#'
         modules.append(
             {
                 'slug': module['slug'],
@@ -645,7 +648,10 @@ class UsersListView(LoginRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         is_ti = is_ti_user(self.request)
         context['is_ti_group'] = is_ti
-        context['modules'] = build_modules('usuarios') if is_ti else []
+        selected_tab = (self.request.GET.get('tab') or 'usuarios').strip().lower()
+        if selected_tab not in {'usuarios', 'emails', 'alias'}:
+            selected_tab = 'usuarios'
+        context['modules'] = build_modules(selected_tab) if is_ti else []
         show_inactive = self.request.GET.get('show_inactive') == '1'
         only_email_users = self.request.GET.get('only_email_users') == '1'
         only_non_email_users = self.request.GET.get('only_non_email_users') == '1'
