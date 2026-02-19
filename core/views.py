@@ -689,6 +689,24 @@ class UsersListView(LoginRequiredMixin, TemplateView):
                         target = matches[0]
                 if not target:
                     target = ERPUser.objects.filter(email__iexact=email).first()
+                if not target and '@' in email:
+                    email_local = (email.split('@', 1)[0] or '').strip().lower()
+                    if email_local:
+                        target = ERPUser.objects.filter(username__iexact=email_local).first()
+                if not target:
+                    first_norm = _normalize_text(first)
+                    last_norm = _normalize_text(last)
+                    relaxed = []
+                    for candidate in all_users:
+                        cand_name = _normalize_text(candidate.full_name)
+                        cand_user = _normalize_text(candidate.username or '')
+                        if first_norm and first_norm not in cand_name and first_norm not in cand_user:
+                            continue
+                        if last_norm and last_norm not in cand_name and last_norm not in cand_user:
+                            continue
+                        relaxed.append(candidate)
+                    if len(relaxed) == 1:
+                        target = relaxed[0]
                 if not target:
                     skipped += 1
                     continue
