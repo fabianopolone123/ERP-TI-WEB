@@ -58,6 +58,18 @@ def _infer_cpu_generation(processor_name: str, payload_generation: str = '') -> 
         if len(digits) == 5:
             return f'{digits[:2]}a'
         return f'{digits[:1]}a'
+    intel_legacy_match = re.search(
+        r'i[3579](?:\s*-\s*|\s+cpu\s+|\s+)(?:[a-z]{0,2}\s*)?([0-9]{3,5})[a-z]{0,2}\b',
+        name,
+        flags=re.IGNORECASE,
+    )
+    if intel_legacy_match:
+        digits = intel_legacy_match.group(1)
+        if len(digits) == 3:
+            return '1a'
+        if len(digits) >= 5:
+            return f'{digits[:2]}a'
+        return f'{digits[:1]}a'
     ryzen_match = re.search(r'ryzen\s+\d\s+([0-9]{4,5})', name, flags=re.IGNORECASE)
     if ryzen_match:
         digits = ryzen_match.group(1)
@@ -155,6 +167,15 @@ if ($cpu.Name -match 'Core\\s*(\\(\\s*TM\\s*\\)\\s*)?Ultra\\s*[3579]?\\s*([0-9]{
 }} elseif ($cpu.Name -match 'i[3579]-([0-9]{4,5})') {{
     $digits = $Matches[1]
     if ($digits.Length -ge 5) {{
+        $cpuGeneration = \"{0}a\" -f $digits.Substring(0,2)
+    }} else {{
+        $cpuGeneration = \"{0}a\" -f $digits.Substring(0,1)
+    }}
+}} elseif ($cpu.Name -match 'i[3579](\\s*-\\s*|\\s+cpu\\s+|\\s+)([A-Za-z]{0,2}\\s*)?([0-9]{3,5})[A-Za-z]{0,2}\\b') {{
+    $digits = $Matches[3]
+    if ($digits.Length -eq 3) {{
+        $cpuGeneration = '1a'
+    }} elseif ($digits.Length -ge 5) {{
         $cpuGeneration = \"{0}a\" -f $digits.Substring(0,2)
     }} else {{
         $cpuGeneration = \"{0}a\" -f $digits.Substring(0,1)

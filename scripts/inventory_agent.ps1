@@ -74,6 +74,15 @@ if ($cpu.Name -match 'Core\s*(\(\s*TM\s*\)\s*)?Ultra\s*[3579]?\s*([0-9]{3,5})') 
     } else {
         $cpuGeneration = "{0}a" -f $digits.Substring(0,1)
     }
+} elseif ($cpu.Name -match 'i[3579](\s*-\s*|\s+cpu\s+|\s+)([A-Za-z]{0,2}\s*)?([0-9]{3,5})[A-Za-z]{0,2}\b') {
+    $digits = $Matches[3]
+    if ($digits.Length -eq 3) {
+        $cpuGeneration = '1a'
+    } elseif ($digits.Length -ge 5) {
+        $cpuGeneration = "{0}a" -f $digits.Substring(0,2)
+    } else {
+        $cpuGeneration = "{0}a" -f $digits.Substring(0,1)
+    }
 } elseif ($cpu.Name -match 'Ryzen\s+\d\s+([0-9]{4,5})') {
     $digits = $Matches[1]
     $cpuGeneration = "{0}a" -f $digits.Substring(0,1)
