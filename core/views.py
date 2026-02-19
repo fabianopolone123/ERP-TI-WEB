@@ -603,6 +603,7 @@ class UsersListView(LoginRequiredMixin, TemplateView):
         context['is_ti_group'] = is_ti
         context['modules'] = build_modules('usuarios') if is_ti else []
         show_inactive = self.request.GET.get('show_inactive') == '1'
+        only_people = self.request.GET.get('only_people') == '1'
         queryset = ERPUser.objects.all()
         active_users = list(ERPUser.objects.filter(is_active=True))
         active_people = [u for u in active_users if _is_probably_person_name(u.full_name)]
@@ -611,7 +612,11 @@ class UsersListView(LoginRequiredMixin, TemplateView):
         context['active_non_people_count'] = max(0, len(active_users) - len(active_people))
         if not show_inactive:
             queryset = queryset.filter(is_active=True)
+        if only_people:
+            people_ids = [u.id for u in queryset if _is_probably_person_name(u.full_name)]
+            queryset = queryset.filter(id__in=people_ids)
         context['show_inactive'] = show_inactive
+        context['only_people'] = only_people
         context['users'] = queryset.order_by('full_name')
         return context
 
