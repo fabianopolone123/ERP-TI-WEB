@@ -768,17 +768,10 @@
     (function () {
         const board = document.querySelector('[data-board]');
         if (!board) return;
-        const MIN_COL_PX = 320;
-        const MAX_COL_PX = 460;
 
         const refreshUniformColumns = () => {
-            const regularColumns = Array.from(board.querySelectorAll('.kanban-column'));
-            const totalRegular = regularColumns.length || 1;
-            const width = board.clientWidth || window.innerWidth || 1280;
-            const byMin = Math.max(1, Math.floor(width / MIN_COL_PX));
-            const byMax = Math.max(1, Math.ceil(width / MAX_COL_PX));
-            const cols = Math.min(totalRegular, Math.max(byMax, byMin));
-            board.style.setProperty('--regular-cols', String(cols));
+            const totalColumns = board.querySelectorAll('.kanban-column').length || 1;
+            board.style.setProperty('--regular-cols', String(totalColumns));
         };
 
         refreshUniformColumns();
