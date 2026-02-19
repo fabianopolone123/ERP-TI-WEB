@@ -676,6 +676,13 @@ class UsersListView(LoginRequiredMixin, TemplateView):
             .exclude(email='')
             .order_by('full_name', 'username')
         )
+        context['email_unique_count'] = len(
+            {
+                (email or '').strip().lower()
+                for email in ERPUser.objects.exclude(email__isnull=True).exclude(email='').values_list('email', flat=True)
+                if (email or '').strip()
+            }
+        )
         context['email_aliases'] = (
             EmailAlias.objects.select_related('user')
             .order_by('user__full_name', 'email')

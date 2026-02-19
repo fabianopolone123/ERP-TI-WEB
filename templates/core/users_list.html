@@ -123,7 +123,8 @@
                             />
                         </div>
                         <div class="ticket-legend" style="margin-bottom: 10px;">
-                            <strong>Total de contas com e-mail:</strong> {{ email_users|length }}
+                            <strong>Usuários com e-mail principal:</strong> {{ email_users|length }}
+                            <span class="muted">| E-mails principais únicos: {{ email_unique_count|default:0 }}</span>
                         </div>
                         <div style="overflow-x: auto;">
                             <table class="data-table" data-table-name="emails">
