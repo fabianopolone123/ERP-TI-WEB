@@ -678,6 +678,7 @@ class UsersListView(LoginRequiredMixin, TemplateView):
             updated = 0
             unchanged = 0
             skipped = 0
+            matched_ids = set()
 
             for row in rows:
                 if not isinstance(row, dict):
@@ -700,16 +701,30 @@ class UsersListView(LoginRequiredMixin, TemplateView):
                     if len(matches) == 1:
                         target = matches[0]
                 if not target:
+                    target = ERPUser.objects.filter(email__iexact=email).first()
+                if not target:
                     skipped += 1
                     continue
 
+                matched_ids.add(target.id)
                 current_email = (target.email or '').strip().lower()
+                status_raw = (row.get('Status [READ ONLY]') or '').strip().lower()
+                should_be_active = status_raw in {'active', 'ativado', 'enabled'}
+                alias_candidates = []
+                for key in ('Recovery Email', 'Home Secondary Email', 'Work Secondary Email'):
+                    val = (row.get(key) or '').strip().lower()
+                    if val and '@' in val:
+                        alias_candidates.append(val)
+
                 if current_email == email:
                     unchanged += 1
                     changed_fields = []
                     if not target.is_email_user:
                         target.is_email_user = True
                         changed_fields.append('is_email_user')
+                    if bool(target.is_active) != bool(should_be_active):
+                        target.is_active = should_be_active
+                        changed_fields.append('is_active')
                     if (target.email_usage or '').strip() != email_usage:
                         target.email_usage = email_usage
                         changed_fields.append('email_usage')
@@ -718,6 +733,9 @@ class UsersListView(LoginRequiredMixin, TemplateView):
                         changed_fields.append('email_last_sign_in')
                     if changed_fields:
                         target.save(update_fields=changed_fields)
+                    for alias_email in alias_candidates:
+                        if alias_email != current_email:
+                            EmailAlias.objects.get_or_create(user=target, email=alias_email)
                     continue
 
                 owner = ERPUser.objects.filter(email__iexact=email).exclude(id=target.id).first()
@@ -729,10 +747,17 @@ class UsersListView(LoginRequiredMixin, TemplateView):
                     EmailAlias.objects.get_or_create(user=target, email=current_email)
                 target.email = email
                 target.is_email_user = True
+                target.is_active = should_be_active
                 target.email_usage = email_usage
                 target.email_last_sign_in = last_sign_in
-                target.save(update_fields=['email', 'is_email_user', 'email_usage', 'email_last_sign_in'])
+                target.save(update_fields=['email', 'is_email_user', 'is_active', 'email_usage', 'email_last_sign_in'])
+                for alias_email in alias_candidates:
+                    if alias_email != email:
+                        EmailAlias.objects.get_or_create(user=target, email=alias_email)
                 updated += 1
+
+            if matched_ids:
+                ERPUser.objects.exclude(id__in=matched_ids).update(is_email_user=False)
 
             messages.success(request, f'Atualização de e-mails (JSON) concluída: {updated} atualizados, {unchanged} sem mudança, {skipped} ignorados.')
             return redirect(f"{reverse('usuarios')}?tab=emails")
@@ -772,7 +797,8 @@ class UsersListView(LoginRequiredMixin, TemplateView):
         context['only_non_email_users'] = only_non_email_users
         context['users'] = queryset.order_by('full_name')
         email_users = list(
-            ERPUser.objects.exclude(email__isnull=True)
+            ERPUser.objects.filter(is_email_user=True)
+            .exclude(email__isnull=True)
             .exclude(email='')
             .order_by('full_name', 'username')
         )
@@ -785,7 +811,7 @@ class UsersListView(LoginRequiredMixin, TemplateView):
         context['email_unique_count'] = len(
             {
                 (email or '').strip().lower()
-                for email in ERPUser.objects.exclude(email__isnull=True).exclude(email='').values_list('email', flat=True)
+                for email in ERPUser.objects.filter(is_email_user=True).exclude(email__isnull=True).exclude(email='').values_list('email', flat=True)
                 if (email or '').strip()
             }
         )
