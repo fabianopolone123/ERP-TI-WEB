@@ -584,18 +584,6 @@ class UsersListView(LoginRequiredMixin, TemplateView):
             return self.get(request, *args, **kwargs)
 
         action = (request.POST.get('action') or '').strip().lower()
-        if action == 'update_email_user':
-            user_id = (request.POST.get('user_id') or '').strip()
-            user = ERPUser.objects.filter(id=user_id).first()
-            if not user:
-                messages.error(request, 'Usuário não encontrado.')
-            else:
-                user.is_email_user = bool(request.POST.get('is_email_user'))
-                user.save(update_fields=['is_email_user'])
-                messages.success(request, f'Marcação de e-mail atualizada para {user.full_name}.')
-            show_inactive = '1' if request.POST.get('show_inactive') == '1' else '0'
-            return redirect(f"{reverse('usuarios')}?show_inactive={show_inactive}")
-
         if action == 'create_manual_user':
             full_name = (request.POST.get('full_name') or '').strip()
             username_raw = (request.POST.get('username') or '').strip()
@@ -608,7 +596,6 @@ class UsersListView(LoginRequiredMixin, TemplateView):
             email = email_tokens[0] if email_tokens else ''
             extension = (request.POST.get('extension') or '').strip()
             is_active = bool(request.POST.get('is_active'))
-            is_email_user = bool(request.POST.get('is_email_user'))
 
             if not full_name:
                 messages.error(request, 'Informe o nome completo do usuário manual.')
@@ -628,7 +615,7 @@ class UsersListView(LoginRequiredMixin, TemplateView):
                 extension=extension,
                 ad_guid=f'manual-{uuid4().hex}',
                 is_active=is_active,
-                is_email_user=is_email_user,
+                is_email_user=False,
                 is_manual=True,
             )
             for alias_email in email_tokens[1:]:
