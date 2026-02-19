@@ -77,7 +77,6 @@ ERP_MODULES = [
     {'slug': 'equipamentos', 'label': 'Equipamentos', 'url_name': 'equipamentos'},
     {'slug': 'ips', 'label': 'IPs', 'url_name': None},
     {'slug': 'emails', 'label': 'Emails', 'url_name': None},
-    {'slug': 'alias', 'label': 'Alias', 'url_name': None},
     {'slug': 'ramais', 'label': 'Ramais', 'url_name': None},
     {'slug': 'softwares', 'label': 'Softwares', 'url_name': 'softwares'},
     {'slug': 'insumos', 'label': 'Insumos', 'url_name': None},
@@ -106,7 +105,7 @@ def build_modules(active_slug: str | None) -> list[dict[str, str | bool]]:
     modules = []
     for module in ERP_MODULES:
         url_name = module.get('url_name')
-        if module['slug'] in {'emails', 'alias'}:
+        if module['slug'] == 'emails':
             url = f"{reverse('usuarios')}?tab={module['slug']}"
         else:
             url = reverse(url_name) if url_name else '#'
@@ -649,7 +648,7 @@ class UsersListView(LoginRequiredMixin, TemplateView):
         is_ti = is_ti_user(self.request)
         context['is_ti_group'] = is_ti
         selected_tab = (self.request.GET.get('tab') or 'usuarios').strip().lower()
-        if selected_tab not in {'usuarios', 'emails', 'alias'}:
+        if selected_tab not in {'usuarios', 'emails'}:
             selected_tab = 'usuarios'
         context['modules'] = build_modules(selected_tab) if is_ti else []
         show_inactive = self.request.GET.get('show_inactive') == '1'
@@ -671,21 +670,23 @@ class UsersListView(LoginRequiredMixin, TemplateView):
         context['only_email_users'] = only_email_users
         context['only_non_email_users'] = only_non_email_users
         context['users'] = queryset.order_by('full_name')
-        context['email_users'] = (
+        email_users = list(
             ERPUser.objects.exclude(email__isnull=True)
             .exclude(email='')
             .order_by('full_name', 'username')
         )
+        aliases_by_user = {}
+        for alias in EmailAlias.objects.select_related('user').order_by('email'):
+            aliases_by_user.setdefault(alias.user_id, []).append(alias.email)
+        for user in email_users:
+            user.aliases_display = '; '.join(aliases_by_user.get(user.id, []))
+        context['email_users'] = email_users
         context['email_unique_count'] = len(
             {
                 (email or '').strip().lower()
                 for email in ERPUser.objects.exclude(email__isnull=True).exclude(email='').values_list('email', flat=True)
                 if (email or '').strip()
             }
-        )
-        context['email_aliases'] = (
-            EmailAlias.objects.select_related('user')
-            .order_by('user__full_name', 'email')
         )
         return context
 

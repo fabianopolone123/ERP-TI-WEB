@@ -123,8 +123,8 @@
                             />
                         </div>
                         <div class="ticket-legend" style="margin-bottom: 10px;">
-                            <strong>Usuários com e-mail principal:</strong> {{ email_users|length }}
-                            <span class="muted">| E-mails principais únicos: {{ email_unique_count|default:0 }}</span>
+                            <strong>E-mails principais únicos:</strong> {{ email_unique_count|default:0 }}
+                            <span class="muted">| Usuários com e-mail principal: {{ email_users|length }}</span>
                         </div>
                         <div style="overflow-x: auto;">
                             <table class="data-table" data-table-name="emails">
@@ -132,7 +132,8 @@
                                     <tr>
                                         <th>Nome</th>
                                         <th>Login</th>
-                                        <th>E-mail</th>
+                                        <th>E-mail principal</th>
+                                        <th>Alias</th>
                                         <th>Ativo</th>
                                         <th>Origem</th>
                                     </tr>
@@ -143,53 +144,13 @@
                                             <td>{{ user.full_name }}</td>
                                             <td>{{ user.username|default:"-" }}</td>
                                             <td>{{ user.email }}</td>
+                                            <td>{{ user.aliases_display|default:"-" }}</td>
                                             <td>{% if user.is_active %}Sim{% else %}Não{% endif %}</td>
                                             <td>{% if user.is_manual %}Manual{% else %}AD{% endif %}</td>
                                         </tr>
                                     {% empty %}
                                         <tr>
-                                            <td colspan="5" class="muted">Nenhuma conta de e-mail cadastrada.</td>
-                                        </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
-                    {% elif module.slug == "alias" %}
-                        <div class="topbar" style="margin-bottom: 10px;">
-                            <h3>Alias de e-mail</h3>
-                            <input
-                                type="text"
-                                class="table-search"
-                                placeholder="Pesquisar por nome, login ou alias..."
-                                data-table-search="aliases"
-                            />
-                        </div>
-                        <div class="ticket-legend" style="margin-bottom: 10px;">
-                            <strong>Total de aliases secundários:</strong> {{ email_aliases|length }}
-                        </div>
-                        <div style="overflow-x: auto;">
-                            <table class="data-table" data-table-name="aliases">
-                                <thead>
-                                    <tr>
-                                        <th>Nome</th>
-                                        <th>Login</th>
-                                        <th>E-mail principal</th>
-                                        <th>Alias secundário</th>
-                                        <th>Origem</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for alias in email_aliases %}
-                                        <tr>
-                                            <td>{{ alias.user.full_name }}</td>
-                                            <td>{{ alias.user.username|default:"-" }}</td>
-                                            <td>{{ alias.user.email|default:"-" }}</td>
-                                            <td>{{ alias.email }}</td>
-                                            <td>{% if alias.user.is_manual %}Manual{% else %}AD{% endif %}</td>
-                                        </tr>
-                                    {% empty %}
-                                        <tr>
-                                            <td colspan="5" class="muted">Nenhum alias secundário cadastrado.</td>
+                                            <td colspan="6" class="muted">Nenhuma conta de e-mail cadastrada.</td>
                                         </tr>
                                     {% endfor %}
                                 </tbody>
