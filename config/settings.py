@@ -37,7 +37,7 @@ if ENV_PATH.exists():
 SECRET_KEY = 'django-insecure-0_@z3ayq+ia$467tp90s#4bxdg5zhd@e&4vaf(glre_t@#f=nq'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
 ALLOWED_HOSTS = ['127.0.0.1', 'localhost', '0.0.0.0', socket.gethostname()]
 extra_hosts = os.environ.get('EXTRA_ALLOWED_HOSTS', '')
