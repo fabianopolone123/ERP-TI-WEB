@@ -125,8 +125,8 @@
                                 />
                                 <form method="post" enctype="multipart/form-data" class="inline-form">
                                     {% csrf_token %}
-                                    <input type="hidden" name="action" value="update_emails_csv" />
-                                    <input type="file" name="emails_csv" accept=".csv,text/csv" required style="margin: 0;" />
+                                    <input type="hidden" name="action" value="update_emails_json" />
+                                    <input type="file" name="emails_json" accept=".json,application/json,text/json" required style="margin: 0;" />
                                     <button type="submit">Atualizar</button>
                                 </form>
                             </div>
@@ -140,9 +140,10 @@
                                 <thead>
                                     <tr>
                                         <th>Nome</th>
-                                        <th>Login</th>
                                         <th>E-mail principal</th>
                                         <th>Alias</th>
+                                        <th>Tamanho</th>
+                                        <th>Último login</th>
                                         <th>Ativo</th>
                                         <th>Origem</th>
                                     </tr>
@@ -151,15 +152,16 @@
                                     {% for user in email_users %}
                                         <tr>
                                             <td>{{ user.full_name }}</td>
-                                            <td>{{ user.username|default:"-" }}</td>
                                             <td>{{ user.email }}</td>
                                             <td>{{ user.aliases_display|default:"-" }}</td>
+                                            <td>{{ user.email_usage|default:"-" }}</td>
+                                            <td>{{ user.email_last_sign_in|default:"-" }}</td>
                                             <td>{% if user.is_active %}Sim{% else %}Não{% endif %}</td>
                                             <td>{% if user.is_manual %}Manual{% else %}AD{% endif %}</td>
                                         </tr>
                                     {% empty %}
                                         <tr>
-                                            <td colspan="6" class="muted">Nenhuma conta de e-mail cadastrada.</td>
+                                            <td colspan="7" class="muted">Nenhuma conta de e-mail cadastrada.</td>
                                         </tr>
                                     {% endfor %}
                                 </tbody>

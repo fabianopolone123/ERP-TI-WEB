@@ -1,6 +1,5 @@
 ﻿import logging
 import json
-import csv
 import unicodedata
 from uuid import uuid4
 from textwrap import shorten
@@ -637,23 +636,31 @@ class UsersListView(LoginRequiredMixin, TemplateView):
             messages.success(request, f'Usuário manual cadastrado com sucesso: {full_name}.')
             return redirect('usuarios')
 
-        if action == 'update_emails_csv':
-            upload = request.FILES.get('emails_csv')
+        if action == 'update_emails_json':
+            upload = request.FILES.get('emails_json')
             if not upload:
-                messages.error(request, 'Selecione um arquivo CSV para atualizar os e-mails.')
+                messages.error(request, 'Selecione um arquivo JSON para atualizar os e-mails.')
                 return redirect(f"{reverse('usuarios')}?tab=emails")
 
-            decoded = upload.read().decode('utf-8-sig', errors='ignore').splitlines()
-            reader = csv.DictReader(decoded)
-            if not reader.fieldnames:
-                messages.error(request, 'Arquivo CSV inválido ou vazio.')
+            try:
+                payload = json.loads(upload.read().decode('utf-8-sig', errors='ignore'))
+            except Exception:
+                messages.error(request, 'Arquivo JSON inválido.')
                 return redirect(f"{reverse('usuarios')}?tab=emails")
 
             first_key = 'First Name [Required]'
             last_key = 'Last Name [Required]'
             email_key = 'Email Address [Required]'
-            if first_key not in reader.fieldnames or last_key not in reader.fieldnames or email_key not in reader.fieldnames:
-                messages.error(request, 'CSV fora do padrão esperado. Use o arquivo exportado com colunas de nome e e-mail.')
+            last_login_key = 'Last Sign In [READ ONLY]'
+            usage_key = 'Email Usage [READ ONLY]'
+
+            rows = payload.get('users') if isinstance(payload, dict) else None
+            if not isinstance(rows, list) or not rows:
+                messages.error(request, 'JSON fora do padrão esperado. Estrutura esperada: {"users":[...]}')
+                return redirect(f"{reverse('usuarios')}?tab=emails")
+            first_row = rows[0] if isinstance(rows[0], dict) else {}
+            if first_key not in first_row or last_key not in first_row or email_key not in first_row:
+                messages.error(request, 'JSON fora do padrão esperado. Campos obrigatórios não encontrados.')
                 return redirect(f"{reverse('usuarios')}?tab=emails")
 
             all_users = list(ERPUser.objects.all())
@@ -672,10 +679,15 @@ class UsersListView(LoginRequiredMixin, TemplateView):
             unchanged = 0
             skipped = 0
 
-            for row in reader:
+            for row in rows:
+                if not isinstance(row, dict):
+                    skipped += 1
+                    continue
                 first = (row.get(first_key) or '').strip()
                 last = (row.get(last_key) or '').strip()
                 email = (row.get(email_key) or '').strip().lower()
+                email_usage = (row.get(usage_key) or '').strip()
+                last_sign_in = (row.get(last_login_key) or '').strip()
                 if not email:
                     skipped += 1
                     continue
@@ -694,9 +706,18 @@ class UsersListView(LoginRequiredMixin, TemplateView):
                 current_email = (target.email or '').strip().lower()
                 if current_email == email:
                     unchanged += 1
+                    changed_fields = []
                     if not target.is_email_user:
                         target.is_email_user = True
-                        target.save(update_fields=['is_email_user'])
+                        changed_fields.append('is_email_user')
+                    if (target.email_usage or '').strip() != email_usage:
+                        target.email_usage = email_usage
+                        changed_fields.append('email_usage')
+                    if (target.email_last_sign_in or '').strip() != last_sign_in:
+                        target.email_last_sign_in = last_sign_in
+                        changed_fields.append('email_last_sign_in')
+                    if changed_fields:
+                        target.save(update_fields=changed_fields)
                     continue
 
                 owner = ERPUser.objects.filter(email__iexact=email).exclude(id=target.id).first()
@@ -708,10 +729,12 @@ class UsersListView(LoginRequiredMixin, TemplateView):
                     EmailAlias.objects.get_or_create(user=target, email=current_email)
                 target.email = email
                 target.is_email_user = True
-                target.save(update_fields=['email', 'is_email_user'])
+                target.email_usage = email_usage
+                target.email_last_sign_in = last_sign_in
+                target.save(update_fields=['email', 'is_email_user', 'email_usage', 'email_last_sign_in'])
                 updated += 1
 
-            messages.success(request, f'Atualização de e-mails concluída: {updated} atualizados, {unchanged} sem mudança, {skipped} ignorados.')
+            messages.success(request, f'Atualização de e-mails (JSON) concluída: {updated} atualizados, {unchanged} sem mudança, {skipped} ignorados.')
             return redirect(f"{reverse('usuarios')}?tab=emails")
 
         try:

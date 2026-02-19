@@ -13,6 +13,8 @@ class ERPUser(models.Model):
     is_email_user = models.BooleanField(default=False)
     is_manual = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
+    email_usage = models.CharField(max_length=40, blank=True, default='')
+    email_last_sign_in = models.CharField(max_length=40, blank=True, default='')
 
     def __str__(self) -> str:
         return self.full_name
