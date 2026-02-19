@@ -49,6 +49,10 @@
                                     <input type="checkbox" name="only_email_users" value="1" {% if only_email_users %}checked{% endif %} />
                                     Somente usuários com e-mail
                                 </label>
+                                <label class="muted" style="display: inline-flex; align-items: center; gap: 6px; margin-left: 8px;">
+                                    <input type="checkbox" name="only_non_email_users" value="1" {% if only_non_email_users %}checked{% endif %} />
+                                    Mostrar usuários sem e-mail
+                                </label>
                                 <button type="submit">Aplicar</button>
                             </form>
                         </div>
