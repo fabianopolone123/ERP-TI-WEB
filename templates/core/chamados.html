@@ -11,6 +11,7 @@
     }
     [data-board] .kanban-column {
         min-width: 0;
+        height: var(--board-col-height, 560px);
     }
     [data-board] .ticket-card,
     [data-ticket-list] .ticket-card {
@@ -763,6 +764,10 @@
         const refreshUniformColumns = () => {
             const totalColumns = board.querySelectorAll('.kanban-column').length || 1;
             board.style.setProperty('--regular-cols', String(totalColumns));
+            const boardTop = board.getBoundingClientRect().top || 0;
+            const available = Math.floor((window.innerHeight || 900) - boardTop - 12);
+            const colHeight = Math.max(360, available);
+            board.style.setProperty('--board-col-height', `${colHeight}px`);
         };
 
         refreshUniformColumns();
