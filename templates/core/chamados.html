@@ -239,9 +239,18 @@
 
             <div class="kanban-column" data-target="fechado">
                 <div class="kanban-header">Fechados</div>
+                <div style="padding: 8px 10px 0;">
+                    <input
+                        type="text"
+                        class="table-search"
+                        placeholder="Pesquisar em finalizados..."
+                        data-closed-search
+                        style="max-width: 100%; width: 100%; margin: 0;"
+                    />
+                </div>
                 <div class="kanban-body">
                     {% for ticket in closed_tickets %}
-                        <div class="ticket-card urgency-bg-{{ ticket.urgency }}{% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %} shared-ticket{% endif %}" draggable="true" data-ticket-id="{{ ticket.id }}" data-ticket-status="{{ ticket.status }}" data-opened-at="{{ ticket.created_at|date:'c' }}" data-failure-type="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'failure_type' }}">
+                        <div class="ticket-card urgency-bg-{{ ticket.urgency }}{% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %} shared-ticket{% endif %}" draggable="true" data-ticket-id="{{ ticket.id }}" data-ticket-status="{{ ticket.status }}" data-opened-at="{{ ticket.created_at|date:'c' }}" data-failure-type="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'failure_type' }}" data-ticket-description="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'description'|default:''|escape }}">
                             <div class="ticket-title">
                                 <span class="urgency-dot urgency-{{ ticket.urgency }}"></span>
                                 #{{ ticket.id }} - {{ ticket.title }}
@@ -1710,6 +1719,37 @@
         document.addEventListener('tickets-updated', refreshCards);
     })();
 </script>
+{% if is_ti_group %}
+<script>
+    (function () {
+        const input = document.querySelector('[data-closed-search]');
+        const column = document.querySelector('.kanban-column[data-target="fechado"]');
+        if (!input || !column) return;
+
+        const cards = () => Array.from(column.querySelectorAll('.kanban-body .ticket-card'));
+
+        const normalized = (value) => (value || '').toString().trim().toLowerCase();
+        const textForCard = (card) => {
+            const title = card.querySelector('.ticket-title')?.textContent || '';
+            const requester = card.querySelector('.ticket-requester')?.textContent || '';
+            const extra = card.querySelector('.ticket-extra')?.textContent || '';
+            const description = card.dataset.ticketDescription || '';
+            return normalized(`${title} ${requester} ${extra} ${description}`);
+        };
+
+        const applyFilter = () => {
+            const query = normalized(input.value);
+            cards().forEach((card) => {
+                const show = !query || textForCard(card).includes(query);
+                card.style.display = show ? '' : 'none';
+            });
+        };
+
+        input.addEventListener('input', applyFilter);
+        document.addEventListener('tickets-updated', applyFilter);
+    })();
+</script>
+{% endif %}
 <script>
     (function () {
         const board = document.querySelector('[data-board]');
