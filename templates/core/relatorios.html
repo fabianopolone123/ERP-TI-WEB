@@ -1,13 +1,13 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 
-{% block title %}Relatórios | ERP TI{% endblock %}
+{% block title %}RelatÃ³rios | ERP TI{% endblock %}
 
 {% block content %}
 <div class="card">
     <div class="topbar">
         <div>
-            <h2>Relatórios de Chamados</h2>
-            <p class="muted">Filtros e indicadores para análise dos chamados da TI.</p>
+            <h2>RelatÃ³rios de Chamados</h2>
+            <p class="muted">Filtros e indicadores para anÃ¡lise dos chamados da TI.</p>
         </div>
         <form method="post" action="{% url 'logout' %}" class="inline-form">
             {% csrf_token %}
@@ -44,7 +44,7 @@
             }
             .chart-grid {
                 display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+                grid-template-columns: repeat(auto-fit, minmax(clamp(260px, 30vw, 560px), 1fr));
                 gap: 12px;
                 margin-top: 14px;
             }
@@ -58,7 +58,22 @@
                 margin: 0 0 10px;
             }
             .chart-wrap {
-                min-height: 220px;
+                height: clamp(220px, 28vh, 380px);
+            }
+            .chart-card.full-width {
+                grid-column: 1 / -1;
+            }
+            .chart-card.full-width .chart-wrap {
+                height: clamp(260px, 34vh, 460px);
+            }
+            @media (max-width: 900px) {
+                .chart-grid {
+                    grid-template-columns: 1fr;
+                }
+                .chart-wrap,
+                .chart-card.full-width .chart-wrap {
+                    height: 240px;
+                }
             }
         </style>
 
@@ -69,7 +84,7 @@
                     <input id="id_date_from" type="date" name="date_from" value="{{ filters.date_from }}" />
                 </div>
                 <div>
-                    <label for="id_date_to">Até</label>
+                    <label for="id_date_to">AtÃ©</label>
                     <input id="id_date_to" type="date" name="date_to" value="{{ filters.date_to }}" />
                 </div>
                 <div>
@@ -105,7 +120,7 @@
                 </div>
                 <div>
                     <label for="id_q">Busca</label>
-                    <input id="id_q" type="text" name="q" value="{{ filters.q }}" placeholder="Título ou descrição..." />
+                    <input id="id_q" type="text" name="q" value="{{ filters.q }}" placeholder="TÃ­tulo ou descriÃ§Ã£o..." />
                 </div>
             </div>
             <div style="display:flex; gap:8px;">
@@ -141,7 +156,7 @@
                 <div class="chart-wrap"><canvas id="chart-status"></canvas></div>
             </div>
             <div class="chart-card">
-                <h4>Urgência</h4>
+                <h4>UrgÃªncia</h4>
                 <div class="chart-wrap"><canvas id="chart-urgency"></canvas></div>
             </div>
             <div class="chart-card">
@@ -152,8 +167,8 @@
                 <h4>Top Solicitantes</h4>
                 <div class="chart-wrap"><canvas id="chart-requesters"></canvas></div>
             </div>
-            <div class="chart-card" style="grid-column: 1 / -1;">
-                <h4>Evolução por Dia</h4>
+            <div class="chart-card full-width">
+                <h4>EvoluÃ§Ã£o por Dia</h4>
                 <div class="chart-wrap"><canvas id="chart-days"></canvas></div>
             </div>
         </div>
@@ -219,7 +234,8 @@
             })();
         </script>
     {% else %}
-        <p>Solicite ao administrador a inclusão no departamento <strong>TI</strong>.</p>
+        <p>Solicite ao administrador a inclusÃ£o no departamento <strong>TI</strong>.</p>
     {% endif %}
 </div>
 {% endblock %}
+
