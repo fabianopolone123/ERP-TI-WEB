@@ -1,5 +1,6 @@
 ﻿import logging
 import json
+import csv
 import unicodedata
 from uuid import uuid4
 from textwrap import shorten
@@ -635,6 +636,83 @@ class UsersListView(LoginRequiredMixin, TemplateView):
                 EmailAlias.objects.get_or_create(user=user, email=alias_email)
             messages.success(request, f'Usuário manual cadastrado com sucesso: {full_name}.')
             return redirect('usuarios')
+
+        if action == 'update_emails_csv':
+            upload = request.FILES.get('emails_csv')
+            if not upload:
+                messages.error(request, 'Selecione um arquivo CSV para atualizar os e-mails.')
+                return redirect(f"{reverse('usuarios')}?tab=emails")
+
+            decoded = upload.read().decode('utf-8-sig', errors='ignore').splitlines()
+            reader = csv.DictReader(decoded)
+            if not reader.fieldnames:
+                messages.error(request, 'Arquivo CSV inválido ou vazio.')
+                return redirect(f"{reverse('usuarios')}?tab=emails")
+
+            first_key = 'First Name [Required]'
+            last_key = 'Last Name [Required]'
+            email_key = 'Email Address [Required]'
+            if first_key not in reader.fieldnames or last_key not in reader.fieldnames or email_key not in reader.fieldnames:
+                messages.error(request, 'CSV fora do padrão esperado. Use o arquivo exportado com colunas de nome e e-mail.')
+                return redirect(f"{reverse('usuarios')}?tab=emails")
+
+            all_users = list(ERPUser.objects.all())
+            username_map = {
+                (u.username or '').strip().lower(): u
+                for u in all_users
+                if (u.username or '').strip()
+            }
+            full_name_map = {}
+            for u in all_users:
+                key = _normalize_text(u.full_name)
+                if key:
+                    full_name_map.setdefault(key, []).append(u)
+
+            updated = 0
+            unchanged = 0
+            skipped = 0
+
+            for row in reader:
+                first = (row.get(first_key) or '').strip()
+                last = (row.get(last_key) or '').strip()
+                email = (row.get(email_key) or '').strip().lower()
+                if not email:
+                    skipped += 1
+                    continue
+
+                username_guess = f'{first}.{last}'.strip('.').lower().replace(' ', '.')
+                target = username_map.get(username_guess)
+                if not target:
+                    full_key = _normalize_text(f'{first} {last}'.strip())
+                    matches = full_name_map.get(full_key, [])
+                    if len(matches) == 1:
+                        target = matches[0]
+                if not target:
+                    skipped += 1
+                    continue
+
+                current_email = (target.email or '').strip().lower()
+                if current_email == email:
+                    unchanged += 1
+                    if not target.is_email_user:
+                        target.is_email_user = True
+                        target.save(update_fields=['is_email_user'])
+                    continue
+
+                owner = ERPUser.objects.filter(email__iexact=email).exclude(id=target.id).first()
+                if owner:
+                    skipped += 1
+                    continue
+
+                if current_email:
+                    EmailAlias.objects.get_or_create(user=target, email=current_email)
+                target.email = email
+                target.is_email_user = True
+                target.save(update_fields=['email', 'is_email_user'])
+                updated += 1
+
+            messages.success(request, f'Atualização de e-mails concluída: {updated} atualizados, {unchanged} sem mudança, {skipped} ignorados.')
+            return redirect(f"{reverse('usuarios')}?tab=emails")
 
         try:
             created, updated = import_ad_users()
@@ -2254,6 +2332,8 @@ def email_templates_update(request):
     template.save()
     messages.success(request, 'Templates de e-mail atualizados.')
     return redirect('chamados')
+
+
 
 
 

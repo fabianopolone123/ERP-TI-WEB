@@ -115,12 +115,21 @@
                     {% elif module.slug == "emails" %}
                         <div class="topbar" style="margin-bottom: 10px;">
                             <h3>Contas de e-mail</h3>
-                            <input
-                                type="text"
-                                class="table-search"
-                                placeholder="Pesquisar por nome, login ou e-mail..."
-                                data-table-search="emails"
-                            />
+                            <div style="display: flex; gap: 8px; align-items: center;">
+                                <input
+                                    type="text"
+                                    class="table-search"
+                                    placeholder="Pesquisar por nome, login ou e-mail..."
+                                    data-table-search="emails"
+                                    style="margin: 0;"
+                                />
+                                <form method="post" enctype="multipart/form-data" class="inline-form">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="action" value="update_emails_csv" />
+                                    <input type="file" name="emails_csv" accept=".csv,text/csv" required style="margin: 0;" />
+                                    <button type="submit">Atualizar</button>
+                                </form>
+                            </div>
                         </div>
                         <div class="ticket-legend" style="margin-bottom: 10px;">
                             <strong>E-mails principais únicos:</strong> {{ email_unique_count|default:0 }}
