@@ -31,6 +31,10 @@
             padding: 24px;
         }
 
+        body.has-sidebar-nav .container {
+            padding-left: 252px;
+        }
+
         .card {
             background: var(--card);
             border-radius: 14px;
@@ -93,24 +97,27 @@
         }
 
         .tabs {
+            position: fixed;
+            inset: 0 auto 0 0;
+            width: 220px;
             display: flex;
-            flex-wrap: wrap;
+            flex-direction: column;
             align-items: stretch;
             gap: 8px;
-            margin-top: 16px;
-            border-bottom: 1px solid #1f2a44;
-            padding-bottom: 0;
+            margin: 0;
+            border-right: 1px solid #1f2a44;
             background: #0b1324;
-            padding: 8px 8px 0;
-            border-radius: 10px 10px 0 0;
-            overflow: hidden;
+            padding: 12px 10px;
+            overflow-y: auto;
+            overflow-x: hidden;
+            z-index: 900;
         }
 
         .tab-button {
             background: #0c162a;
             border: 1px solid #1f2a44;
             color: var(--text);
-            border-radius: 8px 8px 0 0;
+            border-radius: 8px;
             padding: 10px 12px;
             font-weight: 600;
             font-size: 0.92rem;
@@ -119,9 +126,9 @@
             display: block;
             text-align: center;
             position: relative;
-            top: 1px;
-            flex: 1 1 clamp(120px, 11vw, 190px);
-            min-width: 120px;
+            top: 0;
+            flex: 0 0 auto;
+            min-width: 0;
             max-width: 100%;
             white-space: nowrap;
             overflow: hidden;
@@ -132,7 +139,7 @@
             background: #101c33;
             border-color: #2b3a5c;
             color: #ffffff;
-            box-shadow: 0 -2px 0 var(--accent) inset;
+            box-shadow: inset 3px 0 0 var(--accent);
         }
 
         .tab-panels {
@@ -497,7 +504,23 @@
             flex-wrap: wrap;
         }
 
-        @media (max-width: 600px) {
+        @media (max-width: 900px) {
+            body.has-sidebar-nav .container {
+                padding-left: 16px;
+            }
+            .tabs {
+                position: static;
+                width: 100%;
+                inset: auto;
+                border-right: 0;
+                border-bottom: 1px solid #1f2a44;
+                flex-direction: row;
+                flex-wrap: wrap;
+                margin-top: 16px;
+                border-radius: 10px 10px 0 0;
+                overflow: hidden;
+                padding: 8px 8px 0;
+            }
             .topbar { flex-direction: column; align-items: flex-start; gap: 10px; }
             .tabs { gap: 6px; }
             .tab-button { padding: 6px 10px; font-size: 0.9rem; }
