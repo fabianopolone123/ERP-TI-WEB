@@ -141,7 +141,7 @@ def _is_probably_person_name(full_name: str) -> bool:
         'admin', 'administrator', 'administration',
         'server', 'servico', 'service', 'account', 'system', 'sistema',
         'fortigate', 'firewall', 'backup', 'monitoramento', 'robot', 'bot',
-        'fsso', 'agent', 'mecano', 'glpi', 'ldap', 'impressora', 'impressoras', 'suporte',
+        'fsso', 'agent', 'mecano', 'glpi', 'ldap', 'impressora', 'impressoras', 'impress', 'suporte',
         'producao', 'sidertec',
     }
     if any(token in normalized for token in blocked_tokens):
