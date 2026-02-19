@@ -115,7 +115,7 @@ def import_ad_users() -> tuple[int, int]:
         if guid:
             existing = ERPUser.objects.filter(ad_guid=guid).first()
         if existing is None:
-            existing = ERPUser.objects.filter(username=username).first()
+            existing = ERPUser.objects.filter(username__iexact=username).first()
 
         if existing is None:
             created_user = ERPUser.objects.create(**defaults)
