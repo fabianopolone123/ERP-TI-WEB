@@ -94,7 +94,8 @@
 
         .tabs {
             display: flex;
-            flex-wrap: nowrap;
+            flex-wrap: wrap;
+            align-items: stretch;
             gap: 8px;
             margin-top: 16px;
             border-bottom: 1px solid #1f2a44;
@@ -102,9 +103,7 @@
             background: #0b1324;
             padding: 8px 8px 0;
             border-radius: 10px 10px 0 0;
-            overflow-x: auto;
-            overflow-y: hidden;
-            scrollbar-width: thin;
+            overflow: hidden;
         }
 
         .tab-button {
@@ -121,8 +120,9 @@
             text-align: center;
             position: relative;
             top: 1px;
-            flex: 0 0 auto;
-            min-width: 110px;
+            flex: 1 1 clamp(120px, 11vw, 190px);
+            min-width: 120px;
+            max-width: 100%;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
