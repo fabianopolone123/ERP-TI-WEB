@@ -49,6 +49,10 @@
                                     <input type="checkbox" name="only_people" value="1" {% if only_people %}checked{% endif %} />
                                     Somente pessoas
                                 </label>
+                                <label class="muted" style="display: inline-flex; align-items: center; gap: 6px; margin-left: 8px;">
+                                    <input type="checkbox" name="only_non_people" value="1" {% if only_non_people %}checked{% endif %} />
+                                    Somente AD não-pessoa
+                                </label>
                                 <button type="submit">Aplicar</button>
                             </form>
                         </div>
