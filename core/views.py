@@ -1,6 +1,7 @@
 ﻿import logging
 import json
 import unicodedata
+from uuid import uuid4
 from textwrap import shorten
 from decimal import Decimal, InvalidOperation
 from django.conf import settings
@@ -606,6 +607,7 @@ class UsersListView(LoginRequiredMixin, TemplateView):
                 mobile=mobile,
                 email=email,
                 extension=extension,
+                ad_guid=f'manual-{uuid4().hex}',
                 is_active=is_active,
                 is_email_user=is_email_user,
                 is_manual=True,
@@ -644,6 +646,11 @@ class UsersListView(LoginRequiredMixin, TemplateView):
         context['only_email_users'] = only_email_users
         context['only_non_email_users'] = only_non_email_users
         context['users'] = queryset.order_by('full_name')
+        context['email_users'] = (
+            ERPUser.objects.exclude(email__isnull=True)
+            .exclude(email='')
+            .order_by('full_name', 'username')
+        )
         return context
 
 
@@ -2210,6 +2217,7 @@ def email_templates_update(request):
     template.save()
     messages.success(request, 'Templates de e-mail atualizados.')
     return redirect('chamados')
+
 
 
 

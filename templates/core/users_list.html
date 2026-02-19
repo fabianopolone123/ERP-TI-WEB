@@ -112,6 +112,47 @@
                                 </tbody>
                             </table>
                         </div>
+                    {% elif module.slug == "emails" %}
+                        <div class="topbar" style="margin-bottom: 10px;">
+                            <h3>Contas de e-mail</h3>
+                            <input
+                                type="text"
+                                class="table-search"
+                                placeholder="Pesquisar por nome, login ou e-mail..."
+                                data-table-search="emails"
+                            />
+                        </div>
+                        <div class="ticket-legend" style="margin-bottom: 10px;">
+                            <strong>Total de contas com e-mail:</strong> {{ email_users|length }}
+                        </div>
+                        <div style="overflow-x: auto;">
+                            <table class="data-table" data-table-name="emails">
+                                <thead>
+                                    <tr>
+                                        <th>Nome</th>
+                                        <th>Login</th>
+                                        <th>E-mail</th>
+                                        <th>Ativo</th>
+                                        <th>Origem</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for user in email_users %}
+                                        <tr>
+                                            <td>{{ user.full_name }}</td>
+                                            <td>{{ user.username|default:"-" }}</td>
+                                            <td>{{ user.email }}</td>
+                                            <td>{% if user.is_active %}Sim{% else %}Não{% endif %}</td>
+                                            <td>{% if user.is_manual %}Manual{% else %}AD{% endif %}</td>
+                                        </tr>
+                                    {% empty %}
+                                        <tr>
+                                            <td colspan="5" class="muted">Nenhuma conta de e-mail cadastrada.</td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
                     {% else %}
                         <h3>{{ module.label }}</h3>
                         <p class="muted">Conteúdo do módulo em desenvolvimento.</p>
