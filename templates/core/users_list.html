@@ -77,13 +77,13 @@
                                             <td>{{ user.extension }}</td>
                                             <td>{% if user.is_active %}Sim{% else %}Não{% endif %}</td>
                                             <td>
-                                                <form method="post" class="inline-form">
+                                                <form method="post" class="inline-form" data-email-user-form>
                                                     {% csrf_token %}
                                                     <input type="hidden" name="action" value="update_email_user" />
                                                     <input type="hidden" name="user_id" value="{{ user.id }}" />
                                                     <input type="hidden" name="show_inactive" value="{% if show_inactive %}1{% else %}0{% endif %}" />
                                                     <label class="muted" style="display: inline-flex; align-items: center; gap: 6px;">
-                                                        <input type="checkbox" name="is_email_user" value="1" {% if user.is_email_user %}checked{% endif %} onchange="this.form.submit()" />
+                                                        <input type="checkbox" name="is_email_user" value="1" {% if user.is_email_user %}checked{% endif %} data-email-user-toggle />
                                                         Marcar
                                                     </label>
                                                 </form>
@@ -110,4 +110,37 @@
         <p>Solicite ao administrador a inclusão no departamento <strong>TI</strong>.</p>
     {% endif %}
 </div>
+<script>
+    (function () {
+        const STORAGE_KEY = 'usuarios_scroll_restore_v1';
+        try {
+            const raw = sessionStorage.getItem(STORAGE_KEY) || '';
+            if (raw) {
+                const state = JSON.parse(raw);
+                requestAnimationFrame(() => {
+                    window.scrollTo(Number(state.x || 0), Number(state.y || 0));
+                });
+                sessionStorage.removeItem(STORAGE_KEY);
+            }
+        } catch (_) {
+            // ignore storage errors
+        }
+
+        document.querySelectorAll('form[data-email-user-form]').forEach((form) => {
+            const toggle = form.querySelector('input[data-email-user-toggle]');
+            if (!toggle) return;
+            toggle.addEventListener('change', () => {
+                try {
+                    sessionStorage.setItem(
+                        STORAGE_KEY,
+                        JSON.stringify({ x: window.scrollX || 0, y: window.scrollY || 0 })
+                    );
+                } catch (_) {
+                    // ignore storage errors
+                }
+                form.submit();
+            });
+        });
+    })();
+</script>
 {% endblock %}
