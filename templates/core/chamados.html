@@ -121,10 +121,19 @@
     <div class="topbar">
         <div>
             <h2>Chamados</h2>
-            <p class="muted">Gerencie pendências e atendimentos da equipe de TI.</p>
         </div>
         <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
             {% if is_ti_group %}
+                <div class="ticket-legend ticket-legend-inline">
+                    <strong>Legenda</strong>
+                    <div class="legend-items">
+                        <span><span class="urgency-dot urgency-programada"></span> Programada</span>
+                        <span><span class="urgency-dot urgency-baixa"></span> Baixa</span>
+                        <span><span class="urgency-dot urgency-media"></span> Média</span>
+                        <span><span class="urgency-dot urgency-alta"></span> Alta</span>
+                        <span><span class="urgency-dot urgency-nao_classificado"></span> Não classificado</span>
+                    </div>
+                </div>
                 <button type="button" data-open-whatsapp>WhatsApp</button>
                 <button type="button" data-open-email>E-mail</button>
                 <button type="button" data-open-planilha>Planilha</button>
