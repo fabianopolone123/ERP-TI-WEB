@@ -60,7 +60,14 @@ if (Get-Command Get-PhysicalDisk -ErrorAction SilentlyContinue) {
 }
 
 $cpuGeneration = ''
-if ($cpu.Name -match 'i[3579]-([0-9]{4,5})') {
+if ($cpu.Name -match 'Core\s*(\(\s*TM\s*\)\s*)?Ultra\s*[3579]?\s*([0-9]{3,5})') {
+    $digits = $Matches[2]
+    if ($digits.Length -ge 5) {
+        $cpuGeneration = "{0}a" -f $digits.Substring(0,2)
+    } elseif ($digits.Length -ge 3) {
+        $cpuGeneration = "{0}a" -f $digits.Substring(0,1)
+    }
+} elseif ($cpu.Name -match 'i[3579]-([0-9]{4,5})') {
     $digits = $Matches[1]
     if ($digits.Length -ge 5) {
         $cpuGeneration = "{0}a" -f $digits.Substring(0,2)

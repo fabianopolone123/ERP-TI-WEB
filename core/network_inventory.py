@@ -45,6 +45,13 @@ def _infer_cpu_generation(processor_name: str, payload_generation: str = '') -> 
     name = (processor_name or '').strip()
     if not name:
         return ''
+    ultra_match = re.search(r'core\s*(?:\(\s*tm\s*\)\s*)?ultra\s*[3579]?\s*([0-9]{3,5})', name, flags=re.IGNORECASE)
+    if ultra_match:
+        digits = ultra_match.group(1)
+        if len(digits) >= 5:
+            return f'{digits[:2]}a'
+        if len(digits) >= 3:
+            return f'{digits[:1]}a'
     intel_match = re.search(r'i[3579]-([0-9]{4,5})', name, flags=re.IGNORECASE)
     if intel_match:
         digits = intel_match.group(1)
@@ -138,7 +145,14 @@ try {{
 }}
 
 $cpuGeneration = ''
-if ($cpu.Name -match 'i[3579]-([0-9]{4,5})') {{
+if ($cpu.Name -match 'Core\\s*(\\(\\s*TM\\s*\\)\\s*)?Ultra\\s*[3579]?\\s*([0-9]{3,5})') {{
+    $digits = $Matches[2]
+    if ($digits.Length -ge 5) {{
+        $cpuGeneration = \"{0}a\" -f $digits.Substring(0,2)
+    }} elseif ($digits.Length -ge 3) {{
+        $cpuGeneration = \"{0}a\" -f $digits.Substring(0,1)
+    }}
+}} elseif ($cpu.Name -match 'i[3579]-([0-9]{4,5})') {{
     $digits = $Matches[1]
     if ($digits.Length -ge 5) {{
         $cpuGeneration = \"{0}a\" -f $digits.Substring(0,2)
