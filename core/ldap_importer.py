@@ -93,6 +93,7 @@ def import_ad_users() -> tuple[int, int]:
             'is_active': is_active,
             'username': username,
             'ad_guid': guid or '',
+            'is_manual': False,
         }
 
         existing = None
@@ -104,6 +105,10 @@ def import_ad_users() -> tuple[int, int]:
         if existing is None:
             ERPUser.objects.create(**defaults)
             created += 1
+            continue
+
+        # Usuários cadastrados manualmente não devem ser alterados pela sincronização do AD.
+        if existing.is_manual:
             continue
 
         changed = False

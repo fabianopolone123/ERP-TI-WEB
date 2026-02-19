@@ -33,6 +33,60 @@
                                 <button type="submit">Importar do AD</button>
                             </form>
                         </div>
+                        <div class="ticket-form" style="margin-bottom: 12px;">
+                            <div class="topbar" style="margin-bottom: 8px;">
+                                <h3 style="margin: 0;">Novo usuário manual</h3>
+                            </div>
+                            <form method="post">
+                                {% csrf_token %}
+                                <input type="hidden" name="action" value="create_manual_user" />
+                                <div class="form-row">
+                                    <div>
+                                        <label for="id_manual_full_name">Nome completo</label>
+                                        <input id="id_manual_full_name" name="full_name" type="text" required />
+                                    </div>
+                                    <div>
+                                        <label for="id_manual_username">Login (opcional)</label>
+                                        <input id="id_manual_username" name="username" type="text" />
+                                    </div>
+                                    <div>
+                                        <label for="id_manual_department">Departamento</label>
+                                        <input id="id_manual_department" name="department" type="text" />
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div>
+                                        <label for="id_manual_phone">Telefone</label>
+                                        <input id="id_manual_phone" name="phone" type="text" />
+                                    </div>
+                                    <div>
+                                        <label for="id_manual_mobile">Celular</label>
+                                        <input id="id_manual_mobile" name="mobile" type="text" />
+                                    </div>
+                                    <div>
+                                        <label for="id_manual_email">E-mail</label>
+                                        <input id="id_manual_email" name="email" type="email" />
+                                    </div>
+                                    <div>
+                                        <label for="id_manual_extension">Ramal</label>
+                                        <input id="id_manual_extension" name="extension" type="text" />
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div style="display: flex; gap: 16px; align-items: center;">
+                                        <label class="muted" style="display: inline-flex; align-items: center; gap: 6px;">
+                                            <input type="checkbox" name="is_active" value="1" checked />
+                                            Ativo
+                                        </label>
+                                        <label class="muted" style="display: inline-flex; align-items: center; gap: 6px;">
+                                            <input type="checkbox" name="is_email_user" value="1" />
+                                            Usuário com e-mail
+                                        </label>
+                                    </div>
+                                </div>
+                                <button type="submit">Salvar usuário manual</button>
+                            </form>
+                        </div>
                         <div class="topbar" style="margin-bottom: 10px;">
                             <input
                                 type="text"
@@ -71,6 +125,7 @@
                                         <th>Email</th>
                                         <th>Ramal</th>
                                         <th>Ativo</th>
+                                        <th>Origem</th>
                                         <th>Usuário com e-mail</th>
                                     </tr>
                                 </thead>
@@ -84,6 +139,7 @@
                                             <td>{{ user.email }}</td>
                                             <td>{{ user.extension }}</td>
                                             <td>{% if user.is_active %}Sim{% else %}Não{% endif %}</td>
+                                            <td>{% if user.is_manual %}Manual{% else %}AD{% endif %}</td>
                                             <td>
                                                 <form method="post" class="inline-form" data-email-user-form>
                                                     {% csrf_token %}
@@ -99,7 +155,7 @@
                                         </tr>
                                     {% empty %}
                                         <tr>
-                                            <td colspan="8" class="muted">
+                                            <td colspan="9" class="muted">
                                                 Nenhum usuário cadastrado.
                                             </td>
                                         </tr>

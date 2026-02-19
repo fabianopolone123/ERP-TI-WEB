@@ -578,6 +578,41 @@ class UsersListView(LoginRequiredMixin, TemplateView):
             show_inactive = '1' if request.POST.get('show_inactive') == '1' else '0'
             return redirect(f"{reverse('usuarios')}?show_inactive={show_inactive}")
 
+        if action == 'create_manual_user':
+            full_name = (request.POST.get('full_name') or '').strip()
+            username_raw = (request.POST.get('username') or '').strip()
+            username = username_raw or None
+            department = (request.POST.get('department') or '').strip()
+            phone = (request.POST.get('phone') or '').strip()
+            mobile = (request.POST.get('mobile') or '').strip()
+            email = (request.POST.get('email') or '').strip()
+            extension = (request.POST.get('extension') or '').strip()
+            is_active = bool(request.POST.get('is_active'))
+            is_email_user = bool(request.POST.get('is_email_user'))
+
+            if not full_name:
+                messages.error(request, 'Informe o nome completo do usuário manual.')
+                return self.get(request, *args, **kwargs)
+
+            if username and ERPUser.objects.filter(username__iexact=username).exists():
+                messages.error(request, 'Já existe um usuário com esse login.')
+                return self.get(request, *args, **kwargs)
+
+            ERPUser.objects.create(
+                full_name=full_name,
+                username=username,
+                department=department,
+                phone=phone,
+                mobile=mobile,
+                email=email,
+                extension=extension,
+                is_active=is_active,
+                is_email_user=is_email_user,
+                is_manual=True,
+            )
+            messages.success(request, f'Usuário manual cadastrado com sucesso: {full_name}.')
+            return redirect('usuarios')
+
         try:
             created, updated = import_ad_users()
             messages.success(request, f'Importação concluída: {created} novos, {updated} atualizados.')
