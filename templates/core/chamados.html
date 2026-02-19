@@ -5,6 +5,13 @@
 
 {% block content %}
 <style>
+    [data-board].kanban {
+        width: 100%;
+        grid-template-columns: repeat(var(--regular-cols, 1), minmax(0, 1fr)) !important;
+    }
+    [data-board] .kanban-column {
+        min-width: 0;
+    }
     [data-board] .ticket-card,
     [data-ticket-list] .ticket-card {
         padding: 8px 9px;
