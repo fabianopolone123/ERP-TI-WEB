@@ -113,16 +113,38 @@
             z-index: 900;
         }
         .sidebar-logo {
-            padding: 8px 10px;
-            margin-bottom: 4px;
-            border: 1px solid #1f2a44;
-            border-radius: 8px;
-            background: #101c33;
+            min-height: 110px;
+            padding: 10px;
+            margin-bottom: 6px;
+            border: 1px solid #2b3a5c;
+            border-radius: 12px;
+            background: linear-gradient(160deg, #101c33 0%, #0f172a 100%);
             color: #cbd5f5;
             font-weight: 800;
             letter-spacing: 0.03em;
             text-align: center;
-            white-space: nowrap;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        .sidebar-logo-mark {
+            width: 42px;
+            height: 42px;
+            border-radius: 10px;
+            background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            color: #ffffff;
+            font-size: 0.92rem;
+            font-weight: 900;
+            box-shadow: 0 4px 14px rgba(29, 78, 216, 0.45);
+        }
+        .sidebar-logo-text {
+            line-height: 1.15;
+            font-size: 0.95rem;
         }
 
         .tab-button {
@@ -536,6 +558,9 @@
             .sidebar-logo {
                 width: 100%;
                 text-align: left;
+                min-height: auto;
+                flex-direction: row;
+                justify-content: flex-start;
             }
             .topbar { flex-direction: column; align-items: flex-start; gap: 10px; }
             .tabs { gap: 6px; }
