@@ -51,6 +51,7 @@ from .network_inventory import (
     sync_network_inventory,
     format_inventory_run_stamp,
     upsert_inventory_from_payload,
+    _infer_tag_code_from_hostname,
 )
 
 logger = logging.getLogger(__name__)
@@ -617,11 +618,15 @@ class EquipamentosView(LoginRequiredMixin, TemplateView):
                     messages.info(request, line)
             return self.get(request, *args, **kwargs)
 
+        hostname = request.POST.get('hostname', '').strip()
+        tag_code = request.POST.get('tag_code', '').strip()
+        if not tag_code:
+            tag_code = _infer_tag_code_from_hostname(hostname)
         Equipment.objects.create(
-            tag_code=request.POST.get('tag_code', '').strip(),
+            tag_code=tag_code,
             sector=request.POST.get('sector', '').strip(),
             user=request.POST.get('user', '').strip(),
-            hostname=request.POST.get('hostname', '').strip(),
+            hostname=hostname,
             equipment=request.POST.get('equipment', '').strip(),
             model=request.POST.get('model', '').strip(),
             brand=request.POST.get('brand', '').strip(),

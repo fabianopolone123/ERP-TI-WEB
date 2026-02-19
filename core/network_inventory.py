@@ -266,6 +266,17 @@ def _to_iso_br_date(raw_value: str) -> str:
     return value
 
 
+def _infer_tag_code_from_hostname(hostname: str) -> str:
+    host = (hostname or '').strip()
+    if not host:
+        return ''
+    # Exemplos: NOTE-057, CPU-300, PRJ-0012
+    match = re.search(r'^[A-Za-z]+-([0-9]{2,6})$', host, flags=re.IGNORECASE)
+    if match:
+        return match.group(1)
+    return ''
+
+
 def upsert_inventory_from_payload(payload: dict[str, Any], source: str = 'rede') -> tuple[bool, str]:
     now = timezone.now()
 
@@ -293,6 +304,9 @@ def upsert_inventory_from_payload(payload: dict[str, Any], source: str = 'rede')
     if equipment is None:
         equipment = Equipment(hostname=host)
 
+    inferred_tag = _infer_tag_code_from_hostname(host)
+    if inferred_tag and not (equipment.tag_code or '').strip():
+        equipment.tag_code = inferred_tag
     equipment.user = user_name or equipment.user
     equipment.sector = sector or equipment.sector
     equipment.equipment = equipment.equipment or 'Computador'
