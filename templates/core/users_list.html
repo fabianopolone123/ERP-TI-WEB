@@ -274,5 +274,29 @@
         closeEls.forEach((el) => el.addEventListener('click', close));
     })();
 </script>
+<script>
+    (function () {
+        const key = 'usuarios_scroll_y';
+        const forms = document.querySelectorAll('form.inline-form');
+        forms.forEach((form) => {
+            form.addEventListener('submit', () => {
+                const actionInput = form.querySelector('input[name="action"]');
+                const action = (actionInput?.value || '').trim().toLowerCase();
+                if (action === 'hide_user_from_list' || action === 'unhide_user_from_list') {
+                    sessionStorage.setItem(key, String(window.scrollY || 0));
+                }
+            });
+        });
+
+        const saved = sessionStorage.getItem(key);
+        if (saved !== null) {
+            sessionStorage.removeItem(key);
+            const y = Number(saved);
+            if (!Number.isNaN(y)) {
+                window.requestAnimationFrame(() => window.scrollTo(0, y));
+            }
+        }
+    })();
+</script>
 {% endif %}
 {% endblock %}
