@@ -156,6 +156,11 @@
         max-width: 100%;
         text-align: right;
     }
+    .ticket-main-right .ticket-timing-row {
+        justify-content: flex-end;
+        width: 100%;
+        margin-top: 2px;
+    }
     .ticket-timer-controls {
         margin-top: 4px !important;
     }
@@ -276,9 +281,6 @@
                                             <button type="button" data-ticket-play data-ticket-id="{{ ticket.id }}" {% if ticket.current_cycle_started_at %}style="display:none;"{% endif %}>Play</button>
                                             <button type="button" data-ticket-pause data-ticket-id="{{ ticket.id }}" {% if not ticket.current_cycle_started_at %}style="display:none;"{% endif %}>Pause</button>
                                         </div>
-                                        <div class="ticket-timing-row">
-                                            <span class="ticket-open-counter"></span>
-                                        </div>
                                     </div>
                                     <div class="ticket-main-right">
                                         <span class="ticket-requester">{{ ticket_meta|get_item:ticket.id|default:""|get_item:'requester' }}</span>
@@ -289,6 +291,9 @@
                                                 -
                                             {% endif %}
                                         </span>
+                                        <div class="ticket-timing-row">
+                                            <span class="ticket-open-counter"></span>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -1760,18 +1765,23 @@
         };
 
         const ensureCounter = (card) => {
+            const right = card.querySelector('.ticket-main-right');
             const left = card.querySelector('.ticket-main-left');
-            let row = (left || card).querySelector('.ticket-timing-row');
+            let row = (right || left || card).querySelector('.ticket-timing-row');
             if (!row) {
-                const controls = (left || card).querySelector('.ticket-timer-controls');
-                const title = (left || card).querySelector('.ticket-title');
-                if (!title) return null;
                 row = document.createElement('div');
                 row.className = 'ticket-timing-row';
-                if (controls) {
-                    controls.insertAdjacentElement('afterend', row);
+                if (right) {
+                    right.appendChild(row);
                 } else {
-                    title.insertAdjacentElement('afterend', row);
+                    const controls = (left || card).querySelector('.ticket-timer-controls');
+                    const title = (left || card).querySelector('.ticket-title');
+                    if (!title) return null;
+                    if (controls) {
+                        controls.insertAdjacentElement('afterend', row);
+                    } else {
+                        title.insertAdjacentElement('afterend', row);
+                    }
                 }
             }
             let badge = row.querySelector('.ticket-open-counter');
