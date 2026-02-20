@@ -557,6 +557,45 @@ def _extract_source_user_id(source_target: str) -> int | None:
         return None
 
 
+def _get_or_create_auth_user_for_erp(erp_user: ERPUser):
+    username = (erp_user.username or '').strip()
+    if not username:
+        return None
+    User = get_user_model()
+    auth_user = User.objects.filter(username__iexact=username).first()
+    primary_email_tokens = _split_email_tokens((erp_user.email or '').strip())
+    primary_email = primary_email_tokens[0] if primary_email_tokens else ''
+    if auth_user:
+        changed_fields = []
+        if primary_email and getattr(auth_user, 'email', '') != primary_email:
+            auth_user.email = primary_email
+            changed_fields.append('email')
+        if hasattr(auth_user, 'is_active') and bool(getattr(auth_user, 'is_active', True)) != bool(erp_user.is_active):
+            auth_user.is_active = bool(erp_user.is_active)
+            changed_fields.append('is_active')
+        if changed_fields:
+            auth_user.save(update_fields=changed_fields)
+        return auth_user
+
+    create_kwargs = {'username': username}
+    if hasattr(User, 'email'):
+        create_kwargs['email'] = primary_email
+    if hasattr(User, 'is_active'):
+        create_kwargs['is_active'] = bool(erp_user.is_active)
+    auth_user = User.objects.create(**create_kwargs)
+    if hasattr(auth_user, 'set_unusable_password'):
+        auth_user.set_unusable_password()
+    full_name = (erp_user.full_name or '').strip()
+    if full_name:
+        parts = full_name.split()
+        if hasattr(auth_user, 'first_name'):
+            auth_user.first_name = parts[0]
+        if hasattr(auth_user, 'last_name'):
+            auth_user.last_name = ' '.join(parts[1:]) if len(parts) > 1 else ''
+    auth_user.save()
+    return auth_user
+
+
 class DashboardView(LoginRequiredMixin, TemplateView):
     template_name = 'core/dashboard.html'
 
@@ -1403,11 +1442,15 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
                 except ValueError:
                     messages.error(request, 'Solicitante inválido.')
                     return self.get(request, *args, **kwargs)
-                requester_user = get_user_model().objects.filter(id=requester_id, is_active=True).first()
-                if not requester_user:
+                requester_erp_user = ERPUser.objects.filter(id=requester_id, is_active=True).first()
+                if not requester_erp_user:
                     messages.error(request, 'Solicitante não encontrado.')
                     return self.get(request, *args, **kwargs)
-                creator_user = requester_user
+                requester_auth_user = _get_or_create_auth_user_for_erp(requester_erp_user)
+                if not requester_auth_user:
+                    messages.error(request, 'Solicitante sem login válido para abertura.')
+                    return self.get(request, *args, **kwargs)
+                creator_user = requester_auth_user
             if opened_at_raw:
                 try:
                     opened_at_dt = datetime.fromisoformat(opened_at_raw)
@@ -1460,8 +1503,7 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
         context['modules'] = build_modules('chamados') if is_ti else []
         context['ti_opened_at_default'] = timezone.localtime(timezone.now()).strftime('%Y-%m-%dT%H:%M')
         if is_ti:
-            User = get_user_model()
-            context['ti_requesters'] = User.objects.filter(is_active=True).order_by('username')
+            context['ti_requesters'] = ERPUser.objects.filter(is_active=True).order_by('full_name', 'username')
         if is_ti:
             wa_settings = _get_whatsapp_settings()
             context['whatsapp_group'] = _get_whatsapp_group_jid(wa_settings)

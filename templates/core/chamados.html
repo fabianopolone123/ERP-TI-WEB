@@ -422,11 +422,10 @@
                     <div>
                         <label for="id_requester_user_id">Abrir em nome de</label>
                         <select id="id_requester_user_id" name="requester_user_id">
-                            <option value="{{ request.user.id }}" selected>{{ request.user.username }}</option>
                             {% for req_user in ti_requesters %}
-                                {% if req_user.id != request.user.id %}
-                                    <option value="{{ req_user.id }}">{{ req_user.username }}</option>
-                                {% endif %}
+                                <option value="{{ req_user.id }}" {% if req_user.username|default:''|lower == request.user.username|default:''|lower %}selected{% endif %}>
+                                    {{ req_user.full_name|default:req_user.username }}{% if req_user.username %} ({{ req_user.username }}){% endif %}
+                                </option>
                             {% endfor %}
                         </select>
                     </div>
