@@ -48,14 +48,6 @@
                                     <input type="checkbox" name="show_inactive" value="1" {% if show_inactive %}checked{% endif %} />
                                     Mostrar inativos
                                 </label>
-                                <label class="muted" style="display: inline-flex; align-items: center; gap: 6px; margin-left: 8px;">
-                                    <input type="checkbox" name="only_email_users" value="1" {% if only_email_users %}checked{% endif %} />
-                                    Somente usuários com e-mail
-                                </label>
-                                <label class="muted" style="display: inline-flex; align-items: center; gap: 6px; margin-left: 8px;">
-                                    <input type="checkbox" name="only_non_email_users" value="1" {% if only_non_email_users %}checked{% endif %} />
-                                    Mostrar usuários sem e-mail
-                                </label>
                                 <button type="submit">Aplicar</button>
                             </form>
                         </div>
@@ -75,6 +67,7 @@
                                         <th>Ramal</th>
                                         <th>Ativo</th>
                                         <th>Origem</th>
+                                        <th>Ação</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -88,12 +81,59 @@
                                             <td>{{ user.extension }}</td>
                                             <td>{% if user.is_active %}Sim{% else %}Não{% endif %}</td>
                                             <td>{% if user.is_manual %}Manual{% else %}AD{% endif %}</td>
+                                            <td>
+                                                <form method="post" class="inline-form">
+                                                    {% csrf_token %}
+                                                    <input type="hidden" name="action" value="hide_user_from_list" />
+                                                    <input type="hidden" name="user_id" value="{{ user.id }}" />
+                                                    <button type="submit">Desativar da lista</button>
+                                                </form>
+                                            </td>
                                         </tr>
                                     {% empty %}
                                         <tr>
-                                            <td colspan="8" class="muted">
+                                            <td colspan="9" class="muted">
                                                 Nenhum usuário cadastrado.
                                             </td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="topbar" style="margin-top: 14px; margin-bottom: 8px;">
+                            <h3 style="margin: 0;">Usuários ocultos manualmente</h3>
+                            <span class="muted">Não aparecem na lista principal, mas continuam no cadastro.</span>
+                        </div>
+                        <div style="overflow-x: auto;">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Nome completo</th>
+                                        <th>Departamento</th>
+                                        <th>Login</th>
+                                        <th>Ativo (AD)</th>
+                                        <th>Ação</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for user in hidden_users %}
+                                        <tr>
+                                            <td>{{ user.full_name }}</td>
+                                            <td>{{ user.department|default:"-" }}</td>
+                                            <td>{{ user.username|default:"-" }}</td>
+                                            <td>{% if user.is_active %}Sim{% else %}Não{% endif %}</td>
+                                            <td>
+                                                <form method="post" class="inline-form">
+                                                    {% csrf_token %}
+                                                    <input type="hidden" name="action" value="unhide_user_from_list" />
+                                                    <input type="hidden" name="user_id" value="{{ user.id }}" />
+                                                    <button type="submit">Reativar na lista</button>
+                                                </form>
+                                            </td>
+                                        </tr>
+                                    {% empty %}
+                                        <tr>
+                                            <td colspan="5" class="muted">Nenhum usuário oculto manualmente.</td>
                                         </tr>
                                     {% endfor %}
                                 </tbody>

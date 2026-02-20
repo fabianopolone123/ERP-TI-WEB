@@ -672,6 +672,44 @@ class UsersListView(LoginRequiredMixin, TemplateView):
             messages.success(request, f'Usuário manual cadastrado com sucesso: {full_name}.')
             return redirect('usuarios')
 
+        if action == 'hide_user_from_list':
+            user_id_raw = (request.POST.get('user_id') or '').strip()
+            try:
+                user_id = int(user_id_raw)
+            except (TypeError, ValueError):
+                messages.error(request, 'Usuário inválido para ocultar.')
+                return redirect('usuarios')
+            target = ERPUser.objects.filter(id=user_id).first()
+            if not target:
+                messages.error(request, 'Usuário não encontrado.')
+                return redirect('usuarios')
+            if target.is_hidden_from_users:
+                messages.info(request, 'Usuário já está oculto da lista.')
+                return redirect('usuarios')
+            target.is_hidden_from_users = True
+            target.save(update_fields=['is_hidden_from_users'])
+            messages.success(request, f'Usuário ocultado da lista: {target.full_name}.')
+            return redirect('usuarios')
+
+        if action == 'unhide_user_from_list':
+            user_id_raw = (request.POST.get('user_id') or '').strip()
+            try:
+                user_id = int(user_id_raw)
+            except (TypeError, ValueError):
+                messages.error(request, 'Usuário inválido para reativar na lista.')
+                return redirect('usuarios')
+            target = ERPUser.objects.filter(id=user_id).first()
+            if not target:
+                messages.error(request, 'Usuário não encontrado.')
+                return redirect('usuarios')
+            if not target.is_hidden_from_users:
+                messages.info(request, 'Usuário já está visível na lista.')
+                return redirect('usuarios')
+            target.is_hidden_from_users = False
+            target.save(update_fields=['is_hidden_from_users'])
+            messages.success(request, f'Usuário reativado na lista: {target.full_name}.')
+            return redirect('usuarios')
+
         if action == 'update_emails_json':
             upload = request.FILES.get('emails_json')
             if not upload:
@@ -796,24 +834,17 @@ class UsersListView(LoginRequiredMixin, TemplateView):
             selected_tab = 'usuarios'
         context['modules'] = build_modules(selected_tab) if is_ti else []
         show_inactive = self.request.GET.get('show_inactive') == '1'
-        only_email_users = self.request.GET.get('only_email_users') == '1'
-        only_non_email_users = self.request.GET.get('only_non_email_users') == '1'
-        queryset = ERPUser.objects.all()
-        active_users = list(ERPUser.objects.filter(is_active=True))
+        queryset = ERPUser.objects.filter(is_hidden_from_users=False)
+        active_users = list(ERPUser.objects.filter(is_active=True, is_hidden_from_users=False))
         context['active_total_count'] = len(active_users)
         active_marked = [u for u in active_users if u.is_email_user]
         context['active_people_count'] = len(active_marked)
         context['active_non_people_count'] = max(0, len(active_users) - len(active_marked))
         if not show_inactive:
             queryset = queryset.filter(is_active=True)
-        if only_email_users and not only_non_email_users:
-            queryset = queryset.filter(is_email_user=True)
-        elif only_non_email_users and not only_email_users:
-            queryset = queryset.filter(is_email_user=False)
         context['show_inactive'] = show_inactive
-        context['only_email_users'] = only_email_users
-        context['only_non_email_users'] = only_non_email_users
         context['users'] = queryset.order_by('full_name')
+        context['hidden_users'] = ERPUser.objects.filter(is_hidden_from_users=True).order_by('full_name')
         email_accounts = list(EmailAccount.objects.all().order_by('full_name', 'email'))
         context['email_users'] = email_accounts
         context['email_unique_count'] = EmailAccount.objects.values('email').distinct().count()
