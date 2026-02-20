@@ -11,6 +11,10 @@
             --text: #e2e8f0;
             --accent: #3b82f6;
             --muted: #94a3b8;
+            --btn-confirm: #16a34a;
+            --btn-confirm-hover: #15803d;
+            --btn-close: #475569;
+            --btn-close-hover: #334155;
         }
 
         * { box-sizing: border-box; }
@@ -85,6 +89,50 @@
             cursor: pointer;
             font-weight: 600;
             font-size: 0.92rem;
+            transition: background-color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+        }
+        button:hover { opacity: 0.96; }
+
+        button[type="submit"] {
+            background: var(--btn-confirm);
+        }
+        button[type="submit"]:hover {
+            background: var(--btn-confirm-hover);
+        }
+        .inline-form button[type="submit"] {
+            background: var(--accent);
+        }
+        .inline-form button[type="submit"]:hover {
+            background: #2563eb;
+        }
+
+        button[data-close-modal],
+        button[data-close-details],
+        button[data-close-whatsapp],
+        button[data-close-email],
+        button[data-close-planilha],
+        button[data-close-ticket-cancel],
+        button[data-close-user-manual],
+        button[data-close-equipment],
+        button[data-close-requisition],
+        button[data-close-sub-budget],
+        button[data-capture-cancel],
+        button[data-close-image-viewer] {
+            background: var(--btn-close);
+        }
+        button[data-close-modal]:hover,
+        button[data-close-details]:hover,
+        button[data-close-whatsapp]:hover,
+        button[data-close-email]:hover,
+        button[data-close-planilha]:hover,
+        button[data-close-ticket-cancel]:hover,
+        button[data-close-user-manual]:hover,
+        button[data-close-equipment]:hover,
+        button[data-close-requisition]:hover,
+        button[data-close-sub-budget]:hover,
+        button[data-capture-cancel]:hover,
+        button[data-close-image-viewer]:hover {
+            background: var(--btn-close-hover);
         }
 
 
