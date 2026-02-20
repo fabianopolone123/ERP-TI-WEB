@@ -17,6 +17,24 @@
     [data-ticket-list] .ticket-card {
         padding: 8px 9px;
     }
+    [data-board] .ticket-card.playing {
+        border-color: #22c55e !important;
+        box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.35), inset 0 0 0 1px rgba(34, 197, 94, 0.2);
+    }
+    .play-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 1px 6px;
+        border-radius: 999px;
+        font-size: 0.58rem;
+        font-weight: 800;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+        background: rgba(34, 197, 94, 0.2);
+        color: #bbf7d0;
+        border: 1px solid rgba(34, 197, 94, 0.55);
+    }
     [data-board] .ticket-card.urgency-bg-programada,
     [data-ticket-list] .ticket-card.urgency-bg-programada {
         background: linear-gradient(135deg, rgba(14, 116, 144, 0.34) 0%, rgba(15, 23, 42, 0.94) 100%) !important;
@@ -215,12 +233,15 @@
                     <div class="kanban-header">{{ user.full_name }}</div>
                     <div class="kanban-body">
                         {% for ticket in user_tickets|get_item:user.id %}
-                            <div class="ticket-card urgency-bg-{{ ticket.urgency }}{% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %} shared-ticket{% endif %}" draggable="true" data-ticket-id="{{ ticket.id }}" data-ticket-status="{{ ticket.status }}" data-opened-at="{{ ticket.created_at|date:'c' }}" data-failure-type="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'failure_type' }}" data-cycle-running="{% if ticket.current_cycle_started_at %}1{% else %}0{% endif %}">
+                            <div class="ticket-card urgency-bg-{{ ticket.urgency }}{% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %} shared-ticket{% endif %}{% if ticket.current_cycle_started_at %} playing{% endif %}" draggable="true" data-ticket-id="{{ ticket.id }}" data-ticket-status="{{ ticket.status }}" data-opened-at="{{ ticket.created_at|date:'c' }}" data-failure-type="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'failure_type' }}" data-cycle-running="{% if ticket.current_cycle_started_at %}1{% else %}0{% endif %}">
                                 <div class="ticket-title">
                                     <span class="urgency-dot urgency-{{ ticket.urgency }}"></span>
                                     #{{ ticket.id }} - {{ ticket.title }}
                                     {% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %}
                                         <span class="status-pill status-shared">Compartilhado</span>
+                                    {% endif %}
+                                    {% if ticket.current_cycle_started_at %}
+                                        <span class="play-pill">EM PLAY</span>
                                     {% endif %}
                                 </div>
                                 <div class="ticket-meta ticket-meta-rich">
@@ -1110,10 +1131,24 @@
         const syncPlayPauseButtons = (ticketId, running) => {
             board.querySelectorAll(`.ticket-card[data-ticket-id="${ticketId}"]`).forEach((card) => {
                 card.dataset.cycleRunning = running ? '1' : '0';
+                card.classList.toggle('playing', !!running);
                 const playBtn = card.querySelector('[data-ticket-play]');
                 const pauseBtn = card.querySelector('[data-ticket-pause]');
                 if (playBtn) playBtn.style.display = running ? 'none' : '';
                 if (pauseBtn) pauseBtn.style.display = running ? '' : 'none';
+                const title = card.querySelector('.ticket-title');
+                if (title) {
+                    const existing = title.querySelector('.play-pill');
+                    if (running && !existing) {
+                        const pill = document.createElement('span');
+                        pill.className = 'play-pill';
+                        pill.textContent = 'EM PLAY';
+                        title.appendChild(pill);
+                    }
+                    if (!running && existing) {
+                        existing.remove();
+                    }
+                }
                 if (running) {
                     const parent = card.parentElement;
                     if (parent) parent.prepend(card);
