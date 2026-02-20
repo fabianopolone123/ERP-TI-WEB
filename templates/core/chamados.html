@@ -188,6 +188,15 @@
         overflow: hidden;
         opacity: 0.95;
     }
+    .ticket-shared-note {
+        margin-top: 4px;
+        font-size: 0.68rem;
+        font-weight: 700;
+        color: #f59e0b;
+        letter-spacing: 0.01em;
+        text-transform: uppercase;
+        line-height: 1.2;
+    }
     .ticket-legend-inline {
         margin-left: auto;
         margin-right: 10px;
@@ -346,9 +355,6 @@
                                         <div class="ticket-title">
                                             <span class="urgency-dot urgency-{{ ticket.urgency }}"></span>
                                             #{{ ticket.id }} - {{ ticket.title }}
-                                            {% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %}
-                                                <span class="status-pill status-shared">Outro atendente também está trabalhando</span>
-                                            {% endif %}
                                         </div>
                                     </div>
                                     <div class="ticket-main-right">
@@ -370,6 +376,9 @@
                                     <button type="button" data-ticket-pause data-ticket-id="{{ ticket.id }}" {% if not ticket_cycle_map|get_item:ticket.id|default:''|get_item:user.id %}style="display:none;"{% endif %}>Pause</button>
                                     <span class="ticket-last-action" title="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'last_action_text'|default:'' }}">{{ ticket_meta|get_item:ticket.id|default:''|get_item:'last_action_text'|default:'' }}</span>
                                 </div>
+                                {% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %}
+                                    <div class="ticket-shared-note">Outro atendente também está trabalhando</div>
+                                {% endif %}
                             </div>
                         {% endfor %}
                     </div>
