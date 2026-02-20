@@ -1114,6 +1114,10 @@
                 const pauseBtn = card.querySelector('[data-ticket-pause]');
                 if (playBtn) playBtn.style.display = running ? 'none' : '';
                 if (pauseBtn) pauseBtn.style.display = running ? '' : 'none';
+                if (running) {
+                    const parent = card.parentElement;
+                    if (parent) parent.prepend(card);
+                }
             });
         };
 

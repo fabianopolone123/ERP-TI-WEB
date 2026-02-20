@@ -1537,6 +1537,15 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
             for uid in ids:
                 if uid in ticket_map:
                     ticket_map[uid].append(ticket)
+        for uid, tickets_for_user in ticket_map.items():
+            ticket_map[uid] = sorted(
+                tickets_for_user,
+                key=lambda t: (
+                    0 if t.current_cycle_started_at else 1,
+                    -(t.current_cycle_started_at.timestamp() if t.current_cycle_started_at else 0),
+                    -(t.created_at.timestamp() if t.created_at else 0),
+                ),
+            )
 
         all_tickets = (
             list(context['new_tickets'])
