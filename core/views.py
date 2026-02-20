@@ -11,7 +11,7 @@ from django.db.models import Count, Q, Case, When, Value, IntegerField
 from django.db.models.functions import TruncDate
 from django.shortcuts import redirect
 from django.utils import timezone
-from datetime import timedelta
+from datetime import datetime, timedelta
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth import get_user_model
@@ -1369,6 +1369,8 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
         ticket_type = request.POST.get('ticket_type', '').strip()
         urgency = request.POST.get('urgency', '').strip()
         attachment = request.FILES.get('attachment')
+        creator_user = request.user
+        opened_at_dt = None
 
         if not title or not description:
             messages.error(request, 'Preencha título e descrição.')
@@ -1392,10 +1394,32 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
         elif not ticket_type or not urgency:
             messages.error(request, 'Preencha tipo e urgência.')
             return self.get(request, *args, **kwargs)
+        else:
+            requester_user_id = (request.POST.get('requester_user_id') or '').strip()
+            opened_at_raw = (request.POST.get('opened_at') or '').strip()
+            if requester_user_id:
+                try:
+                    requester_id = int(requester_user_id)
+                except ValueError:
+                    messages.error(request, 'Solicitante inválido.')
+                    return self.get(request, *args, **kwargs)
+                requester_user = get_user_model().objects.filter(id=requester_id, is_active=True).first()
+                if not requester_user:
+                    messages.error(request, 'Solicitante não encontrado.')
+                    return self.get(request, *args, **kwargs)
+                creator_user = requester_user
+            if opened_at_raw:
+                try:
+                    opened_at_dt = datetime.fromisoformat(opened_at_raw)
+                    if timezone.is_naive(opened_at_dt):
+                        opened_at_dt = timezone.make_aware(opened_at_dt, timezone.get_current_timezone())
+                except ValueError:
+                    messages.error(request, 'Data/hora de abertura inválida.')
+                    return self.get(request, *args, **kwargs)
 
         recent_cutoff = timezone.now() - timedelta(seconds=30)
         duplicate = Ticket.objects.filter(
-            created_by=request.user,
+            created_by=creator_user,
             title=title,
             description=description,
             created_at__gte=recent_cutoff,
@@ -1411,9 +1435,12 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
             ticket_type=ticket_type,
             urgency=urgency,
             status=initial_status,
-            created_by=request.user,
+            created_by=creator_user,
             attachment=attachment,
         )
+        if opened_at_dt:
+            Ticket.objects.filter(id=ticket.id).update(created_at=opened_at_dt)
+            ticket.created_at = opened_at_dt
         _log_ticket_timeline(
             ticket=ticket,
             event_type=TicketTimelineEvent.EventType.CREATED,
@@ -1431,6 +1458,10 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
         is_ti = is_ti_user(self.request)
         context['is_ti_group'] = is_ti
         context['modules'] = build_modules('chamados') if is_ti else []
+        context['ti_opened_at_default'] = timezone.localtime(timezone.now()).strftime('%Y-%m-%dT%H:%M')
+        if is_ti:
+            User = get_user_model()
+            context['ti_requesters'] = User.objects.filter(is_active=True).order_by('username')
         if is_ti:
             wa_settings = _get_whatsapp_settings()
             context['whatsapp_group'] = _get_whatsapp_group_jid(wa_settings)

@@ -420,6 +420,21 @@
                 </div>
                 {% if is_ti_group %}
                     <div>
+                        <label for="id_requester_user_id">Abrir em nome de</label>
+                        <select id="id_requester_user_id" name="requester_user_id">
+                            <option value="{{ request.user.id }}" selected>{{ request.user.username }}</option>
+                            {% for req_user in ti_requesters %}
+                                {% if req_user.id != request.user.id %}
+                                    <option value="{{ req_user.id }}">{{ req_user.username }}</option>
+                                {% endif %}
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label for="id_opened_at">Data/hora de abertura</label>
+                        <input id="id_opened_at" name="opened_at" type="datetime-local" value="{{ ti_opened_at_default }}" />
+                    </div>
+                    <div>
                         <label for="id_type">Tipo</label>
                         <select id="id_type" name="ticket_type" required>
                             <option value="requisicao">Requisição</option>
