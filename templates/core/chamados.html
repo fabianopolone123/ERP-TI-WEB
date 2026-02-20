@@ -269,9 +269,9 @@
                         <div class="legend-items">
                             <span><span class="urgency-dot urgency-programada"></span> Programada</span>
                             <span><span class="urgency-dot urgency-baixa"></span> Baixa</span>
-                            <span><span class="urgency-dot urgency-media"></span> MÃ©dia</span>
+                            <span><span class="urgency-dot urgency-media"></span> Média</span>
                             <span><span class="urgency-dot urgency-alta"></span> Alta</span>
-                            <span><span class="urgency-dot urgency-nao_classificado"></span> NÃ£o classificado</span>
+                            <span><span class="urgency-dot urgency-nao_classificado"></span> Não classificado</span>
                         </div>
                         <label for="id_refresh_seconds" style="display:flex; align-items:center; gap:6px; font-size:0.82rem; color:#93a4bf;">
                             Atualizar a cada
@@ -421,7 +421,7 @@
 
         <div class="kanban" data-ticket-list>
             <div class="kanban-column">
-                <div class="kanban-header">SolicitaÃ§Ãµes</div>
+                <div class="kanban-header">Solicitações</div>
                 <div class="kanban-body">
                     {% for ticket in own_tickets %}
                         <div class="ticket-card urgency-bg-{{ ticket.urgency }}" data-ticket-id="{{ ticket.id }}" data-ticket-status="{{ ticket.status }}" data-opened-at="{{ ticket.created_at|date:'c' }}">
@@ -474,40 +474,40 @@
         <form id="ticket-create-form" class="ticket-create-form" method="post" enctype="multipart/form-data">
             {% csrf_token %}
             <div class="ticket-create-field">
-                <label for="id_title">TÃ­tulo</label>
+                <label for="id_title">Título</label>
                 <input id="id_title" name="title" type="text" required />
             </div>
             <div class="ticket-create-field">
                 <label for="id_type">Tipo</label>
                 <select id="id_type" name="ticket_type" required>
-                    <option value="requisicao">RequisiÃ§Ã£o</option>
+                    <option value="requisicao">Requisição</option>
                     <option value="melhoria">Melhoria</option>
                     <option value="incidente">Incidente</option>
                     <option value="programado">Programado</option>
                 </select>
             </div>
             <div class="ticket-create-field">
-                <label for="id_urgency">UrgÃªncia</label>
+                <label for="id_urgency">Urgência</label>
                 <select id="id_urgency" name="urgency" required>
                     <option value="programada">Programada</option>
                     <option value="baixa">Baixa</option>
-                    <option value="media">MÃ©dia</option>
+                    <option value="media">Média</option>
                     <option value="alta">Alta</option>
                 </select>
             </div>
             {% if not is_ti_group %}
                 <div class="ticket-legend">
-                    <strong>Legenda de urgÃªncia</strong>
+                    <strong>Legenda de urgência</strong>
                     <ul>
                         <li><span class="urgency-dot urgency-programada"></span> <strong>Programada:</strong> menor prioridade, pode ser agendada.</li>
                         <li><span class="urgency-dot urgency-baixa"></span> <strong>Baixa:</strong> impacto pequeno e localizado.</li>
-                        <li><span class="urgency-dot urgency-media"></span> <strong>MÃ©dia:</strong> impacto no time/Ã¡rea, precisa atenÃ§Ã£o.</li>
-                        <li><span class="urgency-dot urgency-alta"></span> <strong>Alta:</strong> vÃ¡rias pessoas ou setor parado.</li>
+                        <li><span class="urgency-dot urgency-media"></span> <strong>Média:</strong> impacto no time/área, precisa atenção.</li>
+                        <li><span class="urgency-dot urgency-alta"></span> <strong>Alta:</strong> várias pessoas ou setor parado.</li>
                     </ul>
                 </div>
             {% endif %}
             <div class="ticket-create-field">
-                <label for="id_desc">DescriÃ§Ã£o</label>
+                <label for="id_desc">Descrição</label>
                 <textarea id="id_desc" name="description" rows="4" required></textarea>
             </div>
             <div class="ticket-create-field">
@@ -530,17 +530,17 @@
             <button type="button" data-close-details>Fechar</button>
         </div>
         <div class="ticket-details">
-            <div><strong>TÃ­tulo:</strong> <span data-detail-title></span></div>
+            <div><strong>Título:</strong> <span data-detail-title></span></div>
             <div class="detail-description-block">
-                <div class="detail-description-label">DescriÃ§Ã£o do problema</div>
+                <div class="detail-description-label">Descrição do problema</div>
                 <div class="detail-description-text" data-detail-description></div>
             </div>
             <div><strong>Tipo:</strong> <span data-detail-type></span></div>
-            <div><strong>UrgÃªncia:</strong> <span data-detail-urgency></span></div>
+            <div><strong>Urgência:</strong> <span data-detail-urgency></span></div>
             <div><strong>Status:</strong> <span data-detail-status></span></div>
             <div><strong>Solicitante:</strong> <span data-detail-created-by></span></div>
-            <div><strong>ResponsÃ¡veis:</strong> <span data-detail-assignees></span></div>
-            <div><strong>ResoluÃ§Ã£o:</strong> <span data-detail-resolution></span></div>
+            <div><strong>Responsáveis:</strong> <span data-detail-assignees></span></div>
+            <div><strong>Resolução:</strong> <span data-detail-resolution></span></div>
             <div>
                 <strong>Anexo:</strong>
                 <a href="#" data-detail-attachment target="_blank" rel="noreferrer">abrir</a>
@@ -554,13 +554,13 @@
         <form class="ticket-edit" data-edit-form hidden>
                 <div class="form-row">
                     <div style="flex: 2;">
-                        <label for="id_edit_title">TÃ­tulo</label>
+                        <label for="id_edit_title">Título</label>
                         <input id="id_edit_title" name="title" type="text" required />
                     </div>
                 </div>
                 <div class="form-row">
                     <div style="flex: 2;">
-                        <label for="id_edit_desc">DescriÃ§Ã£o</label>
+                        <label for="id_edit_desc">Descrição</label>
                         <textarea id="id_edit_desc" name="description" rows="3" required></textarea>
                     </div>
                     <div style="align-self: flex-end;">
@@ -572,7 +572,7 @@
                 </div>
             </form>
             <div style="margin-top: 12px;">
-                <button type="button" data-edit-toggle hidden>Editar tÃ­tulo/descriÃ§Ã£o</button>
+                <button type="button" data-edit-toggle hidden>Editar título/descrição</button>
             </div>
         {% if not is_ti_group %}
             <div style="margin-top: 12px;">
@@ -585,20 +585,20 @@
                     <div>
                         <label for="id_reclass_type">Tipo</label>
                         <select id="id_reclass_type" name="ticket_type" required>
-                            <option value="nao_classificado">NÃ£o classificado</option>
-                            <option value="requisicao">RequisiÃ§Ã£o</option>
+                            <option value="nao_classificado">Não classificado</option>
+                            <option value="requisicao">Requisição</option>
                             <option value="melhoria">Melhoria</option>
                             <option value="incidente">Incidente</option>
                             <option value="programado">Programado</option>
                         </select>
                     </div>
                     <div>
-                        <label for="id_reclass_urgency">UrgÃªncia</label>
+                        <label for="id_reclass_urgency">Urgência</label>
                         <select id="id_reclass_urgency" name="urgency" required>
-                            <option value="nao_classificado">NÃ£o classificado</option>
+                            <option value="nao_classificado">Não classificado</option>
                             <option value="programada">Programada</option>
                             <option value="baixa">Baixa</option>
-                            <option value="media">MÃ©dia</option>
+                            <option value="media">Média</option>
                             <option value="alta">Alta</option>
                         </select>
                     </div>
@@ -610,7 +610,7 @@
         {% endif %}
 
         <div class="chat-section">
-            <h4>{% if is_ti_group %}Chat pÃºblico{% else %}Chat{% endif %}</h4>
+            <h4>{% if is_ti_group %}Chat público{% else %}Chat{% endif %}</h4>
             <div class="chat-messages" data-chat-public></div>
             <form class="chat-form" data-chat-form data-internal="0">
                 <input type="text" name="message" placeholder="Escreva uma mensagem..." />
@@ -642,13 +642,13 @@
         <div class="modal-backdrop" data-close-whatsapp></div>
         <div class="modal-content">
             <div class="topbar" style="margin-bottom: 8px;">
-                <h3>WhatsApp (notificaÃ§Ãµes)</h3>
+                <h3>WhatsApp (notificações)</h3>
                 <button type="button" data-close-whatsapp>Fechar</button>
             </div>
             <div class="ticket-legend">
                 <strong>Grupo atual:</strong> {{ whatsapp_group|default:"(nao configurado)" }}
                 <div class="muted" style="margin-top: 6px;">
-                    Placeholders disponÃ­veis: veja a lista completa abaixo dos templates.
+                    Placeholders disponíveis: veja a lista completa abaixo dos templates.
                 </div>
             </div>
             <form method="post" action="{% url 'chamados_whatsapp_settings' %}">
@@ -675,7 +675,7 @@
                 </div>
                 <div class="form-row">
                     <div style="flex: 1;">
-                        <label>NotificaÃ§Ãµes</label>
+                        <label>Notificações</label>
                         <div class="ticket-legend" style="margin-top: 8px;">
                             <div style="display:grid; grid-template-columns: 1fr 140px 140px; gap: 6px 12px; align-items: center;">
                                 <div></div>
@@ -694,7 +694,7 @@
                                 <div style="text-align:center;"><input type="checkbox" name="send_group_on_assignment_changed" {% if wa_settings.send_group_on_assignment_changed %}checked{% endif %} /></div>
                                 <div style="text-align:center;"><input type="checkbox" name="send_individual_on_assignment_changed" {% if wa_settings.send_individual_on_assignment_changed %}checked{% endif %} /></div>
 
-                                <div>ResponsÃ¡vel definido (em atendimento)</div>
+                                <div>Responsável definido (em atendimento)</div>
                                 <div style="text-align:center;"><input type="checkbox" name="send_group_on_assignment_new" {% if wa_settings.send_group_on_assignment_new %}checked{% endif %} /></div>
                                 <div style="text-align:center;"><input type="checkbox" name="send_individual_on_assignment_new" {% if wa_settings.send_individual_on_assignment_new %}checked{% endif %} /></div>
 
@@ -710,7 +710,7 @@
                                 <div style="text-align:center;"><input type="checkbox" name="send_group_on_message_internal" {% if wa_settings.send_group_on_message_internal %}checked{% endif %} /></div>
                                 <div style="text-align:center;"><input type="checkbox" name="send_individual_on_message_internal" {% if wa_settings.send_individual_on_message_internal %}checked{% endif %} /></div>
 
-                                <div>Nova mensagem do usuÃ¡rio</div>
+                                <div>Nova mensagem do usuário</div>
                                 <div style="text-align:center;"><input type="checkbox" name="send_group_on_message_user" {% if wa_settings.send_group_on_message_user %}checked{% endif %} /></div>
                                 <div style="text-align:center;"><input type="checkbox" name="send_individual_on_message_user" {% if wa_settings.send_individual_on_message_user %}checked{% endif %} /></div>
                             </div>
@@ -724,13 +724,13 @@
                 <div class="form-row">
                     <div style="flex: 2;">
                         <label for="id_wa_new">Novo chamado</label>
-                        <textarea id="id_wa_new" name="template_new_ticket" rows="2" placeholder="Novo chamado #{id}: {title} | Solicitante: {solicitante} | Tipo: {tipo} | UrgÃªncia: {urgencia} | {description}">{{ wa_templates.new_ticket }}</textarea>
+                        <textarea id="id_wa_new" name="template_new_ticket" rows="2" placeholder="Novo chamado #{id}: {title} | Solicitante: {solicitante} | Tipo: {tipo} | Urgência: {urgencia} | {description}">{{ wa_templates.new_ticket }}</textarea>
                     </div>
                 </div>
                 <div class="form-row">
                     <div style="flex: 2;">
                         <label for="id_wa_status">Status atualizado</label>
-                        <textarea id="id_wa_status" name="template_status_update" rows="2" placeholder="Chamado #{id} atualizado: {status} | ResponsÃ¡vel: {responsavel} | Solicitante: {solicitante}">{{ wa_templates.status_update }}</textarea>
+                        <textarea id="id_wa_status" name="template_status_update" rows="2" placeholder="Chamado #{id} atualizado: {status} | Responsável: {responsavel} | Solicitante: {solicitante}">{{ wa_templates.status_update }}</textarea>
                     </div>
                 </div>
                 <div class="form-row">
@@ -740,7 +740,7 @@
                     </div>
                 </div>
                 <div class="ticket-legend" style="margin-bottom: 10px;">
-                    <strong>Placeholders disponÃ­veis</strong>
+                    <strong>Placeholders disponíveis</strong>
                     <div class="muted" style="margin-top:6px;">
                         <code>{id}</code>, <code>{ticket_id}</code>, <code>{title}</code>, <code>{titulo}</code>, <code>{description}</code>, <code>{descricao}</code>, <code>{status}</code>, <code>{tipo}</code>, <code>{urgencia}</code>, <code>{responsavel}</code>, <code>{responsavel_usuario}</code>, <code>{solicitante}</code>, <code>{solicitante_usuario}</code>, <code>{solicitante_email}</code>, <code>{colaboradores}</code>, <code>{message}</code>, <code>{mensagem}</code>, <code>{criado_em}</code>, <code>{atualizado_em}</code>, <code>{resolucao}</code>, <code>{link}</code>
                     </div>
@@ -749,7 +749,7 @@
             </form>
             <div class="ticket-legend" style="margin-top: 12px;">
                 <strong>Atendentes TI (WhatsApp)</strong>
-                <div class="muted" style="margin-top: 6px;">Somente visualizaÃ§Ã£o para validar nome e telefone.</div>
+                <div class="muted" style="margin-top: 6px;">Somente visualização para validar nome e telefone.</div>
             </div>
             <div class="form-row">
                 <div style="flex: 1; min-width: 260px;">
@@ -771,11 +771,11 @@
         <div class="modal-backdrop" data-close-email></div>
         <div class="modal-content">
             <div class="topbar" style="margin-bottom: 8px;">
-                <h3>E-mail (notificaÃ§Ãµes)</h3>
+                <h3>E-mail (notificações)</h3>
                 <button type="button" data-close-email>Fechar</button>
             </div>
             <div class="ticket-legend">
-                <strong>Placeholders disponÃ­veis:</strong> {id}, {title}, {description}, {status}, {responsavel}, {message}
+                <strong>Placeholders disponíveis:</strong> {id}, {title}, {description}, {status}, {responsavel}, {message}
             </div>
             <form method="post" action="{% url 'chamados_email_templates' %}">
                 {% csrf_token %}
@@ -796,7 +796,7 @@
                     </div>
                     <div style="flex: 3;">
                         <label for="id_email_status_body">Corpo - Status atualizado</label>
-                        <textarea id="id_email_status_body" name="email_status_update_body" rows="2" placeholder="Status atual: {status}\nResponsÃ¡vel: {responsavel}">{{ email_templates.status_update_body }}</textarea>
+                        <textarea id="id_email_status_body" name="email_status_update_body" rows="2" placeholder="Status atual: {status}\nResponsável: {responsavel}">{{ email_templates.status_update_body }}</textarea>
                     </div>
                 </div>
                 <div class="form-row">
@@ -873,8 +873,8 @@
                 </div>
                 <div class="form-row">
                     <div style="flex: 1;">
-                        <label for="id_close_resolution_text" data-close-ticket-text-label>ResoluÃ§Ã£o</label>
-                        <textarea id="id_close_resolution_text" name="resolution" rows="4" placeholder="Descreva a resoluÃ§Ã£o..." required></textarea>
+                        <label for="id_close_resolution_text" data-close-ticket-text-label>Resolução</label>
+                        <textarea id="id_close_resolution_text" name="resolution" rows="4" placeholder="Descreva a resolução..." required></textarea>
                     </div>
                 </div>
                 <div style="display:flex; justify-content:flex-end; gap:8px;">
@@ -939,12 +939,12 @@
                 return;
             }
             const isCloseMode = mode === 'close';
-            if (closeTitle) closeTitle.textContent = isCloseMode ? 'Finalizar chamado' : 'Registrar aÃ§Ã£o';
-            if (closeTextLabel) closeTextLabel.textContent = isCloseMode ? 'ResoluÃ§Ã£o' : 'AÃ§Ã£o / CorreÃ§Ã£o';
-            if (closeSubmitBtn) closeSubmitBtn.textContent = isCloseMode ? 'Finalizar' : 'Salvar aÃ§Ã£o';
+            if (closeTitle) closeTitle.textContent = isCloseMode ? 'Finalizar chamado' : 'Registrar ação';
+            if (closeTextLabel) closeTextLabel.textContent = isCloseMode ? 'Resolução' : 'Ação / Correção';
+            if (closeSubmitBtn) closeSubmitBtn.textContent = isCloseMode ? 'Finalizar' : 'Salvar ação';
             closeResolutionInput.placeholder = isCloseMode
-                ? 'Descreva a resoluÃ§Ã£o...'
-                : 'Descreva a aÃ§Ã£o/correÃ§Ã£o realizada...';
+                ? 'Descreva a resolução...'
+                : 'Descreva a ação/correção realizada...';
             closeResolver = resolve;
             closeFailureInput.value = initialFailure || '';
             closeResolutionInput.value = '';
@@ -1097,7 +1097,7 @@
 
                 if (isClosing) {
                     if (!isUserSource) {
-                        alert('SÃ³ Ã© permitido finalizar chamado quando ele sai da coluna de um atendente.');
+                        alert('Só é permitido finalizar chamado quando ele sai da coluna de um atendente.');
                         draggingId = null;
                         return;
                     }
@@ -1136,7 +1136,7 @@
                         failureType = currentSavedFailure || askFailureType();
                     }
                     if (!failureType) {
-                        alert('Informe um tipo de falha vÃ¡lido: N/A, Equipamento, Software ou Falha humana.');
+                        alert('Informe um tipo de falha válido: N/A, Equipamento, Software ou Falha humana.');
                         draggingId = null;
                         return;
                     }
@@ -1179,15 +1179,15 @@
                         if (responseData.error === 'progress_note_required') {
                             alert('Informe o que foi feito antes de mover para Pendente.');
                         } else if (responseData.error === 'resolution_required') {
-                            alert('Informe a resoluÃ§Ã£o para finalizar o chamado.');
+                            alert('Informe a resolução para finalizar o chamado.');
                         } else if (responseData.error === 'close_only_from_attendant') {
-                            alert('SÃ³ Ã© permitido finalizar chamado quando ele sai da coluna de um atendente.');
+                            alert('Só é permitido finalizar chamado quando ele sai da coluna de um atendente.');
                         } else if (responseData.error === 'play_required') {
                             alert('Para finalizar, inicie o atendimento com Play e depois finalize.');
                         } else if (responseData.error === 'failure_required') {
                             alert('Informe o tipo de falha: N/A, Equipamento, Software ou Falha humana.');
                         } else if (responseData.error === 'action_required') {
-                            alert('Informe a aÃ§Ã£o/correÃ§Ã£o ao mover o chamado.');
+                            alert('Informe a ação/correção ao mover o chamado.');
                         }
                         if (shouldClone) {
                             movedCard.remove();
@@ -1270,7 +1270,7 @@
             if (!card || !column) return;
             const sourceTarget = column.dataset.target || '';
             if (!sourceTarget.startsWith('user_')) {
-                alert('Play/Pause sÃ³ pode ser usado em coluna de atendente.');
+                alert('Play/Pause só pode ser usado em coluna de atendente.');
                 return;
             }
 
@@ -1306,13 +1306,13 @@
             const data = await response.json().catch(() => ({}));
             if (!response.ok) {
                 if (data.error === 'action_required') {
-                    alert('Informe a aÃ§Ã£o/correÃ§Ã£o ao pausar.');
+                    alert('Informe a ação/correção ao pausar.');
                 } else if (data.error === 'failure_required') {
                     alert('Informe o tipo de falha ao pausar.');
                 } else if (data.error === 'not_running') {
-                    alert('Este chamado nÃ£o estÃ¡ em execuÃ§Ã£o.');
+                    alert('Este chamado não está em execução.');
                 } else {
-                    alert('NÃ£o foi possÃ­vel processar Play/Pause.');
+                    alert('Não foi possível processar Play/Pause.');
                 }
                 return;
             }
@@ -1459,7 +1459,7 @@
             if (!timeline.length) {
                 const empty = document.createElement('div');
                 empty.className = 'ticket-empty';
-                empty.textContent = 'Sem histÃ³rico registrado.';
+                empty.textContent = 'Sem histórico registrado.';
                 container.appendChild(empty);
                 return;
             }
@@ -1469,7 +1469,7 @@
 
                 const header = document.createElement('div');
                 header.className = 'chat-author';
-                header.textContent = `${row.event_type} â€¢ ${row.actor || '-'}`;
+                header.textContent = `${row.event_type} • ${row.actor || '-'}`;
                 wrapper.appendChild(header);
 
                 const transition = document.createElement('div');
@@ -1669,7 +1669,7 @@
                     await loadDetails(currentTicketId);
                     return;
                 }
-                let errorMsg = 'NÃ£o foi possÃ­vel reclassificar.';
+                let errorMsg = 'Não foi possível reclassificar.';
                 try {
                     const data = await response.json();
                     if (data && data.error) {
@@ -2088,4 +2088,5 @@
     </script>
 {% endif %}
 {% endblock %}
+
 
