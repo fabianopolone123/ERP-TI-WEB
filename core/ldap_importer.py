@@ -118,7 +118,9 @@ def import_ad_users() -> tuple[int, int]:
             existing = ERPUser.objects.filter(username__iexact=username).first()
 
         if existing is None:
-            created_user = ERPUser.objects.create(**defaults)
+            create_defaults = dict(defaults)
+            create_defaults['is_email_user'] = is_active
+            created_user = ERPUser.objects.create(**create_defaults)
             for alias_email in secondary_emails:
                 EmailAlias.objects.get_or_create(user=created_user, email=alias_email)
             created += 1

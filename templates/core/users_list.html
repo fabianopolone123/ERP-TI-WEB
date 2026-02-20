@@ -65,6 +65,7 @@
                                         <th>Celular</th>
                                         <th>Email</th>
                                         <th>Ramal</th>
+                                        <th>Com e-mail</th>
                                         <th>Ativo</th>
                                         <th>Origem</th>
                                         <th>Ação</th>
@@ -79,6 +80,16 @@
                                             <td>{{ user.mobile }}</td>
                                             <td>{{ user.email }}</td>
                                             <td>{{ user.extension }}</td>
+                                            <td>
+                                                <form method="post" class="inline-form">
+                                                    {% csrf_token %}
+                                                    <input type="hidden" name="action" value="set_email_user_flag" />
+                                                    <input type="hidden" name="user_id" value="{{ user.id }}" />
+                                                    <label style="display:inline-flex; align-items:center; gap:6px; cursor:pointer;">
+                                                        <input type="checkbox" name="is_email_user" value="1" {% if user.is_email_user %}checked{% endif %} onchange="this.form.submit()" />
+                                                    </label>
+                                                </form>
+                                            </td>
                                             <td>{% if user.is_active %}Sim{% else %}Não{% endif %}</td>
                                             <td>{% if user.is_manual %}Manual{% else %}AD{% endif %}</td>
                                             <td>
@@ -92,7 +103,7 @@
                                         </tr>
                                     {% empty %}
                                         <tr>
-                                            <td colspan="9" class="muted">
+                                            <td colspan="10" class="muted">
                                                 Nenhum usuário cadastrado.
                                             </td>
                                         </tr>
@@ -282,7 +293,7 @@
             form.addEventListener('submit', () => {
                 const actionInput = form.querySelector('input[name="action"]');
                 const action = (actionInput?.value || '').trim().toLowerCase();
-                if (action === 'hide_user_from_list' || action === 'unhide_user_from_list') {
+                if (action === 'hide_user_from_list' || action === 'unhide_user_from_list' || action === 'set_email_user_flag') {
                     sessionStorage.setItem(key, String(window.scrollY || 0));
                 }
             });

@@ -664,7 +664,7 @@ class UsersListView(LoginRequiredMixin, TemplateView):
                 extension=extension,
                 ad_guid=f'manual-{uuid4().hex}',
                 is_active=is_active,
-                is_email_user=False,
+                is_email_user=is_active,
                 is_manual=True,
             )
             for alias_email in email_tokens[1:]:
@@ -708,6 +708,23 @@ class UsersListView(LoginRequiredMixin, TemplateView):
             target.is_hidden_from_users = False
             target.save(update_fields=['is_hidden_from_users'])
             messages.success(request, f'Usuário reativado na lista: {target.full_name}.')
+            return redirect('usuarios')
+
+        if action == 'set_email_user_flag':
+            user_id_raw = (request.POST.get('user_id') or '').strip()
+            try:
+                user_id = int(user_id_raw)
+            except (TypeError, ValueError):
+                messages.error(request, 'Usuário inválido para atualizar marcação de e-mail.')
+                return redirect('usuarios')
+            target = ERPUser.objects.filter(id=user_id).first()
+            if not target:
+                messages.error(request, 'Usuário não encontrado.')
+                return redirect('usuarios')
+            is_email_user = bool(request.POST.get('is_email_user'))
+            if bool(target.is_email_user) != is_email_user:
+                target.is_email_user = is_email_user
+                target.save(update_fields=['is_email_user'])
             return redirect('usuarios')
 
         if action == 'update_emails_json':
