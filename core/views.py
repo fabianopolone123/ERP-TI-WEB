@@ -1612,7 +1612,11 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
                     last_paths[aid] = path_value
         context['attendant_last_workbook_paths'] = last_paths
         context['new_tickets'] = (
-            Ticket.objects.filter(status__in=[Ticket.Status.NOVO, Ticket.Status.PENDENTE, Ticket.Status.PROGRAMADO])
+            Ticket.objects.filter(
+                status__in=[Ticket.Status.NOVO, Ticket.Status.PENDENTE, Ticket.Status.PROGRAMADO],
+                assigned_to__isnull=True,
+                collaborators__isnull=True,
+            )
             .select_related('created_by')
             .annotate(
                 queue_order=Case(
@@ -1622,10 +1626,13 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
                     output_field=IntegerField(),
                 )
             )
+            .distinct()
             .order_by('queue_order', '-created_at')
         )
         context['closed_tickets'] = Ticket.objects.filter(status=Ticket.Status.FECHADO).select_related('created_by').order_by('-created_at')
-        in_progress_tickets = Ticket.objects.filter(status=Ticket.Status.EM_ATENDIMENTO).select_related('created_by').prefetch_related(
+        in_progress_tickets = Ticket.objects.filter(
+            status__in=[Ticket.Status.EM_ATENDIMENTO, Ticket.Status.PENDENTE]
+        ).select_related('created_by').prefetch_related(
             'collaborators'
         ).order_by('created_at')
         ticket_map = {user.id: [] for user in ti_users}
@@ -2174,7 +2181,7 @@ def ticket_timer_action(request):
     ticket = Ticket.objects.filter(id=ticket_id).first()
     if not ticket:
         return JsonResponse({'ok': False, 'error': 'not_found'}, status=404)
-    if ticket.status != Ticket.Status.EM_ATENDIMENTO:
+    if ticket.status not in {Ticket.Status.EM_ATENDIMENTO, Ticket.Status.PENDENTE}:
         return JsonResponse({'ok': False, 'error': 'not_in_progress'}, status=400)
 
     source_user_id = _extract_source_user_id(source_target)
@@ -2201,18 +2208,33 @@ def ticket_timer_action(request):
     if action == 'play':
         if source_cycle.current_cycle_started_at:
             return JsonResponse({'ok': True, 'running': True})
+        previous_status = ticket.status
         source_cycle.current_cycle_started_at = timezone.now()
         source_cycle.save(update_fields=['current_cycle_started_at', 'updated_at'])
+        if ticket.status != Ticket.Status.EM_ATENDIMENTO:
+            ticket.status = Ticket.Status.EM_ATENDIMENTO
+            ticket.save(update_fields=['status', 'updated_at'])
+            _notify_whatsapp(
+                ticket,
+                event_type="status_in_progress",
+                event_label="Status atualizado",
+                extra_line="Status atual: Em atendimento",
+            )
+            _notify_ticket_email(
+                ticket,
+                event_label="Status atualizado",
+                extra_line="Status atual: Em atendimento",
+            )
         _sync_ticket_cycle_snapshot(ticket)
         _log_ticket_timeline(
             ticket=ticket,
             event_type=TicketTimelineEvent.EventType.STATUS_CHANGED,
             request_user=request.user,
-            from_status=ticket.status,
+            from_status=previous_status,
             to_status=ticket.status,
             note='Atendimento iniciado (Play).',
         )
-        return JsonResponse({'ok': True, 'running': True})
+        return JsonResponse({'ok': True, 'running': True, 'status': ticket.status})
 
     # pause
     if not source_cycle.current_cycle_started_at:
@@ -2233,18 +2255,38 @@ def ticket_timer_action(request):
     )
     source_cycle.current_cycle_started_at = None
     source_cycle.save(update_fields=['current_cycle_started_at', 'updated_at'])
+    previous_status = ticket.status
     ticket.last_failure_type = failure_type
-    ticket.save(update_fields=['last_failure_type', 'updated_at'])
+    has_running_cycles = TicketAttendantCycle.objects.filter(
+        ticket=ticket,
+        current_cycle_started_at__isnull=False,
+    ).exists()
+    if not has_running_cycles and ticket.status != Ticket.Status.FECHADO:
+        ticket.status = Ticket.Status.PENDENTE
+        ticket.save(update_fields=['last_failure_type', 'status', 'updated_at'])
+        _notify_whatsapp(
+            ticket,
+            event_type="status_pending",
+            event_label="Status atualizado",
+            extra_line="Status atual: Pendente",
+        )
+        _notify_ticket_email(
+            ticket,
+            event_label="Status atualizado",
+            extra_line="Status atual: Pendente",
+        )
+    else:
+        ticket.save(update_fields=['last_failure_type', 'updated_at'])
     _sync_ticket_cycle_snapshot(ticket)
     _log_ticket_timeline(
         ticket=ticket,
         event_type=TicketTimelineEvent.EventType.STATUS_CHANGED,
         request_user=request.user,
-        from_status=ticket.status,
+        from_status=previous_status,
         to_status=ticket.status,
         note=f'Atendimento pausado (Pause): {action_note}',
     )
-    return JsonResponse({'ok': True, 'running': False, 'failure_type': failure_type})
+    return JsonResponse({'ok': True, 'running': False, 'failure_type': failure_type, 'status': ticket.status})
 
 
 @login_required
