@@ -931,7 +931,9 @@ class EquipamentosView(LoginRequiredMixin, TemplateView):
         is_ti = is_ti_user(self.request)
         context['is_ti_group'] = is_ti
         context['modules'] = build_modules('equipamentos') if is_ti else []
-        context['equipments'] = Equipment.objects.all().order_by('-created_at')
+        equipments_qs = Equipment.objects.all().order_by('-created_at')
+        context['equipments'] = equipments_qs
+        context['equipment_total_count'] = equipments_qs.count()
         context['inventory_default_hosts'] = _inventory_default_hosts()
         context['inventory_timeout_seconds'] = int(getattr(settings, 'INVENTORY_POWERSHELL_TIMEOUT', 120) or 120)
         return context

@@ -22,7 +22,13 @@
     {% if is_ti_group %}
         {% include "core/_tabs.html" %}
         <div class="topbar" style="margin-top: 16px;">
-            <h3>Lista de equipamentos</h3>
+            <div>
+                <h3 style="margin-bottom: 4px;">Lista de equipamentos</h3>
+                <div class="muted" style="font-size: 0.86rem;">
+                    Quantidade: <strong data-equipment-count-visible>{{ equipment_total_count }}</strong>
+                    de <strong data-equipment-count-total>{{ equipment_total_count }}</strong>
+                </div>
+            </div>
             <button type="button" data-open-equipment>Adicionar novo</button>
         </div>
         <div class="topbar" style="margin-bottom: 10px;">
@@ -179,6 +185,31 @@
 
         openBtn.addEventListener('click', open);
         closeEls.forEach((el) => el.addEventListener('click', close));
+    })();
+</script>
+<script>
+    (function () {
+        const visibleEl = document.querySelector('[data-equipment-count-visible]');
+        const totalEl = document.querySelector('[data-equipment-count-total]');
+        const table = document.querySelector('.data-table[data-table-name="equipamentos"]');
+        if (!visibleEl || !totalEl || !table) return;
+        const tbody = table.querySelector('tbody');
+        if (!tbody) return;
+
+        const countVisible = () => {
+            const rows = Array.from(tbody.querySelectorAll('tr')).filter((row) => !row.querySelector('td[colspan]'));
+            const visible = rows.filter((row) => row.style.display !== 'none').length;
+            visibleEl.textContent = String(visible);
+            totalEl.textContent = String(rows.length);
+        };
+
+        countVisible();
+        document.addEventListener('input', (event) => {
+            const target = event.target;
+            if (!(target instanceof HTMLInputElement)) return;
+            if ((target.getAttribute('data-table-search') || '') !== 'equipamentos') return;
+            window.setTimeout(countVisible, 0);
+        });
     })();
 </script>
 {% endblock %}
