@@ -169,6 +169,20 @@
     }
     .ticket-timer-controls {
         margin-top: 4px !important;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: nowrap;
+    }
+    .ticket-last-action {
+        min-width: 0;
+        max-width: 100%;
+        font-size: 0.72rem;
+        color: #cbd5e1;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        opacity: 0.95;
     }
     .ticket-legend-inline {
         margin-left: auto;
@@ -273,7 +287,7 @@
                     <div class="kanban-header">{{ user.full_name }}</div>
                     <div class="kanban-body">
                         {% for ticket in user_tickets|get_item:user.id %}
-                            <div class="ticket-card urgency-bg-{{ ticket.urgency }}{% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %} shared-ticket{% endif %}{% if ticket.current_cycle_started_at %} playing{% endif %}" draggable="true" data-ticket-id="{{ ticket.id }}" data-ticket-status="{{ ticket.status }}" data-opened-at="{{ ticket.created_at|date:'c' }}" data-failure-type="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'failure_type' }}" data-cycle-running="{% if ticket.current_cycle_started_at %}1{% else %}0{% endif %}">
+                            <div class="ticket-card urgency-bg-{{ ticket.urgency }}{% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %} shared-ticket{% endif %}{% if ticket.current_cycle_started_at %} playing{% endif %}" draggable="true" data-ticket-id="{{ ticket.id }}" data-ticket-status="{{ ticket.status }}" data-opened-at="{{ ticket.created_at|date:'c' }}" data-failure-type="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'failure_type' }}" data-last-action="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'last_action_text'|default:''|escape }}" data-cycle-running="{% if ticket.current_cycle_started_at %}1{% else %}0{% endif %}">
                                 <div class="ticket-main-row">
                                     <div class="ticket-main-left">
                                         <div class="ticket-title">
@@ -286,6 +300,7 @@
                                         <div class="ticket-meta ticket-timer-controls" style="margin-top: 6px;">
                                             <button type="button" data-ticket-play data-ticket-id="{{ ticket.id }}" {% if ticket.current_cycle_started_at %}style="display:none;"{% endif %}>Play</button>
                                             <button type="button" data-ticket-pause data-ticket-id="{{ ticket.id }}" {% if not ticket.current_cycle_started_at %}style="display:none;"{% endif %}>Pause</button>
+                                            <span class="ticket-last-action" title="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'last_action_text'|default:'' }}">{{ ticket_meta|get_item:ticket.id|default:''|get_item:'last_action_text'|default:'' }}</span>
                                         </div>
                                     </div>
                                     <div class="ticket-main-right">
@@ -927,6 +942,7 @@
             controls.innerHTML = `
                 <button type="button" data-ticket-play data-ticket-id="${card.dataset.ticketId || ''}">Play</button>
                 <button type="button" data-ticket-pause data-ticket-id="${card.dataset.ticketId || ''}" style="display:none;">Pause</button>
+                <span class="ticket-last-action" title="${card.dataset.lastAction || ''}">${card.dataset.lastAction || ''}</span>
             `;
             const left = card.querySelector('.ticket-main-left');
             const title = left ? left.querySelector('.ticket-title') : card.querySelector('.ticket-title');
@@ -1257,6 +1273,16 @@
 
             if (action === 'pause' && data.failure_type) {
                 card.dataset.failureType = data.failure_type;
+            }
+            if (action === 'pause' && actionNote) {
+                board.querySelectorAll(`.ticket-card[data-ticket-id="${ticketId}"]`).forEach((node) => {
+                    node.dataset.lastAction = actionNote;
+                    const actionEl = node.querySelector('.ticket-last-action');
+                    if (actionEl) {
+                        actionEl.textContent = actionNote;
+                        actionEl.title = actionNote;
+                    }
+                });
             }
             syncPlayPauseButtons(ticketId, !!data.running);
         });

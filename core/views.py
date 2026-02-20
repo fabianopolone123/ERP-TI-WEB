@@ -1552,6 +1552,19 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
             + list(context['closed_tickets'])
             + list(in_progress_tickets)
         )
+        ticket_ids = list({t.id for t in all_tickets if t and t.id})
+        latest_action_by_ticket: dict[int, str] = {}
+        if ticket_ids:
+            logs = (
+                TicketWorkLog.objects.filter(ticket_id__in=ticket_ids)
+                .order_by('ticket_id', '-closed_at', '-id')
+                .values('ticket_id', 'action_text')
+            )
+            for row in logs:
+                tid = row.get('ticket_id')
+                if tid in latest_action_by_ticket:
+                    continue
+                latest_action_by_ticket[tid] = (row.get('action_text') or '').strip()
         usernames = {t.created_by.username for t in all_tickets if t.created_by}
         erp_users = ERPUser.objects.filter(username__in=list(usernames))
         erp_map = {u.username.lower(): u for u in erp_users}
@@ -1567,6 +1580,7 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
                 'description': ticket.description or '',
                 'is_multi_attendant': ticket.id in multi_assigned_ticket_ids,
                 'failure_type': ticket.last_failure_type or '',
+                'last_action_text': latest_action_by_ticket.get(ticket.id, ''),
             }
         context['ticket_meta'] = ticket_meta
 
