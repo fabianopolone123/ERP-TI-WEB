@@ -113,9 +113,12 @@
                         </div>
                         <div class="topbar" style="margin-top: 14px; margin-bottom: 8px;">
                             <h3 style="margin: 0;">Usuários ocultos manualmente</h3>
-                            <span class="muted">Não aparecem na lista principal, mas continuam no cadastro.</span>
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <span class="muted">Não aparecem na lista principal, mas continuam no cadastro.</span>
+                                <button type="button" data-hidden-users-toggle>Mostrar</button>
+                            </div>
                         </div>
-                        <div style="overflow-x: auto;">
+                        <div style="overflow-x: auto; display: none;" data-hidden-users-panel>
                             <table class="data-table">
                                 <thead>
                                     <tr>
@@ -287,6 +290,21 @@
 </script>
 <script>
     (function () {
+        const toggleBtn = document.querySelector('[data-hidden-users-toggle]');
+        const panel = document.querySelector('[data-hidden-users-panel]');
+        if (toggleBtn && panel) {
+            let open = false;
+            const sync = () => {
+                panel.style.display = open ? '' : 'none';
+                toggleBtn.textContent = open ? 'Ocultar' : 'Mostrar';
+            };
+            toggleBtn.addEventListener('click', () => {
+                open = !open;
+                sync();
+            });
+            sync();
+        }
+
         const key = 'usuarios_scroll_y';
         const forms = document.querySelectorAll('form.inline-form');
         forms.forEach((form) => {
