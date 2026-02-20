@@ -72,6 +72,7 @@ DEFAULT_WA_TEMPLATES = {
 }
 
 ERP_MODULES = [
+    {'slug': 'chamados', 'label': 'Chamados', 'url_name': 'chamados'},
     {'slug': 'usuarios', 'label': 'Usuários', 'url_name': 'usuarios'},
     {'slug': 'acessos', 'label': 'Acessos', 'url_name': 'acessos'},
     {'slug': 'equipamentos', 'label': 'Equipamentos', 'url_name': 'equipamentos'},
@@ -83,7 +84,6 @@ ERP_MODULES = [
     {'slug': 'requisicoes', 'label': 'Requisições', 'url_name': 'requisicoes'},
     {'slug': 'dicas', 'label': 'Dicas', 'url_name': 'dicas'},
     {'slug': 'emprestimos', 'label': 'Empréstimos', 'url_name': None},
-    {'slug': 'chamados', 'label': 'Chamados', 'url_name': 'chamados'},
     {'slug': 'relatorios', 'label': 'Relatórios', 'url_name': 'relatorios'},
 ]
 
@@ -579,7 +579,7 @@ class CustomLoginView(auth_views.LoginView):
 
     def get_success_url(self):
         if is_ti_user(self.request):
-            return reverse('usuarios')
+            return reverse('chamados')
         return reverse('chamados')
 
 
