@@ -173,10 +173,11 @@
         align-items: center;
         gap: 8px;
         flex-wrap: nowrap;
+        width: 100%;
     }
     .ticket-last-action {
+        flex: 1 1 auto;
         min-width: 0;
-        max-width: 100%;
         font-size: 0.72rem;
         color: #cbd5e1;
         white-space: nowrap;
@@ -297,11 +298,6 @@
                                                 <span class="status-pill status-shared">Compartilhado</span>
                                             {% endif %}
                                         </div>
-                                        <div class="ticket-meta ticket-timer-controls" style="margin-top: 6px;">
-                                            <button type="button" data-ticket-play data-ticket-id="{{ ticket.id }}" {% if ticket.current_cycle_started_at %}style="display:none;"{% endif %}>Play</button>
-                                            <button type="button" data-ticket-pause data-ticket-id="{{ ticket.id }}" {% if not ticket.current_cycle_started_at %}style="display:none;"{% endif %}>Pause</button>
-                                            <span class="ticket-last-action" title="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'last_action_text'|default:'' }}">{{ ticket_meta|get_item:ticket.id|default:''|get_item:'last_action_text'|default:'' }}</span>
-                                        </div>
                                     </div>
                                     <div class="ticket-main-right">
                                         <span class="ticket-requester">{{ ticket_meta|get_item:ticket.id|default:""|get_item:'requester' }}</span>
@@ -316,6 +312,11 @@
                                             <span class="ticket-open-counter"></span>
                                         </div>
                                     </div>
+                                </div>
+                                <div class="ticket-meta ticket-timer-controls" style="margin-top: 6px;">
+                                    <button type="button" data-ticket-play data-ticket-id="{{ ticket.id }}" {% if ticket.current_cycle_started_at %}style="display:none;"{% endif %}>Play</button>
+                                    <button type="button" data-ticket-pause data-ticket-id="{{ ticket.id }}" {% if not ticket.current_cycle_started_at %}style="display:none;"{% endif %}>Pause</button>
+                                    <span class="ticket-last-action" title="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'last_action_text'|default:'' }}">{{ ticket_meta|get_item:ticket.id|default:''|get_item:'last_action_text'|default:'' }}</span>
                                 </div>
                             </div>
                         {% endfor %}
@@ -944,11 +945,16 @@
                 <button type="button" data-ticket-pause data-ticket-id="${card.dataset.ticketId || ''}" style="display:none;">Pause</button>
                 <span class="ticket-last-action" title="${card.dataset.lastAction || ''}">${card.dataset.lastAction || ''}</span>
             `;
-            const left = card.querySelector('.ticket-main-left');
-            const title = left ? left.querySelector('.ticket-title') : card.querySelector('.ticket-title');
-            if (title) {
-                title.insertAdjacentElement('afterend', controls);
+            const mainRow = card.querySelector('.ticket-main-row');
+            if (mainRow) {
+                mainRow.insertAdjacentElement('afterend', controls);
             } else {
+                const left = card.querySelector('.ticket-main-left');
+                const title = left ? left.querySelector('.ticket-title') : card.querySelector('.ticket-title');
+                if (title) {
+                    title.insertAdjacentElement('afterend', controls);
+                    return;
+                }
                 const metaRich = left ? left.querySelector('.ticket-meta-rich') : card.querySelector('.ticket-meta-rich');
                 if (metaRich) {
                     metaRich.insertAdjacentElement('beforebegin', controls);
