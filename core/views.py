@@ -573,8 +573,17 @@ def _sync_ticket_cycle_snapshot(ticket: Ticket):
     started_at = None
     if ticket.assigned_to_id:
         cycle = _get_ticket_attendant_cycle(ticket, ticket.assigned_to_id, create=False)
+        # Backward-compatibility: if legacy field still has an active cycle for
+        # assigned attendant (old model), persist it into the per-attendant table.
+        if not cycle and ticket.current_cycle_started_at:
+            cycle = _get_ticket_attendant_cycle(ticket, ticket.assigned_to_id, create=True)
+            if cycle and not cycle.current_cycle_started_at:
+                cycle.current_cycle_started_at = ticket.current_cycle_started_at
+                cycle.save(update_fields=['current_cycle_started_at', 'updated_at'])
         if cycle:
             started_at = cycle.current_cycle_started_at
+        elif ticket.current_cycle_started_at:
+            started_at = ticket.current_cycle_started_at
     if ticket.current_cycle_started_at != started_at:
         ticket.current_cycle_started_at = started_at
         ticket.save(update_fields=['current_cycle_started_at', 'updated_at'])
