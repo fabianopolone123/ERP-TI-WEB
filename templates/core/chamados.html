@@ -1754,6 +1754,9 @@
             if (!body) return;
             const cards = Array.from(body.querySelectorAll('.ticket-card'));
             cards.sort((a, b) => {
+                const aRunning = (a.dataset.cycleRunning || '') === '1' || a.classList.contains('playing');
+                const bRunning = (b.dataset.cycleRunning || '') === '1' || b.classList.contains('playing');
+                if (aRunning !== bRunning) return aRunning ? -1 : 1;
                 const ad = parseOpenedAt(a);
                 const bd = parseOpenedAt(b);
                 if (!ad && !bd) return 0;
