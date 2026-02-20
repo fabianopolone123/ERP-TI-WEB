@@ -132,6 +132,30 @@
         margin-top: 4px;
         min-height: 20px;
     }
+    .ticket-main-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 8px;
+        align-items: start;
+    }
+    .ticket-main-left {
+        min-width: 0;
+    }
+    .ticket-main-right {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 3px;
+        min-width: 110px;
+        max-width: 42%;
+    }
+    .ticket-main-right .ticket-requester {
+        max-width: 100%;
+    }
+    .ticket-main-right .ticket-extra {
+        max-width: 100%;
+        text-align: right;
+    }
     .ticket-timer-controls {
         margin-top: 4px !important;
     }
@@ -239,29 +263,33 @@
                     <div class="kanban-body">
                         {% for ticket in user_tickets|get_item:user.id %}
                             <div class="ticket-card urgency-bg-{{ ticket.urgency }}{% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %} shared-ticket{% endif %}{% if ticket.current_cycle_started_at %} playing{% endif %}" draggable="true" data-ticket-id="{{ ticket.id }}" data-ticket-status="{{ ticket.status }}" data-opened-at="{{ ticket.created_at|date:'c' }}" data-failure-type="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'failure_type' }}" data-cycle-running="{% if ticket.current_cycle_started_at %}1{% else %}0{% endif %}">
-                                <div class="ticket-title">
-                                    <span class="urgency-dot urgency-{{ ticket.urgency }}"></span>
-                                    #{{ ticket.id }} - {{ ticket.title }}
-                                    {% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %}
-                                        <span class="status-pill status-shared">Compartilhado</span>
-                                    {% endif %}
-                                </div>
-                                <div class="ticket-timing-row">
-                                    <span class="ticket-open-counter"></span>
-                                </div>
-                                <div class="ticket-meta ticket-timer-controls" style="margin-top: 6px;">
-                                    <button type="button" data-ticket-play data-ticket-id="{{ ticket.id }}" {% if ticket.current_cycle_started_at %}style="display:none;"{% endif %}>Play</button>
-                                    <button type="button" data-ticket-pause data-ticket-id="{{ ticket.id }}" {% if not ticket.current_cycle_started_at %}style="display:none;"{% endif %}>Pause</button>
-                                </div>
-                                <div class="ticket-meta ticket-meta-rich">
-                                    <span class="ticket-requester">{{ ticket_meta|get_item:ticket.id|default:""|get_item:'requester' }}</span>
-                                    <span class="ticket-extra">
-                                        {% if ticket_meta|get_item:ticket.id|default:""|get_item:'department' %}
-                                            {{ ticket_meta|get_item:ticket.id|default:""|get_item:'department' }}
-                                        {% else %}
-                                            -
-                                        {% endif %}
-                                    </span>
+                                <div class="ticket-main-row">
+                                    <div class="ticket-main-left">
+                                        <div class="ticket-title">
+                                            <span class="urgency-dot urgency-{{ ticket.urgency }}"></span>
+                                            #{{ ticket.id }} - {{ ticket.title }}
+                                            {% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %}
+                                                <span class="status-pill status-shared">Compartilhado</span>
+                                            {% endif %}
+                                        </div>
+                                        <div class="ticket-meta ticket-timer-controls" style="margin-top: 6px;">
+                                            <button type="button" data-ticket-play data-ticket-id="{{ ticket.id }}" {% if ticket.current_cycle_started_at %}style="display:none;"{% endif %}>Play</button>
+                                            <button type="button" data-ticket-pause data-ticket-id="{{ ticket.id }}" {% if not ticket.current_cycle_started_at %}style="display:none;"{% endif %}>Pause</button>
+                                        </div>
+                                        <div class="ticket-timing-row">
+                                            <span class="ticket-open-counter"></span>
+                                        </div>
+                                    </div>
+                                    <div class="ticket-main-right">
+                                        <span class="ticket-requester">{{ ticket_meta|get_item:ticket.id|default:""|get_item:'requester' }}</span>
+                                        <span class="ticket-extra">
+                                            {% if ticket_meta|get_item:ticket.id|default:""|get_item:'department' %}
+                                                {{ ticket_meta|get_item:ticket.id|default:""|get_item:'department' }}
+                                            {% else %}
+                                                -
+                                            {% endif %}
+                                        </span>
+                                    </div>
                                 </div>
                             </div>
                         {% endfor %}
@@ -889,20 +917,16 @@
                 <button type="button" data-ticket-play data-ticket-id="${card.dataset.ticketId || ''}">Play</button>
                 <button type="button" data-ticket-pause data-ticket-id="${card.dataset.ticketId || ''}" style="display:none;">Pause</button>
             `;
-            const timingRow = card.querySelector('.ticket-timing-row');
-            if (timingRow && timingRow.parentElement === card) {
-                timingRow.insertAdjacentElement('afterend', controls);
+            const left = card.querySelector('.ticket-main-left');
+            const title = left ? left.querySelector('.ticket-title') : card.querySelector('.ticket-title');
+            if (title) {
+                title.insertAdjacentElement('afterend', controls);
             } else {
-                const title = card.querySelector('.ticket-title');
-                if (title && title.parentElement === card) {
-                    title.insertAdjacentElement('afterend', controls);
+                const metaRich = left ? left.querySelector('.ticket-meta-rich') : card.querySelector('.ticket-meta-rich');
+                if (metaRich) {
+                    metaRich.insertAdjacentElement('beforebegin', controls);
                 } else {
-                    const metaRich = card.querySelector('.ticket-meta-rich');
-                    if (metaRich) {
-                        card.insertBefore(controls, metaRich);
-                    } else {
-                        card.appendChild(controls);
-                    }
+                    (left || card).appendChild(controls);
                 }
             }
         };
@@ -1736,13 +1760,19 @@
         };
 
         const ensureCounter = (card) => {
-            let row = card.querySelector('.ticket-timing-row');
+            const left = card.querySelector('.ticket-main-left');
+            let row = (left || card).querySelector('.ticket-timing-row');
             if (!row) {
-                const title = card.querySelector('.ticket-title');
+                const controls = (left || card).querySelector('.ticket-timer-controls');
+                const title = (left || card).querySelector('.ticket-title');
                 if (!title) return null;
                 row = document.createElement('div');
                 row.className = 'ticket-timing-row';
-                title.insertAdjacentElement('afterend', row);
+                if (controls) {
+                    controls.insertAdjacentElement('afterend', row);
+                } else {
+                    title.insertAdjacentElement('afterend', row);
+                }
             }
             let badge = row.querySelector('.ticket-open-counter');
             if (!badge) {
