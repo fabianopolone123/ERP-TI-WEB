@@ -206,6 +206,55 @@
         flex-wrap: wrap;
         margin-top: 4px;
     }
+    .ticket-create-modal .modal-content {
+        width: min(720px, 92vw);
+        padding: 16px 18px 14px;
+    }
+    .ticket-create-header {
+        margin-bottom: 10px !important;
+        align-items: flex-start;
+    }
+    .ticket-create-header h3 {
+        margin: 0;
+    }
+    .ticket-create-inline {
+        display: grid;
+        grid-template-columns: 170px minmax(220px, 1fr);
+        gap: 8px;
+        width: min(430px, 100%);
+    }
+    .ticket-create-inline input,
+    .ticket-create-inline select {
+        margin: 0;
+    }
+    .ticket-create-form .ticket-create-field {
+        margin-bottom: 8px;
+    }
+    .ticket-create-form .ticket-create-field > label {
+        display: block;
+        margin-bottom: 4px;
+    }
+    .ticket-create-form .ticket-create-field input,
+    .ticket-create-form .ticket-create-field select,
+    .ticket-create-form .ticket-create-field textarea {
+        margin: 0;
+    }
+    .ticket-create-form textarea {
+        min-height: 104px;
+        resize: vertical;
+    }
+    .ticket-create-actions {
+        margin-top: 10px;
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        gap: 10px;
+    }
+    @media (max-width: 760px) {
+        .ticket-create-inline {
+            grid-template-columns: 1fr;
+        }
+    }
 </style>
 <div class="card">
     <div class="topbar">
@@ -404,73 +453,47 @@
     {% endif %}
 </div>
 
-<div class="modal" data-modal hidden>
+<div class="modal ticket-create-modal" data-modal hidden>
     <div class="modal-backdrop" data-close-modal></div>
     <div class="modal-content">
-        <div class="topbar" style="margin-bottom: 8px;">
+        <div class="topbar ticket-create-header">
             <h3>Abrir chamado</h3>
-            <button type="button" data-close-modal>Fechar</button>
-        </div>
-        <form method="post" enctype="multipart/form-data">
-            {% csrf_token %}
-            <div class="form-row">
-                <div>
-                    <label for="id_title">Título</label>
-                    <input id="id_title" name="title" type="text" required />
+            {% if is_ti_group %}
+                <div class="ticket-create-inline">
+                    <input id="id_opened_at" name="opened_at" type="datetime-local" value="{{ ti_opened_at_default }}" form="ticket-create-form" />
+                    <select id="id_requester_user_id" name="requester_user_id" form="ticket-create-form">
+                        {% for req_user in ti_requesters %}
+                            <option value="{{ req_user.id }}" {% if req_user.username|default:''|lower == request.user.username|default:''|lower %}selected{% endif %}>
+                                {{ req_user.full_name|default:req_user.username }}{% if req_user.username %} ({{ req_user.username }}){% endif %}
+                            </option>
+                        {% endfor %}
+                    </select>
                 </div>
-                {% if is_ti_group %}
-                    <div>
-                        <label for="id_requester_user_id">Abrir em nome de</label>
-                        <select id="id_requester_user_id" name="requester_user_id">
-                            {% for req_user in ti_requesters %}
-                                <option value="{{ req_user.id }}" {% if req_user.username|default:''|lower == request.user.username|default:''|lower %}selected{% endif %}>
-                                    {{ req_user.full_name|default:req_user.username }}{% if req_user.username %} ({{ req_user.username }}){% endif %}
-                                </option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div>
-                        <label for="id_opened_at">Data/hora de abertura</label>
-                        <input id="id_opened_at" name="opened_at" type="datetime-local" value="{{ ti_opened_at_default }}" />
-                    </div>
-                    <div>
-                        <label for="id_type">Tipo</label>
-                        <select id="id_type" name="ticket_type" required>
-                            <option value="requisicao">Requisição</option>
-                            <option value="melhoria">Melhoria</option>
-                            <option value="incidente">Incidente</option>
-                            <option value="programado">Programado</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label for="id_urgency">Urgência</label>
-                        <select id="id_urgency" name="urgency" required>
-                            <option value="programada">Programada</option>
-                            <option value="baixa">Baixa</option>
-                            <option value="media">Média</option>
-                            <option value="alta">Alta</option>
-                        </select>
-                    </div>
-                {% else %}
-                    <div>
-                        <label for="id_type">Tipo</label>
-                        <select id="id_type" name="ticket_type" required>
-                            <option value="requisicao">Requisição</option>
-                            <option value="melhoria">Melhoria</option>
-                            <option value="incidente">Incidente</option>
-                            <option value="programado">Programado</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label for="id_urgency">Urgência</label>
-                        <select id="id_urgency" name="urgency" required>
-                            <option value="programada">Programada</option>
-                            <option value="baixa">Baixa</option>
-                            <option value="media">Média</option>
-                            <option value="alta">Alta</option>
-                        </select>
-                    </div>
-                {% endif %}
+            {% endif %}
+        </div>
+        <form id="ticket-create-form" class="ticket-create-form" method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            <div class="ticket-create-field">
+                <label for="id_title">Título</label>
+                <input id="id_title" name="title" type="text" required />
+            </div>
+            <div class="ticket-create-field">
+                <label for="id_type">Tipo</label>
+                <select id="id_type" name="ticket_type" required>
+                    <option value="requisicao">Requisição</option>
+                    <option value="melhoria">Melhoria</option>
+                    <option value="incidente">Incidente</option>
+                    <option value="programado">Programado</option>
+                </select>
+            </div>
+            <div class="ticket-create-field">
+                <label for="id_urgency">Urgência</label>
+                <select id="id_urgency" name="urgency" required>
+                    <option value="programada">Programada</option>
+                    <option value="baixa">Baixa</option>
+                    <option value="media">Média</option>
+                    <option value="alta">Alta</option>
+                </select>
             </div>
             {% if not is_ti_group %}
                 <div class="ticket-legend">
@@ -483,17 +506,18 @@
                     </ul>
                 </div>
             {% endif %}
-            <div class="form-row">
-                <div style="flex: 2;">
-                    <label for="id_desc">Descrição</label>
-                    <textarea id="id_desc" name="description" rows="3" required></textarea>
-                </div>
-                <div>
-                    <label for="id_attach">Anexo</label>
-                    <input id="id_attach" name="attachment" type="file" />
-                </div>
+            <div class="ticket-create-field">
+                <label for="id_desc">Descrição</label>
+                <textarea id="id_desc" name="description" rows="4" required></textarea>
             </div>
-            <button type="submit">Abrir chamado</button>
+            <div class="ticket-create-field">
+                <label for="id_attach">Anexo</label>
+                <input id="id_attach" name="attachment" type="file" />
+            </div>
+            <div class="ticket-create-actions">
+                <button type="submit">Abrir chamado</button>
+                <button type="button" data-close-modal>Fechar</button>
+            </div>
         </form>
     </div>
 </div>
