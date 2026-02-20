@@ -1,7 +1,10 @@
 @echo off
 setlocal
 
-set "ROOT=%~dp0"
+set "ROOT=S:\TI\Desenvolvimento\ERP-TI-WEB\"
+if not exist "%ROOT%manage.py" (
+  set "ROOT=%~dp0"
+)
 cd /d "%ROOT%"
 
 if not exist "%ROOT%.venv\Scripts\activate.bat" (
