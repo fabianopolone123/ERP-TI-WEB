@@ -24,5 +24,6 @@ urlpatterns = [
     path('', include('core.urls')),
 ]
 
-if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+# Mantém os uploads (ex.: fotos de orçamentos) acessíveis também com DEBUG=False
+# no ambiente interno em que o projeto roda via Django.
+urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
