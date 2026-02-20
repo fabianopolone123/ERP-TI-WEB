@@ -116,7 +116,7 @@
         white-space: pre-wrap;
     }
     .ticket-open-counter {
-        margin-left: auto;
+        margin-left: 0;
         font-size: 0.64rem;
         font-weight: 700;
         color: #99f6e4;
@@ -125,6 +125,15 @@
         border-radius: 999px;
         padding: 2px 6px;
         white-space: nowrap;
+    }
+    .ticket-timing-row {
+        display: flex;
+        align-items: center;
+        margin-top: 4px;
+        min-height: 20px;
+    }
+    .ticket-timer-controls {
+        margin-top: 4px !important;
     }
     .ticket-legend-inline {
         margin-left: auto;
@@ -236,6 +245,9 @@
                                     {% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %}
                                         <span class="status-pill status-shared">Compartilhado</span>
                                     {% endif %}
+                                </div>
+                                <div class="ticket-timing-row">
+                                    <span class="ticket-open-counter"></span>
                                 </div>
                                 <div class="ticket-meta ticket-timer-controls" style="margin-top: 6px;">
                                     <button type="button" data-ticket-play data-ticket-id="{{ ticket.id }}" {% if ticket.current_cycle_started_at %}style="display:none;"{% endif %}>Play</button>
@@ -877,15 +889,20 @@
                 <button type="button" data-ticket-play data-ticket-id="${card.dataset.ticketId || ''}">Play</button>
                 <button type="button" data-ticket-pause data-ticket-id="${card.dataset.ticketId || ''}" style="display:none;">Pause</button>
             `;
-            const title = card.querySelector('.ticket-title');
-            if (title && title.parentElement === card) {
-                title.insertAdjacentElement('afterend', controls);
+            const timingRow = card.querySelector('.ticket-timing-row');
+            if (timingRow && timingRow.parentElement === card) {
+                timingRow.insertAdjacentElement('afterend', controls);
             } else {
-                const metaRich = card.querySelector('.ticket-meta-rich');
-                if (metaRich) {
-                    card.insertBefore(controls, metaRich);
+                const title = card.querySelector('.ticket-title');
+                if (title && title.parentElement === card) {
+                    title.insertAdjacentElement('afterend', controls);
                 } else {
-                    card.appendChild(controls);
+                    const metaRich = card.querySelector('.ticket-meta-rich');
+                    if (metaRich) {
+                        card.insertBefore(controls, metaRich);
+                    } else {
+                        card.appendChild(controls);
+                    }
                 }
             }
         };
@@ -1719,13 +1736,19 @@
         };
 
         const ensureCounter = (card) => {
-            const title = card.querySelector('.ticket-title');
-            if (!title) return null;
-            let badge = title.querySelector('.ticket-open-counter');
+            let row = card.querySelector('.ticket-timing-row');
+            if (!row) {
+                const title = card.querySelector('.ticket-title');
+                if (!title) return null;
+                row = document.createElement('div');
+                row.className = 'ticket-timing-row';
+                title.insertAdjacentElement('afterend', row);
+            }
+            let badge = row.querySelector('.ticket-open-counter');
             if (!badge) {
                 badge = document.createElement('span');
                 badge.className = 'ticket-open-counter';
-                title.appendChild(badge);
+                row.appendChild(badge);
             }
             return badge;
         };
