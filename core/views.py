@@ -30,6 +30,7 @@ from .chamados_excel import export_attendant_logs_to_excel
 from .models import (
     ERPUser,
     EmailAlias,
+    EmailAccount,
     Equipment,
     SoftwareInventory,
     Requisition,
@@ -698,22 +699,9 @@ class UsersListView(LoginRequiredMixin, TemplateView):
                 messages.error(request, 'JSON fora do padrão esperado. Campos obrigatórios não encontrados.')
                 return redirect(f"{reverse('usuarios')}?tab=emails")
 
-            all_users = list(ERPUser.objects.all())
-            username_map = {
-                (u.username or '').strip().lower(): u
-                for u in all_users
-                if (u.username or '').strip()
-            }
-            full_name_map = {}
-            for u in all_users:
-                key = _normalize_text(u.full_name)
-                if key:
-                    full_name_map.setdefault(key, []).append(u)
-
             updated = 0
             unchanged = 0
             skipped = 0
-            matched_ids = set()
 
             for row in rows:
                 if not isinstance(row, dict):
@@ -724,93 +712,70 @@ class UsersListView(LoginRequiredMixin, TemplateView):
                 email = (row.get(email_key) or '').strip().lower()
                 email_usage = (row.get(usage_key) or '').strip()
                 last_sign_in = (row.get(last_login_key) or '').strip()
+                status_raw = (row.get('Status [READ ONLY]') or '').strip()
                 if not email:
                     skipped += 1
                     continue
 
-                username_guess = f'{first}.{last}'.strip('.').lower().replace(' ', '.')
-                target = username_map.get(username_guess)
-                if not target:
-                    full_key = _normalize_text(f'{first} {last}'.strip())
-                    matches = full_name_map.get(full_key, [])
-                    if len(matches) == 1:
-                        target = matches[0]
-                if not target:
-                    target = ERPUser.objects.filter(email__iexact=email).first()
-                if not target and '@' in email:
-                    email_local = (email.split('@', 1)[0] or '').strip().lower()
-                    if email_local:
-                        target = ERPUser.objects.filter(username__iexact=email_local).first()
-                if not target:
-                    first_norm = _normalize_text(first)
-                    last_norm = _normalize_text(last)
-                    relaxed = []
-                    for candidate in all_users:
-                        cand_name = _normalize_text(candidate.full_name)
-                        cand_user = _normalize_text(candidate.username or '')
-                        if first_norm and first_norm not in cand_name and first_norm not in cand_user:
-                            continue
-                        if last_norm and last_norm not in cand_name and last_norm not in cand_user:
-                            continue
-                        relaxed.append(candidate)
-                    if len(relaxed) == 1:
-                        target = relaxed[0]
-                if not target:
-                    skipped += 1
-                    continue
-
-                matched_ids.add(target.id)
-                current_email = (target.email or '').strip().lower()
-                status_raw = (row.get('Status [READ ONLY]') or '').strip().lower()
-                should_be_active = status_raw in {'active', 'ativado', 'enabled'}
+                should_be_active = status_raw.lower() in {'active', 'ativado', 'enabled'}
                 alias_candidates = []
                 for key in ('Recovery Email', 'Home Secondary Email', 'Work Secondary Email'):
                     val = (row.get(key) or '').strip().lower()
                     if val and '@' in val:
                         alias_candidates.append(val)
+                alias_candidates = sorted(
+                    {
+                        alias
+                        for alias in alias_candidates
+                        if alias and alias != email
+                    }
+                )
+                alias_text = '; '.join(alias_candidates)
+                full_name = f'{first} {last}'.strip()
 
-                if current_email == email:
+                account, created = EmailAccount.objects.get_or_create(
+                    email=email,
+                    defaults={
+                        'full_name': full_name,
+                        'aliases': alias_text,
+                        'email_usage': email_usage,
+                        'email_last_sign_in': last_sign_in,
+                        'status': status_raw,
+                        'is_active': should_be_active,
+                        'source': 'json',
+                    },
+                )
+                if created:
+                    updated += 1
+                    continue
+
+                changed = False
+                if (account.full_name or '').strip() != full_name:
+                    account.full_name = full_name
+                    changed = True
+                if (account.aliases or '').strip() != alias_text:
+                    account.aliases = alias_text
+                    changed = True
+                if (account.email_usage or '').strip() != email_usage:
+                    account.email_usage = email_usage
+                    changed = True
+                if (account.email_last_sign_in or '').strip() != last_sign_in:
+                    account.email_last_sign_in = last_sign_in
+                    changed = True
+                if (account.status or '').strip() != status_raw:
+                    account.status = status_raw
+                    changed = True
+                if bool(account.is_active) != bool(should_be_active):
+                    account.is_active = should_be_active
+                    changed = True
+                if (account.source or '').strip() != 'json':
+                    account.source = 'json'
+                    changed = True
+                if changed:
+                    account.save()
+                    updated += 1
+                else:
                     unchanged += 1
-                    changed_fields = []
-                    if not target.is_email_user:
-                        target.is_email_user = True
-                        changed_fields.append('is_email_user')
-                    if bool(target.is_active) != bool(should_be_active):
-                        target.is_active = should_be_active
-                        changed_fields.append('is_active')
-                    if (target.email_usage or '').strip() != email_usage:
-                        target.email_usage = email_usage
-                        changed_fields.append('email_usage')
-                    if (target.email_last_sign_in or '').strip() != last_sign_in:
-                        target.email_last_sign_in = last_sign_in
-                        changed_fields.append('email_last_sign_in')
-                    if changed_fields:
-                        target.save(update_fields=changed_fields)
-                    for alias_email in alias_candidates:
-                        if alias_email != current_email:
-                            EmailAlias.objects.get_or_create(user=target, email=alias_email)
-                    continue
-
-                owner = ERPUser.objects.filter(email__iexact=email).exclude(id=target.id).first()
-                if owner:
-                    skipped += 1
-                    continue
-
-                if current_email:
-                    EmailAlias.objects.get_or_create(user=target, email=current_email)
-                target.email = email
-                target.is_email_user = True
-                target.is_active = should_be_active
-                target.email_usage = email_usage
-                target.email_last_sign_in = last_sign_in
-                target.save(update_fields=['email', 'is_email_user', 'is_active', 'email_usage', 'email_last_sign_in'])
-                for alias_email in alias_candidates:
-                    if alias_email != email:
-                        EmailAlias.objects.get_or_create(user=target, email=alias_email)
-                updated += 1
-
-            if matched_ids:
-                ERPUser.objects.exclude(id__in=matched_ids).update(is_email_user=False)
 
             messages.success(request, f'Atualização de e-mails (JSON) concluída: {updated} atualizados, {unchanged} sem mudança, {skipped} ignorados.')
             return redirect(f"{reverse('usuarios')}?tab=emails")
@@ -849,25 +814,9 @@ class UsersListView(LoginRequiredMixin, TemplateView):
         context['only_email_users'] = only_email_users
         context['only_non_email_users'] = only_non_email_users
         context['users'] = queryset.order_by('full_name')
-        email_users = list(
-            ERPUser.objects.filter(is_email_user=True)
-            .exclude(email__isnull=True)
-            .exclude(email='')
-            .order_by('full_name', 'username')
-        )
-        aliases_by_user = {}
-        for alias in EmailAlias.objects.select_related('user').order_by('email'):
-            aliases_by_user.setdefault(alias.user_id, []).append(alias.email)
-        for user in email_users:
-            user.aliases_display = '; '.join(aliases_by_user.get(user.id, []))
-        context['email_users'] = email_users
-        context['email_unique_count'] = len(
-            {
-                (email or '').strip().lower()
-                for email in ERPUser.objects.filter(is_email_user=True).exclude(email__isnull=True).exclude(email='').values_list('email', flat=True)
-                if (email or '').strip()
-            }
-        )
+        email_accounts = list(EmailAccount.objects.all().order_by('full_name', 'email'))
+        context['email_users'] = email_accounts
+        context['email_unique_count'] = EmailAccount.objects.values('email').distinct().count()
         return context
 
 

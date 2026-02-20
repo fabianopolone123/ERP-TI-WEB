@@ -33,6 +33,25 @@ class EmailAlias(models.Model):
         return f'{self.user.full_name} - {self.email}'
 
 
+class EmailAccount(models.Model):
+    full_name = models.CharField(max_length=200, blank=True, default='')
+    email = models.EmailField(unique=True)
+    aliases = models.TextField(blank=True, default='')
+    email_usage = models.CharField(max_length=80, blank=True, default='')
+    email_last_sign_in = models.CharField(max_length=80, blank=True, default='')
+    status = models.CharField(max_length=40, blank=True, default='')
+    is_active = models.BooleanField(default=True)
+    source = models.CharField(max_length=40, blank=True, default='json')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['full_name', 'email']
+
+    def __str__(self) -> str:
+        return self.email
+
+
 class Equipment(models.Model):
     tag_code = models.CharField(max_length=80, blank=True, default='')
     sector = models.CharField(max_length=120, blank=True, default='')

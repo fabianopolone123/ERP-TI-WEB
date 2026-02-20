@@ -120,37 +120,33 @@
                         </div>
                         <div class="ticket-legend" style="margin-bottom: 10px;">
                             <strong>E-mails principais únicos:</strong> {{ email_unique_count|default:0 }}
-                            <span class="muted">| Usuários com e-mail principal: {{ email_users|length }}</span>
+                            <span class="muted">| Contas importadas: {{ email_users|length }}</span>
                         </div>
                         <div style="overflow-x: auto;">
                             <table class="data-table" data-table-name="emails">
                                 <thead>
                                     <tr>
                                         <th>Nome</th>
-                                        <th>Departamento</th>
                                         <th>E-mail principal</th>
                                         <th>Alias</th>
                                         <th>Tamanho</th>
                                         <th>Último login</th>
                                         <th>Ativo</th>
-                                        <th>Origem</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {% for user in email_users %}
                                         <tr>
                                             <td>{{ user.full_name }}</td>
-                                            <td>{{ user.department|default:"-" }}</td>
                                             <td>{{ user.email }}</td>
-                                            <td>{{ user.aliases_display|default:"-" }}</td>
+                                            <td>{{ user.aliases|default:"-" }}</td>
                                             <td>{{ user.email_usage|default:"-" }}</td>
                                             <td>{{ user.email_last_sign_in|default:"-" }}</td>
                                             <td>{% if user.is_active %}Sim{% else %}Não{% endif %}</td>
-                                            <td>{% if user.is_manual %}Manual{% else %}AD{% endif %}</td>
                                         </tr>
                                     {% empty %}
                                         <tr>
-                                            <td colspan="8" class="muted">Nenhuma conta de e-mail cadastrada.</td>
+                                            <td colspan="6" class="muted">Nenhuma conta de e-mail cadastrada.</td>
                                         </tr>
                                     {% endfor %}
                                 </tbody>
