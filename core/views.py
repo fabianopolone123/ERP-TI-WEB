@@ -2189,7 +2189,7 @@ def ticket_detail(request, ticket_id: int):
         seen_names.add(key)
         historical_names.append(name)
 
-    can_edit = is_ti and ticket.created_by_id == request.user.id
+    can_edit = ticket.created_by_id == request.user.id
     data = {
         'ok': True,
         'ticket': {
@@ -2315,9 +2315,6 @@ def ticket_message(request):
 @login_required
 @require_POST
 def ticket_update(request):
-    if not is_ti_user(request):
-        return JsonResponse({'ok': False, 'error': 'forbidden'}, status=403)
-
     ticket_id = request.POST.get('ticket_id')
     title = (request.POST.get('title') or '').strip()
     description = (request.POST.get('description') or '').strip()
