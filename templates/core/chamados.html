@@ -1072,9 +1072,12 @@
                 const isQueue = target === 'novo';
                 const shouldClone = !isClosing && draggingMulti && isUserTarget && isUserSource;
 
-                if (targetBody.querySelector(`.ticket-card[data-ticket-id="${dragTicketId}"]`)) {
-                    draggingId = null;
-                    return;
+                const duplicateInTarget = !!targetBody.querySelector(`.ticket-card[data-ticket-id="${dragTicketId}"]`);
+                if (duplicateInTarget) {
+                    if (!(isUserSource && isUserTarget && dragSourceTarget !== target)) {
+                        draggingId = null;
+                        return;
+                    }
                 }
 
                 const previousParent = dragCard.parentElement;
@@ -1148,6 +1151,66 @@
                         alert('Informe um tipo de falha válido: N/A, Equipamento, Software ou Falha humana.');
                         draggingId = null;
                         return;
+                    }
+                }
+
+                if (duplicateInTarget && isUserSource && isUserTarget && dragSourceTarget !== target) {
+                    const actionPayload = await askClosePayload(currentSavedFailure, 'action');
+                    if (!actionPayload.confirmed) {
+                        draggingId = null;
+                        return;
+                    }
+                    progressNote = (actionPayload.text || '').trim();
+                    failureType = normalizeFailureType(actionPayload.failureType || currentSavedFailure);
+                    if (!failureType) {
+                        alert('Informe um tipo de falha válido: N/A, Equipamento, Software ou Falha humana.');
+                        draggingId = null;
+                        return;
+                    }
+
+                    moveInFlight = true;
+                    window.__ticketDragInProgress = true;
+                    try {
+                        const response = await fetch('{% url "chamados_mover" %}', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/x-www-form-urlencoded',
+                                'X-CSRFToken': getCookie('csrftoken'),
+                            },
+                            body: new URLSearchParams({
+                                ticket_id: dragTicketId,
+                                target: target,
+                                source_target: dragSourceTarget,
+                                unassign_only: '1',
+                                progress_note: progressNote,
+                                failure_type: failureType,
+                            }),
+                        });
+                        const responseData = await response.json().catch(() => ({}));
+                        if (!response.ok) {
+                            if (responseData.error === 'failure_required') {
+                                alert('Informe o tipo de falha: N/A, Equipamento, Software ou Falha humana.');
+                            } else if (responseData.error === 'action_required') {
+                                alert('Informe a ação/correção ao sair do atendimento.');
+                            } else {
+                                alert('Não foi possível atualizar o compartilhamento deste chamado.');
+                            }
+                            draggingId = null;
+                            return;
+                        }
+
+                        dragCard.remove();
+                        if (failureType) {
+                            board.querySelectorAll(`.ticket-card[data-ticket-id="${dragTicketId}"]`).forEach((card) => {
+                                card.dataset.failureType = failureType;
+                            });
+                        }
+                        document.dispatchEvent(new Event('tickets-updated'));
+                        draggingId = null;
+                        return;
+                    } finally {
+                        moveInFlight = false;
+                        window.__ticketDragInProgress = false;
                     }
                 }
 

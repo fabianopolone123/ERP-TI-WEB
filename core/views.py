@@ -1852,6 +1852,7 @@ def move_ticket(request):
     source_target = (request.POST.get('source_target') or '').strip()
     progress_note = (request.POST.get('progress_note') or '').strip()
     resolution_note = (request.POST.get('resolution') or '').strip()
+    unassign_only = request.POST.get('unassign_only') == '1'
     failure_type = _normalize_failure_type(request.POST.get('failure_type') or '')
     valid_failures = {choice[0] for choice in Ticket.FailureType.choices}
     if failure_type not in valid_failures:
@@ -2022,6 +2023,53 @@ def move_ticket(request):
         assignee = ERPUser.objects.filter(id=user_id).first()
         if not assignee:
             return JsonResponse({'ok': False, 'error': 'user_not_found'}, status=404)
+
+        if unassign_only and source_is_user and source_user_id and source_user_id != assignee.id:
+            current_assignees = set()
+            if ticket.assigned_to_id:
+                current_assignees.add(ticket.assigned_to_id)
+            current_assignees.update(ticket.collaborators.values_list('id', flat=True))
+            if source_user_id not in current_assignees or assignee.id not in current_assignees:
+                return JsonResponse({'ok': False, 'error': 'invalid_source'}, status=400)
+            if failure_type not in valid_failures:
+                return JsonResponse({'ok': False, 'error': 'failure_required'}, status=400)
+            if not progress_note:
+                return JsonResponse({'ok': False, 'error': 'action_required'}, status=400)
+
+            if source_cycle and source_cycle.current_cycle_started_at:
+                cycle_start = source_cycle.current_cycle_started_at
+                closed_at = timezone.now()
+                _create_ticket_work_log(
+                    ticket=ticket,
+                    source_target=source_target,
+                    opened_at=cycle_start,
+                    closed_at=closed_at,
+                    failure_type=failure_type,
+                    action_text=progress_note,
+                )
+                source_cycle.current_cycle_started_at = None
+                source_cycle.save(update_fields=['current_cycle_started_at', 'updated_at'])
+
+            ticket.last_failure_type = failure_type
+            if ticket.assigned_to_id == source_user_id:
+                ticket.assigned_to_id = assignee.id
+                ticket.save(update_fields=['assigned_to', 'last_failure_type', 'updated_at'])
+                ticket.collaborators.remove(assignee.id)
+            else:
+                ticket.collaborators.remove(source_user_id)
+                ticket.save(update_fields=['last_failure_type', 'updated_at'])
+
+            _log_ticket_timeline(
+                ticket=ticket,
+                event_type=TicketTimelineEvent.EventType.UNASSIGNED,
+                request_user=request.user,
+                from_status=previous_status,
+                to_status=ticket.status,
+                note=f'Atendente removido do compartilhamento: {progress_note}',
+            )
+            _sync_ticket_cycle_snapshot(ticket)
+            return JsonResponse({'ok': True, 'partial_unassign': True})
+
         was_closed = previous_status == Ticket.Status.FECHADO
         ticket.status = Ticket.Status.EM_ATENDIMENTO
         sent_assignment = False
