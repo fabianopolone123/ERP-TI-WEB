@@ -358,6 +358,19 @@ class TicketWorkLog(models.Model):
         return f'WorkLog #{self.id} ({self.ticket_id})'
 
 
+class TicketAttendantCycle(models.Model):
+    ticket = models.ForeignKey(Ticket, on_delete=models.CASCADE, related_name='attendant_cycles')
+    attendant = models.ForeignKey(ERPUser, on_delete=models.CASCADE, related_name='ticket_cycles')
+    current_cycle_started_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('ticket', 'attendant')
+
+    def __str__(self) -> str:
+        return f'Cycle #{self.ticket_id}/{self.attendant_id}'
+
+
 class WhatsAppTemplate(models.Model):
     new_ticket = models.TextField(default='Novo chamado #{id}: {title} | {description}')
     status_update = models.TextField(default='Chamado #{id} atualizado: {status} | {responsavel}')

@@ -42,6 +42,7 @@ from .models import (
     TicketMessage,
     TicketTimelineEvent,
     TicketWorkLog,
+    TicketAttendantCycle,
     WhatsAppTemplate,
     EmailTemplate,
     WhatsAppNotificationSettings,
@@ -556,6 +557,27 @@ def _extract_source_user_id(source_target: str) -> int | None:
         return int(str(source_target).replace('user_', ''))
     except ValueError:
         return None
+
+
+def _get_ticket_attendant_cycle(ticket: Ticket, attendant_id: int, create: bool = False):
+    if not attendant_id:
+        return None
+    cycle = TicketAttendantCycle.objects.filter(ticket=ticket, attendant_id=attendant_id).first()
+    if not cycle and create:
+        cycle = TicketAttendantCycle.objects.create(ticket=ticket, attendant_id=attendant_id)
+    return cycle
+
+
+def _sync_ticket_cycle_snapshot(ticket: Ticket):
+    """Keeps legacy field aligned with assigned attendant for compatibility."""
+    started_at = None
+    if ticket.assigned_to_id:
+        cycle = _get_ticket_attendant_cycle(ticket, ticket.assigned_to_id, create=False)
+        if cycle:
+            started_at = cycle.current_cycle_started_at
+    if ticket.current_cycle_started_at != started_at:
+        ticket.current_cycle_started_at = started_at
+        ticket.save(update_fields=['current_cycle_started_at', 'updated_at'])
 
 
 def _get_or_create_auth_user_for_erp(erp_user: ERPUser):
@@ -1613,11 +1635,25 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
             ticket_map[uid] = sorted(
                 tickets_for_user,
                 key=lambda t: (
-                    0 if t.current_cycle_started_at else 1,
-                    -(t.current_cycle_started_at.timestamp() if t.current_cycle_started_at else 0),
                     -(t.created_at.timestamp() if t.created_at else 0),
                 ),
             )
+
+        ticket_cycle_map: dict[int, dict[int, bool]] = {}
+        in_progress_ids = [t.id for t in in_progress_tickets if t.id]
+        if in_progress_ids:
+            for cycle in TicketAttendantCycle.objects.filter(ticket_id__in=in_progress_ids).only(
+                'ticket_id', 'attendant_id', 'current_cycle_started_at'
+            ):
+                if not cycle.current_cycle_started_at:
+                    continue
+                bucket = ticket_cycle_map.setdefault(cycle.ticket_id, {})
+                bucket[cycle.attendant_id] = True
+        for ticket in in_progress_tickets:
+            if not ticket.current_cycle_started_at or not ticket.assigned_to_id:
+                continue
+            bucket = ticket_cycle_map.setdefault(ticket.id, {})
+            bucket.setdefault(ticket.assigned_to_id, True)
 
         all_tickets = (
             list(context['new_tickets'])
@@ -1655,6 +1691,7 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
                 'last_action_text': latest_action_by_ticket.get(ticket.id, ''),
             }
         context['ticket_meta'] = ticket_meta
+        context['ticket_cycle_map'] = ticket_cycle_map
 
         context['user_tickets'] = ticket_map
         return context
@@ -1815,15 +1852,21 @@ def move_ticket(request):
     previous_status = ticket.status
     previous_assignee_id = ticket.assigned_to_id
     source_is_user = source_target.startswith('user_')
+    source_user_id = _extract_source_user_id(source_target) if source_is_user else None
+    source_cycle = _get_ticket_attendant_cycle(ticket, source_user_id, create=False) if source_user_id else None
+    if (
+        source_user_id
+        and not source_cycle
+        and ticket.current_cycle_started_at
+        and ticket.assigned_to_id == source_user_id
+    ):
+        source_cycle = _get_ticket_attendant_cycle(ticket, source_user_id, create=True)
+        if source_cycle and not source_cycle.current_cycle_started_at:
+            source_cycle.current_cycle_started_at = ticket.current_cycle_started_at
+            source_cycle.save(update_fields=['current_cycle_started_at', 'updated_at'])
 
     if target in {'novo', 'pendente', 'programado'}:
         destination_status = Ticket.Status.PENDENTE
-        source_user_id = None
-        if source_target.startswith('user_'):
-            try:
-                source_user_id = int(source_target.replace('user_', ''))
-            except ValueError:
-                source_user_id = None
 
         current_assignees = set()
         if ticket.assigned_to_id:
@@ -1838,7 +1881,7 @@ def move_ticket(request):
                     return JsonResponse({'ok': False, 'error': 'failure_required'}, status=400)
                 if not progress_note:
                     return JsonResponse({'ok': False, 'error': 'action_required'}, status=400)
-                cycle_start = ticket.current_cycle_started_at or ticket.created_at
+                cycle_start = source_cycle.current_cycle_started_at if source_cycle and source_cycle.current_cycle_started_at else ticket.created_at
                 closed_at = timezone.now()
                 _create_ticket_work_log(
                     ticket=ticket,
@@ -1850,6 +1893,9 @@ def move_ticket(request):
                 )
                 ticket.last_failure_type = failure_type
                 ticket.save(update_fields=['last_failure_type', 'updated_at'])
+                if source_cycle and source_cycle.current_cycle_started_at:
+                    source_cycle.current_cycle_started_at = None
+                    source_cycle.save(update_fields=['current_cycle_started_at', 'updated_at'])
             if ticket.assigned_to_id == source_user_id:
                 remaining = [uid for uid in current_assignees if uid != source_user_id]
                 promoted_id = remaining[0]
@@ -1866,6 +1912,7 @@ def move_ticket(request):
                 to_status=ticket.status,
                 note=f'Atendente removido do compartilhamento ao mover para {_timeline_status_label(destination_status)}.',
             )
+            _sync_ticket_cycle_snapshot(ticket)
             return JsonResponse({'ok': True, 'partial_unassign': True})
 
         if source_target.startswith('user_') and not progress_note:
@@ -1875,8 +1922,8 @@ def move_ticket(request):
                 return JsonResponse({'ok': False, 'error': 'failure_required'}, status=400)
             if not progress_note:
                 return JsonResponse({'ok': False, 'error': 'action_required'}, status=400)
-            if ticket.current_cycle_started_at:
-                cycle_start = ticket.current_cycle_started_at
+            if source_cycle and source_cycle.current_cycle_started_at:
+                cycle_start = source_cycle.current_cycle_started_at
                 closed_at = timezone.now()
                 _create_ticket_work_log(
                     ticket=ticket,
@@ -1886,6 +1933,8 @@ def move_ticket(request):
                     failure_type=failure_type,
                     action_text=progress_note,
                 )
+                source_cycle.current_cycle_started_at = None
+                source_cycle.save(update_fields=['current_cycle_started_at', 'updated_at'])
 
         ticket.status = destination_status
         ticket.assigned_to = None
@@ -1916,6 +1965,7 @@ def move_ticket(request):
             to_status=destination_status,
             note=timeline_note,
         )
+        _sync_ticket_cycle_snapshot(ticket)
         return JsonResponse({'ok': True})
 
     if target == 'fechado':
@@ -1925,9 +1975,9 @@ def move_ticket(request):
             return JsonResponse({'ok': False, 'error': 'resolution_required'}, status=400)
         if failure_type not in valid_failures:
             return JsonResponse({'ok': False, 'error': 'failure_required'}, status=400)
-        if not ticket.current_cycle_started_at:
+        if not source_cycle or not source_cycle.current_cycle_started_at:
             return JsonResponse({'ok': False, 'error': 'play_required'}, status=400)
-        cycle_start = ticket.current_cycle_started_at
+        cycle_start = source_cycle.current_cycle_started_at
         closed_at = timezone.now()
         _create_ticket_work_log(
             ticket=ticket,
@@ -1942,6 +1992,8 @@ def move_ticket(request):
         ticket.last_failure_type = failure_type
         ticket.current_cycle_started_at = None
         ticket.save()
+        source_cycle.current_cycle_started_at = None
+        source_cycle.save(update_fields=['current_cycle_started_at', 'updated_at'])
         if previous_status != Ticket.Status.FECHADO:
             _notify_whatsapp(ticket, event_type="status_closed", event_label="Status atualizado", extra_line="Status atual: Fechado")
             _notify_ticket_email(ticket, event_label="Status atualizado", extra_line="Status atual: Fechado")
@@ -1953,6 +2005,7 @@ def move_ticket(request):
             to_status=Ticket.Status.FECHADO,
             note=f'Resolução registrada: {resolution_note}',
         )
+        _sync_ticket_cycle_snapshot(ticket)
         return JsonResponse({'ok': True})
 
     if target.startswith('user_'):
@@ -1971,8 +2024,8 @@ def move_ticket(request):
                 return JsonResponse({'ok': False, 'error': 'failure_required'}, status=400)
             if not progress_note:
                 return JsonResponse({'ok': False, 'error': 'action_required'}, status=400)
-            if ticket.current_cycle_started_at:
-                cycle_start = ticket.current_cycle_started_at
+            if source_cycle and source_cycle.current_cycle_started_at:
+                cycle_start = source_cycle.current_cycle_started_at
                 closed_at = timezone.now()
                 _create_ticket_work_log(
                     ticket=ticket,
@@ -1982,6 +2035,8 @@ def move_ticket(request):
                     failure_type=failure_type,
                     action_text=progress_note,
                 )
+                source_cycle.current_cycle_started_at = None
+                source_cycle.save(update_fields=['current_cycle_started_at', 'updated_at'])
 
         if is_clone_assignment:
             ticket.save()
@@ -2037,6 +2092,7 @@ def move_ticket(request):
             to_status=Ticket.Status.EM_ATENDIMENTO,
             note=timeline_note,
         )
+        _sync_ticket_cycle_snapshot(ticket)
         return JsonResponse({'ok': True})
 
     return JsonResponse({'ok': False, 'error': 'invalid_target'}, status=400)
@@ -2075,11 +2131,22 @@ def ticket_timer_action(request):
     if source_user_id not in assignee_ids:
         return JsonResponse({'ok': False, 'error': 'invalid_source'}, status=400)
 
+    source_cycle = _get_ticket_attendant_cycle(ticket, source_user_id, create=(action == 'play'))
+    if not source_cycle:
+        if ticket.current_cycle_started_at and ticket.assigned_to_id == source_user_id:
+            source_cycle = _get_ticket_attendant_cycle(ticket, source_user_id, create=True)
+            if source_cycle and not source_cycle.current_cycle_started_at:
+                source_cycle.current_cycle_started_at = ticket.current_cycle_started_at
+                source_cycle.save(update_fields=['current_cycle_started_at', 'updated_at'])
+        if not source_cycle:
+            return JsonResponse({'ok': False, 'error': 'invalid_source'}, status=400)
+
     if action == 'play':
-        if ticket.current_cycle_started_at:
+        if source_cycle.current_cycle_started_at:
             return JsonResponse({'ok': True, 'running': True})
-        ticket.current_cycle_started_at = timezone.now()
-        ticket.save(update_fields=['current_cycle_started_at', 'updated_at'])
+        source_cycle.current_cycle_started_at = timezone.now()
+        source_cycle.save(update_fields=['current_cycle_started_at', 'updated_at'])
+        _sync_ticket_cycle_snapshot(ticket)
         _log_ticket_timeline(
             ticket=ticket,
             event_type=TicketTimelineEvent.EventType.STATUS_CHANGED,
@@ -2091,7 +2158,7 @@ def ticket_timer_action(request):
         return JsonResponse({'ok': True, 'running': True})
 
     # pause
-    if not ticket.current_cycle_started_at:
+    if not source_cycle.current_cycle_started_at:
         return JsonResponse({'ok': False, 'error': 'not_running'}, status=400)
     if not action_note:
         return JsonResponse({'ok': False, 'error': 'action_required'}, status=400)
@@ -2102,14 +2169,16 @@ def ticket_timer_action(request):
     _create_ticket_work_log(
         ticket=ticket,
         source_target=source_target,
-        opened_at=ticket.current_cycle_started_at,
+        opened_at=source_cycle.current_cycle_started_at,
         closed_at=closed_at,
         failure_type=failure_type,
         action_text=action_note,
     )
-    ticket.current_cycle_started_at = None
+    source_cycle.current_cycle_started_at = None
+    source_cycle.save(update_fields=['current_cycle_started_at', 'updated_at'])
     ticket.last_failure_type = failure_type
-    ticket.save(update_fields=['current_cycle_started_at', 'last_failure_type', 'updated_at'])
+    ticket.save(update_fields=['last_failure_type', 'updated_at'])
+    _sync_ticket_cycle_snapshot(ticket)
     _log_ticket_timeline(
         ticket=ticket,
         event_type=TicketTimelineEvent.EventType.STATUS_CHANGED,

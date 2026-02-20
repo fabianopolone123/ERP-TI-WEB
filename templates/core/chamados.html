@@ -340,14 +340,14 @@
                     <div class="kanban-header">{{ user.full_name }}</div>
                     <div class="kanban-body">
                         {% for ticket in user_tickets|get_item:user.id %}
-                            <div class="ticket-card urgency-bg-{{ ticket.urgency }}{% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %} shared-ticket{% endif %}{% if ticket.current_cycle_started_at %} playing{% endif %}" draggable="true" data-ticket-id="{{ ticket.id }}" data-ticket-status="{{ ticket.status }}" data-opened-at="{{ ticket.created_at|date:'c' }}" data-failure-type="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'failure_type' }}" data-last-action="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'last_action_text'|default:''|escape }}" data-cycle-running="{% if ticket.current_cycle_started_at %}1{% else %}0{% endif %}">
+                            <div class="ticket-card urgency-bg-{{ ticket.urgency }}{% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %} shared-ticket{% endif %}{% if ticket_cycle_map|get_item:ticket.id|default:''|get_item:user.id %} playing{% endif %}" draggable="true" data-ticket-id="{{ ticket.id }}" data-ticket-status="{{ ticket.status }}" data-opened-at="{{ ticket.created_at|date:'c' }}" data-failure-type="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'failure_type' }}" data-last-action="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'last_action_text'|default:''|escape }}" data-cycle-running="{% if ticket_cycle_map|get_item:ticket.id|default:''|get_item:user.id %}1{% else %}0{% endif %}">
                                 <div class="ticket-main-row">
                                     <div class="ticket-main-left">
                                         <div class="ticket-title">
                                             <span class="urgency-dot urgency-{{ ticket.urgency }}"></span>
                                             #{{ ticket.id }} - {{ ticket.title }}
                                             {% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %}
-                                                <span class="status-pill status-shared">Compartilhado</span>
+                                                <span class="status-pill status-shared">Outro atendente também está trabalhando</span>
                                             {% endif %}
                                         </div>
                                     </div>
@@ -366,8 +366,8 @@
                                     </div>
                                 </div>
                                 <div class="ticket-meta ticket-timer-controls" style="margin-top: 6px;">
-                                    <button type="button" data-ticket-play data-ticket-id="{{ ticket.id }}" {% if ticket.current_cycle_started_at %}style="display:none;"{% endif %}>Play</button>
-                                    <button type="button" data-ticket-pause data-ticket-id="{{ ticket.id }}" {% if not ticket.current_cycle_started_at %}style="display:none;"{% endif %}>Pause</button>
+                                    <button type="button" data-ticket-play data-ticket-id="{{ ticket.id }}" {% if ticket_cycle_map|get_item:ticket.id|default:''|get_item:user.id %}style="display:none;"{% endif %}>Play</button>
+                                    <button type="button" data-ticket-pause data-ticket-id="{{ ticket.id }}" {% if not ticket_cycle_map|get_item:ticket.id|default:''|get_item:user.id %}style="display:none;"{% endif %}>Pause</button>
                                     <span class="ticket-last-action" title="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'last_action_text'|default:'' }}">{{ ticket_meta|get_item:ticket.id|default:''|get_item:'last_action_text'|default:'' }}</span>
                                 </div>
                             </div>
@@ -1212,14 +1212,12 @@
                         });
                     }
                     if (target.startsWith('user_')) {
-                        board.querySelectorAll(`.ticket-card[data-ticket-id="${dragTicketId}"]`).forEach((card) => {
-                            ensureTimerControls(card);
-                            card.dataset.cycleRunning = '0';
-                            const playBtn = card.querySelector('[data-ticket-play]');
-                            const pauseBtn = card.querySelector('[data-ticket-pause]');
-                            if (playBtn) playBtn.style.display = '';
-                            if (pauseBtn) pauseBtn.style.display = 'none';
-                        });
+                        ensureTimerControls(movedCard);
+                        movedCard.dataset.cycleRunning = '0';
+                        const playBtn = movedCard.querySelector('[data-ticket-play]');
+                        const pauseBtn = movedCard.querySelector('[data-ticket-pause]');
+                        if (playBtn) playBtn.style.display = '';
+                        if (pauseBtn) pauseBtn.style.display = 'none';
                     }
                     if (failureType) {
                         board.querySelectorAll(`.ticket-card[data-ticket-id="${dragTicketId}"]`).forEach((card) => {
@@ -1227,13 +1225,11 @@
                         });
                     }
                     if (target === 'novo') {
-                        board.querySelectorAll(`.ticket-card[data-ticket-id="${dragTicketId}"]`).forEach((card) => {
-                            card.dataset.cycleRunning = '0';
-                            const playBtn = card.querySelector('[data-ticket-play]');
-                            const pauseBtn = card.querySelector('[data-ticket-pause]');
-                            if (playBtn) playBtn.style.display = 'none';
-                            if (pauseBtn) pauseBtn.style.display = 'none';
-                        });
+                        movedCard.dataset.cycleRunning = '0';
+                        const playBtn = movedCard.querySelector('[data-ticket-play]');
+                        const pauseBtn = movedCard.querySelector('[data-ticket-pause]');
+                        if (playBtn) playBtn.style.display = 'none';
+                        if (pauseBtn) pauseBtn.style.display = 'none';
                     }
                     document.dispatchEvent(new Event('tickets-updated'));
                     draggingId = null;
@@ -1244,8 +1240,13 @@
             });
         });
 
-        const syncPlayPauseButtons = (ticketId, running) => {
+        const syncPlayPauseButtons = (ticketId, running, sourceTarget = '') => {
             board.querySelectorAll(`.ticket-card[data-ticket-id="${ticketId}"]`).forEach((card) => {
+                if (sourceTarget) {
+                    const col = card.closest('.kanban-column');
+                    const target = col ? (col.dataset.target || '') : '';
+                    if (target !== sourceTarget) return;
+                }
                 card.dataset.cycleRunning = running ? '1' : '0';
                 card.classList.toggle('playing', !!running);
                 const playBtn = card.querySelector('[data-ticket-play]');
@@ -1329,7 +1330,7 @@
                     }
                 });
             }
-            syncPlayPauseButtons(ticketId, !!data.running);
+            syncPlayPauseButtons(ticketId, !!data.running, sourceTarget);
         });
     })();
 </script>
