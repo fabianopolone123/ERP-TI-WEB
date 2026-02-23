@@ -34,6 +34,7 @@ from .models import (
     Equipment,
     SoftwareInventory,
     next_equipment_tag_code,
+    _extract_equipment_tag_number,
     Requisition,
     RequisitionQuote,
     AccessFolder,
@@ -983,9 +984,9 @@ class EquipamentosView(LoginRequiredMixin, TemplateView):
         is_ti = is_ti_user(self.request)
         context['is_ti_group'] = is_ti
         context['modules'] = build_modules('equipamentos') if is_ti else []
-        equipments_qs = Equipment.objects.all().order_by('-created_at')
+        equipments_qs = sorted(Equipment.objects.all(), key=lambda e: (_extract_equipment_tag_number(e.tag_code or '') is None, _extract_equipment_tag_number(e.tag_code or '') or 10**9, (e.tag_code or '').lower(), e.id))
         context['equipments'] = equipments_qs
-        context['equipment_total_count'] = equipments_qs.count()
+        context['equipment_total_count'] = len(equipments_qs)
         context['inventory_default_hosts'] = _inventory_default_hosts()
         context['inventory_timeout_seconds'] = int(getattr(settings, 'INVENTORY_POWERSHELL_TIMEOUT', 120) or 120)
         context['next_equipment_tag_preview'] = next_equipment_tag_code() if is_ti else ''
