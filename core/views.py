@@ -1647,7 +1647,7 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
             .distinct()
             .order_by('queue_order', '-created_at')
         )
-        context['closed_tickets'] = Ticket.objects.filter(status=Ticket.Status.FECHADO).select_related('created_by').order_by('-created_at')
+        context['closed_tickets'] = Ticket.objects.filter(status=Ticket.Status.FECHADO).select_related('created_by').order_by('-updated_at', '-id')
         in_progress_tickets = Ticket.objects.filter(
             status__in=[Ticket.Status.EM_ATENDIMENTO, Ticket.Status.PENDENTE]
         ).select_related('created_by').prefetch_related(
