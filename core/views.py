@@ -938,7 +938,7 @@ class EquipamentosView(LoginRequiredMixin, TemplateView):
         hostname = request.POST.get('hostname', '').strip()
 
         equipment_payload = {
-            'tag_code': '',
+            'tag_code': (request.POST.get('tag_code') or '').strip(),
             'sector': request.POST.get('sector', '').strip(),
             'user': request.POST.get('user', '').strip(),
             'hostname': hostname,
@@ -959,16 +959,18 @@ class EquipamentosView(LoginRequiredMixin, TemplateView):
         if action == 'update':
             equipment_id = (request.POST.get('equipment_id') or '').strip()
             equipment_obj = Equipment.objects.filter(id=equipment_id).first()
+            original_tag_code = (equipment_obj.tag_code or '').strip() if equipment_obj else ''
             if not equipment_obj:
                 messages.error(request, 'Equipamento n?o encontrado para edi??o.')
                 return self.get(request, *args, **kwargs)
             for field_name, field_value in equipment_payload.items():
                 setattr(equipment_obj, field_name, field_value)
-            equipment_obj.tag_code = (equipment_obj.tag_code or '').strip() or next_equipment_tag_code()
+            equipment_obj.tag_code = original_tag_code or (equipment_obj.tag_code or '').strip() or next_equipment_tag_code()
             equipment_obj.save()
             messages.success(request, 'Equipamento atualizado com sucesso.')
             return self.get(request, *args, **kwargs)
 
+        equipment_payload['tag_code'] = (equipment_payload.get('tag_code') or '').strip() or next_equipment_tag_code()
         Equipment.objects.create(**equipment_payload)
         messages.success(request, 'Equipamento cadastrado com sucesso.')
         return self.get(request, *args, **kwargs)
