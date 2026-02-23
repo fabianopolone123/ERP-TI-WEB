@@ -268,8 +268,7 @@
                         <textarea id="id_observacao" name="observacao" rows="3" placeholder="Observacoes do equipamento"></textarea>
                     </div>
                 </div>
-                <div style="display:flex; justify-content:space-between; gap:10px; align-items:center; margin-top:8px;">
-                    <button type="button" class="btn-danger" data-delete-equipment hidden>Excluir</button>
+                <div style="display:flex; justify-content:flex-end; gap:10px; align-items:center; margin-top:8px;">
                     <button type="submit">Salvar</button>
                 </div>
             </form>
@@ -307,7 +306,6 @@
             observacao: form.querySelector('[name="observacao"]'),
         };
         const submitBtn = form.querySelector('button[type="submit"]');
-        const deleteBtn = form.querySelector('[data-delete-equipment]');
         const tagDisplay = form.querySelector('[data-equipment-tag-display]');
         const nextTagPreview = (form.getAttribute('data-next-tag') || '').trim();
 
@@ -319,7 +317,6 @@
             if (equipmentIdInput) equipmentIdInput.value = '';
             if (modalTitle) modalTitle.textContent = 'Novo equipamento';
             if (submitBtn) submitBtn.textContent = 'Salvar alteracoes';
-            if (deleteBtn) deleteBtn.hidden = true;
             if (fieldMap.tagCode) fieldMap.tagCode.value = '';
             if (tagDisplay) tagDisplay.textContent = nextTagPreview || '-';
         };
@@ -333,7 +330,6 @@
             if (equipmentIdInput) equipmentIdInput.value = btn.dataset.id || '';
             if (modalTitle) modalTitle.textContent = 'Editar equipamento';
             if (submitBtn) submitBtn.textContent = 'Salvar alteracoes';
-            if (deleteBtn) deleteBtn.hidden = false;
             if (fieldMap.tagCode) fieldMap.tagCode.value = btn.dataset.tagCode || '';
             if (tagDisplay) tagDisplay.textContent = (btn.dataset.tagCode || '-');
             if (fieldMap.hostname) fieldMap.hostname.value = btn.dataset.hostname || '';
@@ -354,17 +350,6 @@
             open();
         };
 
-        if (deleteBtn) {
-            deleteBtn.addEventListener('click', () => {
-                const equipmentId = (equipmentIdInput && equipmentIdInput.value) ? equipmentIdInput.value : '';
-                if (!equipmentId) return;
-                const equipName = (fieldMap.equipment && fieldMap.equipment.value) ? fieldMap.equipment.value : 'equipamento';
-                const tagCode = (fieldMap.tagCode && fieldMap.tagCode.value) ? ` (${fieldMap.tagCode.value})` : '';
-                if (!window.confirm(`Confirma excluir ${equipName}${tagCode}?`)) return;
-                if (actionInput) actionInput.value = 'delete';
-                form.submit();
-            });
-        }
         openBtn.addEventListener('click', openCreate);
         closeEls.forEach((el) => el.addEventListener('click', close));
         document.querySelectorAll('tr[data-row-edit-equipment]').forEach((row) => {

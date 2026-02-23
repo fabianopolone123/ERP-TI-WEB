@@ -909,13 +909,7 @@ class EquipamentosView(LoginRequiredMixin, TemplateView):
 
         action = (request.POST.get('action') or '').strip().lower()
         if action == 'delete':
-            equipment_id = (request.POST.get('equipment_id') or '').strip()
-            equipment_obj = Equipment.objects.filter(id=equipment_id).first()
-            if not equipment_obj:
-                messages.error(request, 'Equipamento nao encontrado para exclusao.')
-                return self.get(request, *args, **kwargs)
-            equipment_obj.delete()
-            messages.success(request, 'Equipamento excluido com sucesso.')
+            messages.error(request, 'Exclusao de equipamentos bloqueada: a etiqueta nao pode ser removida.')
             return self.get(request, *args, **kwargs)
 
         if action == 'sync_inventory':
