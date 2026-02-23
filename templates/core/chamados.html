@@ -319,7 +319,7 @@
                 <div class="kanban-header">Pendente</div>
                 <div class="kanban-body">
                     {% for ticket in new_tickets %}
-                        <div class="ticket-card urgency-bg-{{ ticket.urgency }}{% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %} shared-ticket{% endif %}" draggable="true" data-ticket-id="{{ ticket.id }}" data-ticket-status="{{ ticket.status }}" data-opened-at="{{ ticket.created_at|date:'c' }}" data-failure-type="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'failure_type' }}">
+                        <div class="ticket-card urgency-bg-{{ ticket.urgency }}{% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %} shared-ticket{% endif %}" draggable="true" data-ticket-id="{{ ticket.id }}" data-ticket-status="{{ ticket.status }}" data-opened-at="{{ ticket.created_at|date:'c' }}" data-failure-type="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'failure_type' }}" data-last-action="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'last_action_text'|default:''|escape }}">
                             <div class="ticket-title">
                                 <span class="urgency-dot urgency-{{ ticket.urgency }}"></span>
                                 #{{ ticket.id }} - {{ ticket.title }}
@@ -338,6 +338,11 @@
                                         {% endif %}
                                     </span>
                                 </div>
+                                {% if ticket_meta|get_item:ticket.id|default:''|get_item:'last_action_text' %}
+                                    <div class="ticket-meta" style="margin-top: 6px;">
+                                        <span class="ticket-last-action" title="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'last_action_text' }}">{{ ticket_meta|get_item:ticket.id|default:''|get_item:'last_action_text' }}</span>
+                                    </div>
+                                {% endif %}
                             {% endif %}
                         </div>
                     {% endfor %}
