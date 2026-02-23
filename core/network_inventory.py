@@ -9,7 +9,7 @@ from typing import Any
 
 from django.utils import timezone
 
-from .models import Equipment, SoftwareInventory
+from .models import Equipment, SoftwareInventory, next_equipment_tag_code
 
 logger = logging.getLogger(__name__)
 
@@ -301,12 +301,12 @@ def upsert_inventory_from_payload(payload: dict[str, Any], source: str = 'rede')
         or Equipment.objects.filter(serial__iexact=serial).first()
         or Equipment.objects.filter(user__iexact=user_name, model__iexact=model).first()
     )
+    is_new_equipment = equipment is None
     if equipment is None:
         equipment = Equipment(hostname=host)
 
-    inferred_tag = _infer_tag_code_from_hostname(host)
-    if inferred_tag and not (equipment.tag_code or '').strip():
-        equipment.tag_code = inferred_tag
+    if is_new_equipment or not (equipment.tag_code or '').strip():
+        equipment.tag_code = next_equipment_tag_code()
     equipment.user = user_name or equipment.user
     equipment.sector = sector or equipment.sector
     equipment.equipment = equipment.equipment or 'Computador'

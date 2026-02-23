@@ -1,4 +1,6 @@
-﻿from django.db import models
+﻿import re
+
+from django.db import models, transaction
 
 
 class ERPUser(models.Model):
@@ -77,6 +79,57 @@ class Equipment(models.Model):
     def __str__(self) -> str:
         return f'{self.equipment} - {self.user}'
 
+
+
+
+
+def _extract_equipment_tag_number(tag_code: str) -> int | None:
+    raw = (tag_code or '').strip()
+    if not raw:
+        return None
+    match = re.search(r'(\d+)$', raw)
+    if not match:
+        return None
+    try:
+        number = int(match.group(1))
+    except ValueError:
+        return None
+    return number if number > 0 else None
+
+
+def _format_equipment_tag_number(number: int, width: int = 3) -> str:
+    width = max(1, int(width or 1))
+    return str(int(number)).zfill(width)
+
+
+def next_equipment_tag_code() -> str:
+    numbers = sorted(
+        n for n in (_extract_equipment_tag_number(item.tag_code) for item in Equipment.objects.only('tag_code')) if n
+    )
+    expected = 1
+    for number in numbers:
+        if number != expected:
+            break
+        expected += 1
+    width = max(3, len(str(max(expected, len(numbers)))))
+    return _format_equipment_tag_number(expected, width=width)
+
+
+@transaction.atomic
+def resequence_equipment_tag_codes() -> int:
+    equipments = list(Equipment.objects.all().order_by('id'))
+    if not equipments:
+        return 0
+    width = max(3, len(str(len(equipments))))
+    changed = []
+    for idx, equipment in enumerate(equipments, start=1):
+        tag_code = _format_equipment_tag_number(idx, width=width)
+        if (equipment.tag_code or '').strip() != tag_code:
+            equipment.tag_code = tag_code
+            changed.append(equipment)
+    if changed:
+        Equipment.objects.bulk_update(changed, ['tag_code'])
+    return len(changed)
 
 class SoftwareInventory(models.Model):
     equipment = models.ForeignKey(

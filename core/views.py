@@ -33,6 +33,8 @@ from .models import (
     EmailAccount,
     Equipment,
     SoftwareInventory,
+    next_equipment_tag_code,
+    resequence_equipment_tag_codes,
     Requisition,
     RequisitionQuote,
     AccessFolder,
@@ -55,7 +57,6 @@ from .network_inventory import (
     sync_network_inventory,
     format_inventory_run_stamp,
     upsert_inventory_from_payload,
-    _infer_tag_code_from_hostname,
 )
 
 logger = logging.getLogger(__name__)
@@ -914,6 +915,7 @@ class EquipamentosView(LoginRequiredMixin, TemplateView):
                 messages.error(request, 'Equipamento nao encontrado para exclusao.')
                 return self.get(request, *args, **kwargs)
             equipment_obj.delete()
+            resequence_equipment_tag_codes()
             messages.success(request, 'Equipamento excluido com sucesso.')
             return self.get(request, *args, **kwargs)
 
@@ -941,12 +943,9 @@ class EquipamentosView(LoginRequiredMixin, TemplateView):
             return self.get(request, *args, **kwargs)
 
         hostname = request.POST.get('hostname', '').strip()
-        tag_code = request.POST.get('tag_code', '').strip()
-        if not tag_code:
-            tag_code = _infer_tag_code_from_hostname(hostname)
 
         equipment_payload = {
-            'tag_code': tag_code,
+            'tag_code': '',
             'sector': request.POST.get('sector', '').strip(),
             'user': request.POST.get('user', '').strip(),
             'hostname': hostname,
@@ -972,11 +971,14 @@ class EquipamentosView(LoginRequiredMixin, TemplateView):
                 return self.get(request, *args, **kwargs)
             for field_name, field_value in equipment_payload.items():
                 setattr(equipment_obj, field_name, field_value)
+            equipment_obj.tag_code = (equipment_obj.tag_code or '').strip() or next_equipment_tag_code()
             equipment_obj.save()
+            resequence_equipment_tag_codes()
             messages.success(request, 'Equipamento atualizado com sucesso.')
             return self.get(request, *args, **kwargs)
 
         Equipment.objects.create(**equipment_payload)
+        resequence_equipment_tag_codes()
         messages.success(request, 'Equipamento cadastrado com sucesso.')
         return self.get(request, *args, **kwargs)
 
