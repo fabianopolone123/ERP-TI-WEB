@@ -1682,6 +1682,20 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
         ticket_ids = list({t.id for t in all_tickets if t and t.id})
         latest_action_by_ticket: dict[int, str] = {}
         if ticket_ids:
+            timeline_rows = (
+                TicketTimelineEvent.objects.filter(ticket_id__in=ticket_ids)
+                .exclude(note='')
+                .order_by('ticket_id', '-created_at', '-id')
+                .values('ticket_id', 'note')
+            )
+            for row in timeline_rows:
+                tid = row.get('ticket_id')
+                if tid in latest_action_by_ticket:
+                    continue
+                note = (row.get('note') or '').strip()
+                if note:
+                    latest_action_by_ticket[tid] = note
+
             logs = (
                 TicketWorkLog.objects.filter(ticket_id__in=ticket_ids)
                 .order_by('ticket_id', '-closed_at', '-id')
