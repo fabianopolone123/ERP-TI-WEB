@@ -3,6 +3,34 @@
 {% block title %}Equipamentos | ERP TI{% endblock %}
 
 {% block content %}
+<style data-equipamentos-responsive>
+    .equipments-table-wrap {
+        overflow: auto;
+        border: 1px solid #1f2a44;
+        border-radius: 10px;
+        background: #0c1527;
+        max-height: 62vh;
+    }
+    .equipments-table-wrap .data-table {
+        border: 0;
+        min-width: 1500px;
+        margin: 0;
+    }
+    .equipments-table-wrap thead th {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+    }
+    .equipments-table-wrap.is-compact .data-table th,
+    .equipments-table-wrap.is-compact .data-table td {
+        padding: 8px 9px;
+        font-size: 0.82rem;
+    }
+    .equipments-table-wrap.is-wide .data-table th,
+    .equipments-table-wrap.is-wide .data-table td {
+        padding: 11px 12px;
+    }
+</style>
 <div class="card">
     <div class="topbar">
         <div>
@@ -40,7 +68,7 @@
             />
         </div>
 
-        <div style="overflow-x: auto;">
+        <div class="equipments-table-wrap" data-equipment-table-wrap>
             <table class="data-table" data-table-name="equipamentos">
                 <thead>
                     <tr>
@@ -59,6 +87,7 @@
                         <th>MOD HD</th>
                         <th>Windows</th>
                         <th>Últ. inventário</th>
+                        <th>Acoes</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -232,7 +261,7 @@
             if (actionInput) actionInput.value = 'create';
             if (equipmentIdInput) equipmentIdInput.value = '';
             if (modalTitle) modalTitle.textContent = 'Novo equipamento';
-            if (submitBtn) submitBtn.textContent = 'Salvar';
+            if (submitBtn) submitBtn.textContent = 'Salvar alteracoes';
         };
         const openCreate = () => {
             resetCreate();
@@ -243,7 +272,7 @@
             if (actionInput) actionInput.value = 'update';
             if (equipmentIdInput) equipmentIdInput.value = btn.dataset.id || '';
             if (modalTitle) modalTitle.textContent = 'Editar equipamento';
-            if (submitBtn) submitBtn.textContent = 'Salvar altera??es';
+            if (submitBtn) submitBtn.textContent = 'Salvar alteracoes';
             if (fieldMap.tagCode) fieldMap.tagCode.value = btn.dataset.tagCode || '';
             if (fieldMap.hostname) fieldMap.hostname.value = btn.dataset.hostname || '';
             if (fieldMap.sector) fieldMap.sector.value = btn.dataset.sector || '';
@@ -266,6 +295,36 @@
         document.querySelectorAll('[data-edit-equipment]').forEach((btn) => {
             btn.addEventListener('click', () => openEdit(btn));
         });
+    })();
+</script>
+<script>
+    (function () {
+        const wrap = document.querySelector('[data-equipment-table-wrap]');
+        const table = document.querySelector('.data-table[data-table-name="equipamentos"]');
+        if (!wrap || !table) return;
+
+        const applyEquipmentViewportLayout = () => {
+            const vh = window.innerHeight || 900;
+            const vw = window.innerWidth || 1400;
+            const rect = wrap.getBoundingClientRect();
+            const availableHeight = Math.max(280, vh - rect.top - 22);
+            wrap.style.maxHeight = `${availableHeight}px`;
+
+            wrap.classList.toggle('is-compact', vw < 1600);
+            wrap.classList.toggle('is-wide', vw >= 1900);
+
+            if (vw < 1280) {
+                table.style.minWidth = '1420px';
+            } else if (vw < 1680) {
+                table.style.minWidth = '1540px';
+            } else {
+                table.style.minWidth = '1640px';
+            }
+        };
+
+        applyEquipmentViewportLayout();
+        window.addEventListener('resize', applyEquipmentViewportLayout);
+        document.addEventListener('tickets-updated', applyEquipmentViewportLayout);
     })();
 </script>
 <script>
