@@ -114,12 +114,26 @@
                         <th>MOD HD</th>
                         <th>Windows</th>
                         <th>Últ. inventário</th>
-                        <th>Acoes</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for item in equipments %}
-                        <tr data-row-edit-equipment>
+                        <tr data-row-edit-equipment
+                            data-id="{{ item.id }}"
+                            data-tag-code="{{ item.tag_code|default:''|escape }}"
+                            data-hostname="{{ item.hostname|default:''|escape }}"
+                            data-sector="{{ item.sector|default:''|escape }}"
+                            data-user="{{ item.user|default:''|escape }}"
+                            data-equipment="{{ item.equipment|default:''|escape }}"
+                            data-model="{{ item.model|default:''|escape }}"
+                            data-brand="{{ item.brand|default:''|escape }}"
+                            data-serial="{{ item.serial|default:''|escape }}"
+                            data-memory="{{ item.memory|default:''|escape }}"
+                            data-processor="{{ item.processor|default:''|escape }}"
+                            data-generation="{{ item.generation|default:''|escape }}"
+                            data-hd="{{ item.hd|default:''|escape }}"
+                            data-mod-hd="{{ item.mod_hd|default:''|escape }}"
+                            data-windows="{{ item.windows|default:''|escape }}">
                             <td data-sort-value="{{ item.tag_code|default:'' }}">{{ item.tag_code|default:"-" }}</td>
                             <td>{{ item.hostname|default:"-" }}</td>
                             <td>{{ item.sector }}</td>
@@ -135,31 +149,10 @@
                             <td>{{ item.mod_hd }}</td>
                             <td>{{ item.windows }}</td>
                             <td>{% if item.last_inventory_at %}{{ item.last_inventory_at|date:"d/m/Y H:i" }}{% else %}-{% endif %}</td>
-                            <td>
-                                <button
-                                    type="button"
-                                    data-edit-equipment
-                                    data-id="{{ item.id }}"
-                                    data-tag-code="{{ item.tag_code|default:''|escape }}"
-                                    data-hostname="{{ item.hostname|default:''|escape }}"
-                                    data-sector="{{ item.sector|default:''|escape }}"
-                                    data-user="{{ item.user|default:''|escape }}"
-                                    data-equipment="{{ item.equipment|default:''|escape }}"
-                                    data-model="{{ item.model|default:''|escape }}"
-                                    data-brand="{{ item.brand|default:''|escape }}"
-                                    data-serial="{{ item.serial|default:''|escape }}"
-                                    data-memory="{{ item.memory|default:''|escape }}"
-                                    data-processor="{{ item.processor|default:''|escape }}"
-                                    data-generation="{{ item.generation|default:''|escape }}"
-                                    data-hd="{{ item.hd|default:''|escape }}"
-                                    data-mod-hd="{{ item.mod_hd|default:''|escape }}"
-                                    data-windows="{{ item.windows|default:''|escape }}"
-                                >Editar</button>
-                            </td>
                         </tr>
                     {% empty %}
                         <tr>
-                            <td colspan="16" class="muted">Nenhum equipamento cadastrado.</td>
+                            <td colspan="15" class="muted">Nenhum equipamento cadastrado.</td>
                         </tr>
                     {% endfor %}
                 </tbody>
@@ -319,18 +312,10 @@
 
         openBtn.addEventListener('click', openCreate);
         closeEls.forEach((el) => el.addEventListener('click', close));
-        const editButtons = Array.from(document.querySelectorAll('[data-edit-equipment]'));
-        editButtons.forEach((btn) => {
-            btn.addEventListener('click', (event) => {
-                event.stopPropagation();
-                openEdit(btn);
-            });
-        });
         document.querySelectorAll('tr[data-row-edit-equipment]').forEach((row) => {
             row.addEventListener('click', (event) => {
                 if (event.target.closest('button, a, input, select, textarea, label')) return;
-                const btn = row.querySelector('[data-edit-equipment]');
-                if (btn) openEdit(btn);
+                openEdit(row);
             });
         });
     })();
