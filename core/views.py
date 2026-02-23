@@ -7,6 +7,7 @@ from decimal import Decimal, InvalidOperation
 from django.conf import settings
 from django.contrib import messages
 from django.core.mail import send_mail
+from django.db import transaction
 from django.db.models import Count, Q, Case, When, Value, IntegerField
 from django.db.models.functions import TruncDate
 from django.shortcuts import redirect
@@ -912,6 +913,82 @@ class EquipamentosView(LoginRequiredMixin, TemplateView):
             messages.error(request, 'Exclusao de equipamentos bloqueada: a etiqueta nao pode ser removida.')
             return self.get(request, *args, **kwargs)
 
+        if action == 'reconcile_inventory':
+            pending_id = (request.POST.get('pending_equipment_id') or '').strip()
+            target_tag = (request.POST.get('target_tag_code') or '').strip()
+            pending = Equipment.objects.filter(id=pending_id).first()
+            if not pending:
+                messages.error(request, 'Equipamento pendente n?o encontrado.')
+                return self.get(request, *args, **kwargs)
+            if not target_tag:
+                messages.error(request, 'Informe a etiqueta correta para vincular o invent?rio.')
+                return self.get(request, *args, **kwargs)
+
+            if target_tag == (pending.tag_code or '').strip():
+                pending.needs_reconciliation = False
+                pending.save(update_fields=['needs_reconciliation'])
+                messages.success(request, f'Invent?rio da etiqueta {target_tag} confirmado.')
+                return self.get(request, *args, **kwargs)
+
+            target = Equipment.objects.filter(tag_code=target_tag).exclude(id=pending.id).first()
+            if not target:
+                messages.error(request, f'Etiqueta {target_tag} n?o encontrada para vincula??o.')
+                return self.get(request, *args, **kwargs)
+
+            def _split_lines(raw_text: str) -> list[str]:
+                items: list[str] = []
+                for line in (raw_text or '').replace(';', '\n').splitlines():
+                    token = line.strip()
+                    if token and token not in items:
+                        items.append(token)
+                return items
+
+            def _merge_lines(a: str, b: str) -> str:
+                merged: list[str] = []
+                for token in _split_lines(a) + _split_lines(b):
+                    if token and token not in merged:
+                        merged.append(token)
+                return '\n'.join(merged)
+
+            with transaction.atomic():
+                old_target_hostname = (target.hostname or '').strip()
+                pending_hostname = (pending.hostname or '').strip()
+
+                # campos t?cnicos e de invent?rio v?m do pendente (GPO)
+                for field_name in [
+                    'hostname', 'sector', 'user', 'model', 'brand', 'serial',
+                    'bios_uuid', 'bios_serial', 'baseboard_serial',
+                    'memory', 'processor', 'generation', 'hd', 'mod_hd', 'windows',
+                    'inventory_source', 'last_inventory_at',
+                ]:
+                    value = getattr(pending, field_name)
+                    if value not in (None, ''):
+                        setattr(target, field_name, value)
+
+                if not (target.equipment or '').strip() and (pending.equipment or '').strip():
+                    target.equipment = pending.equipment
+
+                target.mac_addresses = _merge_lines(target.mac_addresses, pending.mac_addresses)
+                target.hostname_aliases = _merge_lines(target.hostname_aliases, pending.hostname_aliases)
+                if old_target_hostname and old_target_hostname != (target.hostname or '').strip():
+                    target.hostname_aliases = _merge_lines(target.hostname_aliases, old_target_hostname)
+                if pending_hostname and pending_hostname != (target.hostname or '').strip():
+                    target.hostname_aliases = _merge_lines(target.hostname_aliases, pending_hostname)
+                target.needs_reconciliation = False
+                target.save()
+
+                SoftwareInventory.objects.filter(equipment=target).delete()
+                SoftwareInventory.objects.filter(equipment=pending).update(
+                    equipment=target,
+                    hostname=target.hostname or pending.hostname,
+                    user=target.user or pending.user,
+                    sector=target.sector or pending.sector,
+                )
+                pending.delete()
+
+            messages.success(request, f'Invent?rio vinculado ? etiqueta {target_tag} com sucesso.')
+            return self.get(request, *args, **kwargs)
+
         if action == 'sync_inventory':
             hosts_text = (request.POST.get('inventory_hosts') or '').strip()
             hosts = parse_hosts_text(hosts_text) or parse_hosts_text(_inventory_default_hosts())
@@ -986,6 +1063,10 @@ class EquipamentosView(LoginRequiredMixin, TemplateView):
         context['inventory_default_hosts'] = _inventory_default_hosts()
         context['inventory_timeout_seconds'] = int(getattr(settings, 'INVENTORY_POWERSHELL_TIMEOUT', 120) or 120)
         context['next_equipment_tag_preview'] = next_equipment_tag_code() if is_ti else ''
+        context['equipment_reconciliation_pending'] = (
+            Equipment.objects.filter(needs_reconciliation=True).order_by('-last_inventory_at', '-created_at')
+            if is_ti else Equipment.objects.none()
+        )
         return context
 
 

@@ -107,6 +107,56 @@
             />
         </div>
 
+        <div class="card" style="padding: 14px; margin-bottom: 12px; border: 1px solid #43331a; background: #121826;">
+            <div class="topbar" style="margin-bottom: 8px; align-items: flex-start;">
+                <div>
+                    <h3 style="margin: 0 0 4px; font-size: 1rem;">Concilia??o de invent?rio (pendentes)</h3>
+                    <div class="muted" style="font-size: 0.85rem;">Vincule m?quinas da GPO ? etiqueta correta sem perder hist?rico e softwares.</div>
+                </div>
+                <div class="muted" style="font-size: 0.86rem;">Pendentes: <strong>{{ equipment_reconciliation_pending|length }}</strong></div>
+            </div>
+            {% if equipment_reconciliation_pending %}
+                <div style="overflow:auto; border:1px solid #2a364f; border-radius:8px;">
+                    <table class="data-table" style="min-width: 980px; margin:0; border:0; border-radius:0; overflow:visible;">
+                        <thead>
+                            <tr>
+                                <th>Etiqueta</th>
+                                <th>Host (GPO)</th>
+                                <th>S?rie/BIOS</th>
+                                <th>UUID</th>
+                                <th>MAC</th>
+                                <th>?lt. invent?rio</th>
+                                <th>Vincular ? etiqueta</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for p in equipment_reconciliation_pending %}
+                                <tr>
+                                    <td>{{ p.tag_code|default:"-" }}</td>
+                                    <td>{{ p.hostname|default:"-" }}</td>
+                                    <td>{{ p.bios_serial|default:p.serial|default:"-" }}</td>
+                                    <td title="{{ p.bios_uuid }}">{{ p.bios_uuid|default:"-" }}</td>
+                                    <td title="{{ p.mac_addresses }}">{% if p.mac_addresses %}{{ p.mac_addresses|linebreaksbr }}{% else %}-{% endif %}</td>
+                                    <td>{% if p.last_inventory_at %}{{ p.last_inventory_at|date:"d/m/Y H:i" }}{% else %}-{% endif %}</td>
+                                    <td>
+                                        <form method="post" class="inline-form" data-preserve-equipment-scroll style="display:flex; gap:8px; align-items:center;">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="action" value="reconcile_inventory" />
+                                            <input type="hidden" name="pending_equipment_id" value="{{ p.id }}" />
+                                            <input type="text" name="target_tag_code" value="{{ p.tag_code }}" placeholder="Etiqueta correta" style="width: 120px; margin:0;" />
+                                            <button type="submit">Vincular</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="muted" style="font-size:0.9rem;">Nenhum invent?rio pendente de concilia??o.</div>
+            {% endif %}
+        </div>
+
         <div class="equipments-table-wrap" data-equipment-table-wrap>
             <table class="data-table" data-table-name="equipamentos">
                 <thead>
@@ -189,7 +239,7 @@
                 <h3 data-equipment-modal-title>Novo equipamento</h3>
                 <button type="button" data-close-equipment>Fechar</button>
             </div>
-            <form method="post" data-equipment-form data-next-tag="{{ next_equipment_tag_preview|default:'' }}">
+            <form method="post" data-equipment-form data-preserve-equipment-scroll data-next-tag="{{ next_equipment_tag_preview|default:'' }}">
                 <input type="hidden" name="action" value="create" data-equipment-action />
                 <input type="hidden" name="equipment_id" value="" data-equipment-id />
                 {% csrf_token %}
@@ -281,7 +331,7 @@
         const modal = document.querySelector('[data-equipment-modal]');
         const openBtn = document.querySelector('[data-open-equipment]');
         const closeEls = document.querySelectorAll('[data-close-equipment]');
-        const form = document.querySelector('[data-equipment-form]');
+        const forms = Array.from(document.querySelectorAll('form[data-preserve-equipment-scroll]'));
         const modalTitle = document.querySelector('[data-equipment-modal-title]');
         const actionInput = document.querySelector('[data-equipment-action]');
         const equipmentIdInput = document.querySelector('[data-equipment-id]');
@@ -406,9 +456,7 @@
             }
         };
 
-        if (form) {
-            form.addEventListener('submit', saveScrollState);
-        }
+        forms.forEach((form) => form.addEventListener('submit', saveScrollState));
         window.__saveEquipamentosScrollState = saveScrollState;
         window.addEventListener('beforeunload', saveScrollState);
         restoreScrollState();

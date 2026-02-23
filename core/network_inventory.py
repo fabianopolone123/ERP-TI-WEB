@@ -446,6 +446,7 @@ def upsert_inventory_from_payload(payload: dict[str, Any], source: str = 'rede')
 
     if is_new_equipment or not (equipment.tag_code or '').strip():
         equipment.tag_code = next_equipment_tag_code()
+    equipment.needs_reconciliation = bool(source == 'agent' and is_new_equipment)
     old_hostname = equipment.hostname or ''
     equipment.user = user_name or equipment.user
     equipment.sector = sector or equipment.sector

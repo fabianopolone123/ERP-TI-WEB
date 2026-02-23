@@ -69,6 +69,7 @@ class Equipment(models.Model):
     baseboard_serial = models.CharField(max_length=120, blank=True, default='')
     mac_addresses = models.TextField(blank=True, default='')
     hostname_aliases = models.TextField(blank=True, default='')
+    needs_reconciliation = models.BooleanField(default=False)
     memory = models.CharField(max_length=60, blank=True, default='')
     processor = models.CharField(max_length=120, blank=True, default='')
     generation = models.CharField(max_length=60, blank=True, default='')
