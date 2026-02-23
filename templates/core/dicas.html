@@ -26,7 +26,7 @@
             <div class="topbar" style="margin-bottom: 8px;">
                 <h3 style="margin: 0;">Nova dica</h3>
             </div>
-            <form method="post">
+            <form method="post" enctype="multipart/form-data">
                 {% csrf_token %}
                 <input type="hidden" name="action" value="create" />
                 <div class="form-row">
@@ -47,6 +47,12 @@
                     <div style="flex: 1;">
                         <label for="id_dica_content">Como resolver / instrução</label>
                         <textarea id="id_dica_content" name="content" rows="5" required placeholder="Descreva o passo a passo..."></textarea>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div style="max-width: 420px;">
+                        <label for="id_dica_attachment">Anexo (opcional)</label>
+                        <input id="id_dica_attachment" name="attachment" type="file" />
                     </div>
                 </div>
                 <button type="submit">Salvar dica</button>
@@ -73,6 +79,7 @@
                         <th>Instrução</th>
                         <th>Autor</th>
                         <th>Atualizado em</th>
+                        <th>Anexo</th>
                         <th>Ações</th>
                     </tr>
                 </thead>
@@ -86,6 +93,9 @@
                             <td>{% if item.created_by %}{{ item.created_by.username }}{% else %}-{% endif %}</td>
                             <td>{{ item.updated_at|date:"d/m/Y H:i" }}</td>
                             <td>
+                                {% if item.attachment %}<a href="{{ item.attachment.url }}" target="_blank" rel="noopener noreferrer">Abrir</a>{% else %}<span class="muted">-</span>{% endif %}
+                            </td>
+                            <td>
                                 <form method="post" onsubmit="return confirm('Remover esta dica?');">
                                     {% csrf_token %}
                                     <input type="hidden" name="action" value="delete" />
@@ -96,7 +106,7 @@
                         </tr>
                     {% empty %}
                         <tr>
-                            <td colspan="7" class="muted">Nenhuma dica cadastrada.</td>
+                            <td colspan="8" class="muted">Nenhuma dica cadastrada.</td>
                         </tr>
                     {% endfor %}
                 </tbody>

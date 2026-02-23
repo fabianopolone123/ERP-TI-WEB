@@ -201,6 +201,7 @@ class Dica(models.Model):
     category = models.CharField(max_length=20, choices=Category.choices, default=Category.GERAL)
     title = models.CharField(max_length=200)
     content = models.TextField()
+    attachment = models.FileField(upload_to='dicas/', null=True, blank=True)
     created_by = models.ForeignKey(
         'auth.User',
         null=True,

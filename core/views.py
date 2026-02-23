@@ -1298,12 +1298,15 @@ class DicasView(LoginRequiredMixin, TemplateView):
             if not dica:
                 messages.error(request, 'Dica não encontrada.')
                 return redirect('dicas')
+            if dica.attachment:
+                dica.attachment.delete(save=False)
             dica.delete()
             messages.success(request, 'Dica removida com sucesso.')
             return redirect('dicas')
 
         title = (request.POST.get('title') or '').strip()
         content = (request.POST.get('content') or '').strip()
+        attachment = request.FILES.get('attachment')
         category = (request.POST.get('category') or Dica.Category.GERAL).strip()
         valid_categories = {choice[0] for choice in Dica.Category.choices}
         if category not in valid_categories:
@@ -1320,6 +1323,7 @@ class DicasView(LoginRequiredMixin, TemplateView):
             category=category,
             title=title,
             content=content,
+            attachment=attachment,
             created_by=request.user,
         )
         messages.success(request, 'Dica cadastrada com sucesso.')
