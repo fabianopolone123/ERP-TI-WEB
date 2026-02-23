@@ -15,6 +15,10 @@
         border: 0;
         min-width: 1500px;
         margin: 0;
+        border-collapse: separate;
+        border-spacing: 0;
+        overflow: visible;
+        border-radius: 0;
     }
     .equipments-table-wrap thead {
         position: sticky;
@@ -27,6 +31,7 @@
         z-index: 5;
         background: #14304f;
         box-shadow: inset 0 -1px 0 rgba(255,255,255,0.06);
+        background-clip: padding-box;
     }
     .equipments-table-wrap.is-compact .data-table th,
     .equipments-table-wrap.is-compact .data-table td {
