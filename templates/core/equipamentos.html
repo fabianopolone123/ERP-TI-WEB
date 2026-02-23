@@ -321,10 +321,12 @@
             if (tagDisplay) tagDisplay.textContent = nextTagPreview || '-';
         };
         const openCreate = () => {
+            if (typeof window.__saveEquipamentosScrollState === 'function') window.__saveEquipamentosScrollState();
             resetCreate();
             open();
         };
         const openEdit = (btn) => {
+            if (typeof window.__saveEquipamentosScrollState === 'function') window.__saveEquipamentosScrollState();
             resetCreate();
             if (actionInput) actionInput.value = 'update';
             if (equipmentIdInput) equipmentIdInput.value = btn.dataset.id || '';
@@ -407,6 +409,7 @@
         if (form) {
             form.addEventListener('submit', saveScrollState);
         }
+        window.__saveEquipamentosScrollState = saveScrollState;
         window.addEventListener('beforeunload', saveScrollState);
         restoreScrollState();
     })();
