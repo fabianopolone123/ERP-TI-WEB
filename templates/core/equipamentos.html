@@ -189,14 +189,15 @@
                 <h3 data-equipment-modal-title>Novo equipamento</h3>
                 <button type="button" data-close-equipment>Fechar</button>
             </div>
-            <form method="post" data-equipment-form>
+            <form method="post" data-equipment-form data-next-tag="{{ next_equipment_tag_preview|default:'' }}">
                 <input type="hidden" name="action" value="create" data-equipment-action />
                 <input type="hidden" name="equipment_id" value="" data-equipment-id />
                 {% csrf_token %}
                 <div class="form-row">
                     <div>
-                        <label for="id_tag_code">Etiqueta (sequencial)</label>
-                        <input id="id_tag_code" name="tag_code" type="text" placeholder="Gerada automaticamente" readonly />
+                        <label>Etiqueta (sequencial)</label>
+                        <input id="id_tag_code" name="tag_code" type="hidden" />
+                        <div class="muted" data-equipment-tag-display style="margin-top: 6px; padding: 10px 12px; border: 1px solid #334155; border-radius: 8px; background: #0b1324; font-weight: 700; color: #cbd5f5;">{{ next_equipment_tag_preview|default:"-" }}</div>
                     </div>
                     <div>
                         <label for="id_hostname">Host</label>
@@ -307,6 +308,8 @@
         };
         const submitBtn = form.querySelector('button[type="submit"]');
         const deleteBtn = form.querySelector('[data-delete-equipment]');
+        const tagDisplay = form.querySelector('[data-equipment-tag-display]');
+        const nextTagPreview = (form.getAttribute('data-next-tag') || '').trim();
 
         const open = () => { modal.hidden = false; };
         const close = () => { modal.hidden = true; };
@@ -317,6 +320,8 @@
             if (modalTitle) modalTitle.textContent = 'Novo equipamento';
             if (submitBtn) submitBtn.textContent = 'Salvar alteracoes';
             if (deleteBtn) deleteBtn.hidden = true;
+            if (fieldMap.tagCode) fieldMap.tagCode.value = '';
+            if (tagDisplay) tagDisplay.textContent = nextTagPreview || '-';
         };
         const openCreate = () => {
             resetCreate();
@@ -330,6 +335,7 @@
             if (submitBtn) submitBtn.textContent = 'Salvar alteracoes';
             if (deleteBtn) deleteBtn.hidden = false;
             if (fieldMap.tagCode) fieldMap.tagCode.value = btn.dataset.tagCode || '';
+            if (tagDisplay) tagDisplay.textContent = (btn.dataset.tagCode || '-');
             if (fieldMap.hostname) fieldMap.hostname.value = btn.dataset.hostname || '';
             if (fieldMap.sector) fieldMap.sector.value = btn.dataset.sector || '';
             if (fieldMap.user) fieldMap.user.value = btn.dataset.user || '';

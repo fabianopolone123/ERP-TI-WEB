@@ -988,6 +988,7 @@ class EquipamentosView(LoginRequiredMixin, TemplateView):
         context['equipment_total_count'] = equipments_qs.count()
         context['inventory_default_hosts'] = _inventory_default_hosts()
         context['inventory_timeout_seconds'] = int(getattr(settings, 'INVENTORY_POWERSHELL_TIMEOUT', 120) or 120)
+        context['next_equipment_tag_preview'] = next_equipment_tag_code() if is_ti else ''
         return context
 
 
