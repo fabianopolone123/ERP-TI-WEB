@@ -932,6 +932,7 @@
         let sourceColumn = null;
         let draggingMulti = false;
         let moveInFlight = false;
+        window.__ticketMoveInFlight = false;
         const closeModal = document.querySelector('[data-close-ticket-modal]');
         const closeForm = document.querySelector('[data-close-ticket-form]');
         const closeTitle = document.querySelector('[data-close-ticket-title]');
@@ -1169,6 +1170,7 @@
                     }
 
                     moveInFlight = true;
+                    window.__ticketMoveInFlight = true;
                     window.__ticketDragInProgress = true;
                     try {
                         const response = await fetch('{% url "chamados_mover" %}', {
@@ -1210,6 +1212,7 @@
                         return;
                     } finally {
                         moveInFlight = false;
+                        window.__ticketMoveInFlight = false;
                         window.__ticketDragInProgress = false;
                     }
                 }
@@ -1282,6 +1285,15 @@
                                 card.remove();
                             }
                         });
+                    }
+                    if (target === 'fechado') {
+                        movedCard.dataset.ticketStatus = 'fechado';
+                        movedCard.dataset.cycleRunning = '0';
+                        movedCard.classList.remove('playing');
+                    } else if (target.startsWith('user_')) {
+                        movedCard.dataset.ticketStatus = 'em_atendimento';
+                    } else if (target === 'novo') {
+                        movedCard.dataset.ticketStatus = 'pendente';
                     }
                     if (target.startsWith('user_')) {
                         ensureTimerControls(movedCard);
@@ -2137,7 +2149,7 @@
             const hasOpenModal = () =>
                 Array.from(document.querySelectorAll('.modal')).some((modal) => !modal.hidden);
             const isDraggingTicket = () =>
-                !!window.__ticketDragInProgress || document.querySelector('.ticket-card.dragging');
+                !!window.__ticketDragInProgress || !!window.__ticketMoveInFlight || document.querySelector('.ticket-card.dragging');
 
             let timerId = null;
             const restartTimer = () => {
