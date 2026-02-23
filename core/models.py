@@ -111,8 +111,7 @@ def next_equipment_tag_code() -> str:
         if number != expected:
             break
         expected += 1
-    width = max(3, len(str(max(expected, len(numbers)))))
-    return _format_equipment_tag_number(expected, width=width)
+    return str(expected)
 
 
 @transaction.atomic

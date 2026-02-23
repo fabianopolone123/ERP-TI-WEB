@@ -34,7 +34,6 @@ from .models import (
     Equipment,
     SoftwareInventory,
     next_equipment_tag_code,
-    resequence_equipment_tag_codes,
     Requisition,
     RequisitionQuote,
     AccessFolder,
@@ -915,7 +914,6 @@ class EquipamentosView(LoginRequiredMixin, TemplateView):
                 messages.error(request, 'Equipamento nao encontrado para exclusao.')
                 return self.get(request, *args, **kwargs)
             equipment_obj.delete()
-            resequence_equipment_tag_codes()
             messages.success(request, 'Equipamento excluido com sucesso.')
             return self.get(request, *args, **kwargs)
 
@@ -973,12 +971,10 @@ class EquipamentosView(LoginRequiredMixin, TemplateView):
                 setattr(equipment_obj, field_name, field_value)
             equipment_obj.tag_code = (equipment_obj.tag_code or '').strip() or next_equipment_tag_code()
             equipment_obj.save()
-            resequence_equipment_tag_codes()
             messages.success(request, 'Equipamento atualizado com sucesso.')
             return self.get(request, *args, **kwargs)
 
         Equipment.objects.create(**equipment_payload)
-        resequence_equipment_tag_codes()
         messages.success(request, 'Equipamento cadastrado com sucesso.')
         return self.get(request, *args, **kwargs)
 
