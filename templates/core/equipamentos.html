@@ -30,6 +30,33 @@
     .equipments-table-wrap.is-wide .data-table td {
         padding: 11px 12px;
     }
+    .equipments-table-wrap .data-table tbody tr[data-row-edit-equipment] {
+        cursor: pointer;
+    }
+    .equipments-table-wrap .data-table tbody tr[data-row-edit-equipment]:hover {
+        outline: 1px solid rgba(59, 130, 246, 0.35);
+        outline-offset: -1px;
+    }
+    .equipments-table-wrap .col-serial,
+    .equipments-table-wrap .col-memory {
+        width: 110px;
+        max-width: 110px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .equipments-table-wrap .col-serial {
+        width: 140px;
+        max-width: 140px;
+    }
+    .equipments-table-wrap.is-compact .col-serial {
+        width: 120px;
+        max-width: 120px;
+    }
+    .equipments-table-wrap.is-compact .col-memory {
+        width: 90px;
+        max-width: 90px;
+    }
 </style>
 <div class="card">
     <div class="topbar">
@@ -92,7 +119,7 @@
                 </thead>
                 <tbody>
                     {% for item in equipments %}
-                        <tr>
+                        <tr data-row-edit-equipment>
                             <td data-sort-value="{{ item.tag_code|default:'' }}">{{ item.tag_code|default:"-" }}</td>
                             <td>{{ item.hostname|default:"-" }}</td>
                             <td>{{ item.sector }}</td>
@@ -100,8 +127,8 @@
                             <td>{{ item.equipment }}</td>
                             <td>{{ item.model }}</td>
                             <td>{{ item.brand }}</td>
-                            <td>{{ item.serial }}</td>
-                            <td>{{ item.memory }}</td>
+                            <td class="col-serial" title="{{ item.serial }}">{{ item.serial }}</td>
+                            <td class="col-memory" title="{{ item.memory }}">{{ item.memory }}</td>
                             <td>{{ item.processor }}</td>
                             <td>{{ item.generation }}</td>
                             <td>{{ item.hd }}</td>
@@ -292,8 +319,19 @@
 
         openBtn.addEventListener('click', openCreate);
         closeEls.forEach((el) => el.addEventListener('click', close));
-        document.querySelectorAll('[data-edit-equipment]').forEach((btn) => {
-            btn.addEventListener('click', () => openEdit(btn));
+        const editButtons = Array.from(document.querySelectorAll('[data-edit-equipment]'));
+        editButtons.forEach((btn) => {
+            btn.addEventListener('click', (event) => {
+                event.stopPropagation();
+                openEdit(btn);
+            });
+        });
+        document.querySelectorAll('tr[data-row-edit-equipment]').forEach((row) => {
+            row.addEventListener('click', (event) => {
+                if (event.target.closest('button, a, input, select, textarea, label')) return;
+                const btn = row.querySelector('[data-edit-equipment]');
+                if (btn) openEdit(btn);
+            });
         });
     })();
 </script>
