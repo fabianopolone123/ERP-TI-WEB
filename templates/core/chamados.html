@@ -422,7 +422,7 @@
                                 </span>
                             </div>
                             <div class="ticket-meta" style="margin-top: 6px;">
-                                <span style="display:block; width:100%; color:#93a4bf; font-size:0.76rem; line-height:1.25; white-space:normal; overflow:visible; text-overflow:clip;">Fechado em: {{ ticket_meta|get_item:ticket.id|default:""|get_item:'closed_at_text'|default:"-" }}</span>
+                                <span style="display:block; width:100%; color:#93a4bf; font-size:0.76rem; line-height:1.25; white-space:normal; overflow:visible; text-overflow:clip;">Fechado por {{ ticket_meta|get_item:ticket.id|default:""|get_item:'closed_by_text'|default:"-" }} em {{ ticket_meta|get_item:ticket.id|default:""|get_item:'closed_at_text'|default:"-" }}</span>
                             </div>
                         </div>
                     {% endfor %}

@@ -1698,6 +1698,7 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
         latest_worklog_action_by_ticket: dict[int, str] = {}
         latest_timeline_note_by_ticket: dict[int, str] = {}
         latest_closed_at_by_ticket: dict[int, datetime] = {}
+        latest_closed_by_name_by_ticket: dict[int, str] = {}
         if ticket_ids:
             timeline_rows = (
                 TicketTimelineEvent.objects.filter(ticket_id__in=ticket_ids)
@@ -1727,7 +1728,7 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
             closed_rows = (
                 TicketTimelineEvent.objects.filter(ticket_id__in=ticket_ids, to_status=Ticket.Status.FECHADO)
                 .order_by('ticket_id', '-created_at', '-id')
-                .values('ticket_id', 'created_at')
+                .values('ticket_id', 'created_at', 'actor_ti__full_name', 'actor_user__username')
             )
             for row in closed_rows:
                 tid = row.get('ticket_id')
@@ -1736,6 +1737,9 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
                 closed_at = row.get('created_at')
                 if closed_at:
                     latest_closed_at_by_ticket[tid] = closed_at
+                actor_name = (row.get('actor_ti__full_name') or row.get('actor_user__username') or '').strip()
+                if actor_name:
+                    latest_closed_by_name_by_ticket[tid] = actor_name
         usernames = {t.created_by.username for t in all_tickets if t.created_by}
         erp_users = ERPUser.objects.filter(username__in=list(usernames))
         erp_map = {u.username.lower(): u for u in erp_users}
@@ -1754,6 +1758,7 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
                 'last_action_text': latest_worklog_action_by_ticket.get(ticket.id, ''),
                 'last_queue_action_text': latest_timeline_note_by_ticket.get(ticket.id, '') or latest_worklog_action_by_ticket.get(ticket.id, ''),
                 'closed_at_text': timezone.localtime(latest_closed_at_by_ticket.get(ticket.id) or ticket.updated_at).strftime('%d/%m/%Y %H:%M') if (latest_closed_at_by_ticket.get(ticket.id) or ticket.updated_at) else '',
+                'closed_by_text': latest_closed_by_name_by_ticket.get(ticket.id, ''),
             }
         context['ticket_meta'] = ticket_meta
         context['ticket_cycle_map'] = ticket_cycle_map
