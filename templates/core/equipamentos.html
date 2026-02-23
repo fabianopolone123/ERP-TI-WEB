@@ -362,6 +362,57 @@
 </script>
 <script>
     (function () {
+        const form = document.querySelector('[data-equipment-form]');
+        const wrap = document.querySelector('[data-equipment-table-wrap]');
+        const storageKey = `equipamentos-scroll:${window.location.pathname}`;
+
+        const saveScrollState = () => {
+            try {
+                const state = {
+                    pageX: window.scrollX || 0,
+                    pageY: window.scrollY || 0,
+                    wrapLeft: wrap ? wrap.scrollLeft : 0,
+                    wrapTop: wrap ? wrap.scrollTop : 0,
+                    ts: Date.now(),
+                };
+                sessionStorage.setItem(storageKey, JSON.stringify(state));
+            } catch (err) {
+                // ignore storage errors
+            }
+        };
+
+        const restoreScrollState = () => {
+            try {
+                const raw = sessionStorage.getItem(storageKey);
+                if (!raw) return;
+                const state = JSON.parse(raw);
+                if (!state || typeof state !== 'object') return;
+                const apply = () => {
+                    if (wrap) {
+                        wrap.scrollLeft = Number(state.wrapLeft || 0);
+                        wrap.scrollTop = Number(state.wrapTop || 0);
+                    }
+                    window.scrollTo(Number(state.pageX || 0), Number(state.pageY || 0));
+                };
+                window.requestAnimationFrame(() => {
+                    apply();
+                    window.setTimeout(apply, 120);
+                });
+                sessionStorage.removeItem(storageKey);
+            } catch (err) {
+                // ignore storage errors
+            }
+        };
+
+        if (form) {
+            form.addEventListener('submit', saveScrollState);
+        }
+        window.addEventListener('beforeunload', saveScrollState);
+        restoreScrollState();
+    })();
+</script>
+<script>
+    (function () {
         const wrap = document.querySelector('[data-equipment-table-wrap]');
         const table = document.querySelector('.data-table[data-table-name="equipamentos"]');
         if (!wrap || !table) return;
