@@ -632,9 +632,8 @@ class DashboardView(LoginRequiredMixin, TemplateView):
     template_name = 'core/dashboard.html'
 
     def get(self, request, *args, **kwargs):
-        if not is_ti_user(request):
-            return redirect('chamados')
-        return super().get(request, *args, **kwargs)
+        # A dashboard raiz ficou apenas como fallback; usuarios entram direto em Chamados.
+        return redirect('chamados')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -2738,6 +2737,7 @@ def email_templates_update(request):
     template.save()
     messages.success(request, 'Templates de e-mail atualizados.')
     return redirect('chamados')
+
 
 
 
