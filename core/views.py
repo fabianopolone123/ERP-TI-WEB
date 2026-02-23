@@ -1680,7 +1680,8 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
             + list(in_progress_tickets)
         )
         ticket_ids = list({t.id for t in all_tickets if t and t.id})
-        latest_action_by_ticket: dict[int, str] = {}
+        latest_worklog_action_by_ticket: dict[int, str] = {}
+        latest_timeline_note_by_ticket: dict[int, str] = {}
         if ticket_ids:
             timeline_rows = (
                 TicketTimelineEvent.objects.filter(ticket_id__in=ticket_ids)
@@ -1690,11 +1691,11 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
             )
             for row in timeline_rows:
                 tid = row.get('ticket_id')
-                if tid in latest_action_by_ticket:
+                if tid in latest_timeline_note_by_ticket:
                     continue
                 note = (row.get('note') or '').strip()
                 if note:
-                    latest_action_by_ticket[tid] = note
+                    latest_timeline_note_by_ticket[tid] = note
 
             logs = (
                 TicketWorkLog.objects.filter(ticket_id__in=ticket_ids)
@@ -1703,9 +1704,9 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
             )
             for row in logs:
                 tid = row.get('ticket_id')
-                if tid in latest_action_by_ticket:
+                if tid in latest_worklog_action_by_ticket:
                     continue
-                latest_action_by_ticket[tid] = (row.get('action_text') or '').strip()
+                latest_worklog_action_by_ticket[tid] = (row.get('action_text') or '').strip()
         usernames = {t.created_by.username for t in all_tickets if t.created_by}
         erp_users = ERPUser.objects.filter(username__in=list(usernames))
         erp_map = {u.username.lower(): u for u in erp_users}
@@ -1721,7 +1722,8 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
                 'description': ticket.description or '',
                 'is_multi_attendant': ticket.id in multi_assigned_ticket_ids,
                 'failure_type': ticket.last_failure_type or '',
-                'last_action_text': latest_action_by_ticket.get(ticket.id, ''),
+                'last_action_text': latest_worklog_action_by_ticket.get(ticket.id, ''),
+                'last_queue_action_text': latest_timeline_note_by_ticket.get(ticket.id, '') or latest_worklog_action_by_ticket.get(ticket.id, ''),
             }
         context['ticket_meta'] = ticket_meta
         context['ticket_cycle_map'] = ticket_cycle_map
