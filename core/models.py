@@ -68,6 +68,8 @@ class Equipment(models.Model):
     hd = models.CharField(max_length=120, blank=True, default='')
     mod_hd = models.CharField(max_length=120, blank=True, default='')
     windows = models.CharField(max_length=120, blank=True, default='')
+    alimentacao = models.CharField(max_length=120, blank=True, default='')
+    observacao = models.TextField(blank=True, default='')
     inventory_source = models.CharField(max_length=40, blank=True, default='')
     last_inventory_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

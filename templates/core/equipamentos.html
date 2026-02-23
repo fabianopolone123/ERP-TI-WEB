@@ -113,6 +113,8 @@
                         <th>HD</th>
                         <th>MOD HD</th>
                         <th>Windows</th>
+                        <th>Alimentacao</th>
+                        <th>Observacao</th>
                         <th>Últ. inventário</th>
                     </tr>
                 </thead>
@@ -133,7 +135,9 @@
                             data-generation="{{ item.generation|default:''|escape }}"
                             data-hd="{{ item.hd|default:''|escape }}"
                             data-mod-hd="{{ item.mod_hd|default:''|escape }}"
-                            data-windows="{{ item.windows|default:''|escape }}">
+                            data-windows="{{ item.windows|default:''|escape }}"
+                            data-alimentacao="{{ item.alimentacao|default:''|escape }}"
+                            data-observacao="{{ item.observacao|default:''|escape }}">
                             <td data-sort-value="{{ item.tag_code|default:'' }}">{{ item.tag_code|default:"-" }}</td>
                             <td>{{ item.hostname|default:"-" }}</td>
                             <td>{{ item.sector }}</td>
@@ -148,11 +152,13 @@
                             <td>{{ item.hd }}</td>
                             <td>{{ item.mod_hd }}</td>
                             <td>{{ item.windows }}</td>
+                            <td>{{ item.alimentacao|default:"-" }}</td>
+                            <td title="{{ item.observacao }}">{{ item.observacao|default:"-" }}</td>
                             <td>{% if item.last_inventory_at %}{{ item.last_inventory_at|date:"d/m/Y H:i" }}{% else %}-{% endif %}</td>
                         </tr>
                     {% empty %}
                         <tr>
-                            <td colspan="15" class="muted">Nenhum equipamento cadastrado.</td>
+                            <td colspan="17" class="muted">Nenhum equipamento cadastrado.</td>
                         </tr>
                     {% endfor %}
                 </tbody>
@@ -238,6 +244,16 @@
                         <label for="id_windows">Windows</label>
                         <input id="id_windows" name="windows" type="text" />
                     </div>
+                    <div>
+                        <label for="id_alimentacao">Alimentacao</label>
+                        <input id="id_alimentacao" name="alimentacao" type="text" placeholder="Ex.: Fonte 500W / Carregador 65W" />
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div style="grid-column: 1 / -1;">
+                        <label for="id_observacao">Observacao</label>
+                        <textarea id="id_observacao" name="observacao" rows="3" placeholder="Observacoes do equipamento"></textarea>
+                    </div>
                 </div>
                 <button type="submit">Salvar</button>
             </form>
@@ -271,6 +287,8 @@
             hd: form.querySelector('[name="hd"]'),
             modHd: form.querySelector('[name="mod_hd"]'),
             windows: form.querySelector('[name="windows"]'),
+            alimentacao: form.querySelector('[name="alimentacao"]'),
+            observacao: form.querySelector('[name="observacao"]'),
         };
         const submitBtn = form.querySelector('button[type="submit"]');
 
@@ -307,6 +325,8 @@
             if (fieldMap.hd) fieldMap.hd.value = btn.dataset.hd || '';
             if (fieldMap.modHd) fieldMap.modHd.value = btn.dataset.modHd || '';
             if (fieldMap.windows) fieldMap.windows.value = btn.dataset.windows || '';
+            if (fieldMap.alimentacao) fieldMap.alimentacao.value = btn.dataset.alimentacao || '';
+            if (fieldMap.observacao) fieldMap.observacao.value = btn.dataset.observacao || '';
             open();
         };
 

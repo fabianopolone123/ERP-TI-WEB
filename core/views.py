@@ -950,6 +950,8 @@ class EquipamentosView(LoginRequiredMixin, TemplateView):
             'hd': request.POST.get('hd', '').strip(),
             'mod_hd': request.POST.get('mod_hd', '').strip(),
             'windows': request.POST.get('windows', '').strip(),
+            'alimentacao': request.POST.get('alimentacao', '').strip(),
+            'observacao': request.POST.get('observacao', '').strip(),
         }
 
         if action == 'update':
