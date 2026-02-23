@@ -46,11 +46,21 @@ function Get-InstalledSoftware {
 
 $cs = Get-CimInstance -ClassName Win32_ComputerSystem
 $bios = Get-CimInstance -ClassName Win32_BIOS
+$csProduct = Get-CimInstance -ClassName Win32_ComputerSystemProduct
+$baseboard = Get-CimInstance -ClassName Win32_BaseBoard | Select-Object -First 1
 $cpu = Get-CimInstance -ClassName Win32_Processor | Select-Object -First 1
 $os = Get-CimInstance -ClassName Win32_OperatingSystem
 $disks = Get-CimInstance -ClassName Win32_LogicalDisk -Filter "DriveType=3" | Select-Object DeviceID, Size
 $physicalDisks = Get-CimInstance -ClassName Win32_DiskDrive | Select-Object Model, MediaType, InterfaceType
 $physicalDisksEx = @()
+$macAddresses = @()
+try {
+    $macAddresses = Get-CimInstance -ClassName Win32_NetworkAdapterConfiguration |
+        Where-Object { $_.IPEnabled -eq $true -and $_.MACAddress } |
+        Select-Object -ExpandProperty MACAddress
+} catch {
+    $macAddresses = @()
+}
 if (Get-Command Get-PhysicalDisk -ErrorAction SilentlyContinue) {
     try {
         $physicalDisksEx = Get-PhysicalDisk | Select-Object FriendlyName, MediaType, BusType, SpindleSpeed
@@ -113,6 +123,10 @@ $payload = [PSCustomObject]@{
     Model     = $cs.Model
     Brand     = $cs.Manufacturer
     Serial    = $bios.SerialNumber
+    BiosUUID  = $csProduct.UUID
+    BiosSerial = $bios.SerialNumber
+    BaseboardSerial = $baseboard.SerialNumber
+    MacAddresses = @($macAddresses)
     Memory    = $cs.TotalPhysicalMemory
     Processor = $cpu.Name
     Generation = $cpuGeneration

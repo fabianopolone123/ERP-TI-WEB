@@ -14,6 +14,121 @@ from .models import Equipment, SoftwareInventory, next_equipment_tag_code
 logger = logging.getLogger(__name__)
 
 
+
+def _norm_identifier(value: Any) -> str:
+    return str(value or '').strip().upper()
+
+
+def _norm_hostname(value: Any) -> str:
+    return str(value or '').strip().lower()
+
+
+def _norm_mac(value: Any) -> str:
+    raw = str(value or '').strip().upper()
+    return re.sub(r'[^0-9A-F]', '', raw)
+
+
+def _parse_payload_mac_addresses(payload: dict[str, Any]) -> list[str]:
+    raw_items = payload.get('MacAddresses') or payload.get('MACAddresses') or []
+    values: list[str] = []
+    if isinstance(raw_items, str):
+        raw_items = re.split(r'[;,\n]+', raw_items)
+    if isinstance(raw_items, list):
+        for item in raw_items:
+            if isinstance(item, dict):
+                item = item.get('MacAddress') or item.get('MACAddress') or item.get('Address') or ''
+            mac = _norm_mac(item)
+            if mac and mac not in values:
+                values.append(mac)
+    return values
+
+
+def _split_lines_unique(raw_text: str) -> list[str]:
+    items: list[str] = []
+    for line in (raw_text or '').replace(';', '\n').splitlines():
+        token = line.strip()
+        if token and token not in items:
+            items.append(token)
+    return items
+
+
+def _merge_hostname_aliases(existing_aliases: str, old_hostname: str, new_hostname: str) -> str:
+    aliases = _split_lines_unique(existing_aliases)
+    old_host = (old_hostname or '').strip()
+    new_host_norm = _norm_hostname(new_hostname)
+    if old_host and _norm_hostname(old_host) != new_host_norm and old_host not in aliases:
+        aliases.append(old_host)
+    aliases = [a for a in aliases if _norm_hostname(a) != new_host_norm]
+    return '\n'.join(aliases)
+
+
+def _merge_mac_addresses(existing_macs: str, payload_macs: list[str]) -> str:
+    normalized_existing = [_norm_mac(item) for item in _split_lines_unique(existing_macs)]
+    values: list[str] = []
+    for mac in normalized_existing + payload_macs:
+        if mac and mac not in values:
+            values.append(mac)
+    return '\n'.join(values)
+
+
+def _find_equipment_by_inventory_identifiers(
+    host: str,
+    bios_uuid: str,
+    bios_serial: str,
+    baseboard_serial: str,
+    mac_addresses: list[str],
+    serial: str,
+    model: str,
+    user_name: str,
+) -> Equipment | None:
+    if bios_uuid:
+        equipment = Equipment.objects.filter(bios_uuid__iexact=bios_uuid).first()
+        if equipment:
+            return equipment
+
+    if bios_serial:
+        equipment = (
+            Equipment.objects.filter(bios_serial__iexact=bios_serial).first()
+            or Equipment.objects.filter(serial__iexact=bios_serial).first()
+        )
+        if equipment:
+            return equipment
+
+    if baseboard_serial:
+        equipment = Equipment.objects.filter(baseboard_serial__iexact=baseboard_serial).first()
+        if equipment:
+            return equipment
+
+    if mac_addresses:
+        for equipment in Equipment.objects.exclude(mac_addresses='').only('id', 'mac_addresses'):
+            existing = {_norm_mac(item) for item in _split_lines_unique(equipment.mac_addresses)}
+            if existing.intersection(mac_addresses):
+                return equipment
+
+    host_norm = _norm_hostname(host)
+    if host_norm:
+        equipment = Equipment.objects.filter(hostname__iexact=host).first()
+        if equipment:
+            return equipment
+        for equipment in Equipment.objects.exclude(hostname_aliases='').only('id', 'hostname_aliases'):
+            aliases = {_norm_hostname(item) for item in _split_lines_unique(equipment.hostname_aliases)}
+            if host_norm in aliases:
+                return equipment
+
+    if serial:
+        equipment = Equipment.objects.filter(serial__iexact=serial).first()
+        if equipment:
+            return equipment
+
+    if user_name and model:
+        equipment = Equipment.objects.filter(user__iexact=user_name, model__iexact=model).first()
+        if equipment:
+            return equipment
+
+    return None
+
+
+
 def _parse_memory_gb(memory_raw: Any) -> str:
     try:
         value = int(memory_raw or 0)
@@ -134,6 +249,8 @@ $computer = '{hostname}'
 
 $cs = Get-CimInstance -ClassName Win32_ComputerSystem -ComputerName $computer
 $bios = Get-CimInstance -ClassName Win32_BIOS -ComputerName $computer
+$csProduct = Get-CimInstance -ClassName Win32_ComputerSystemProduct -ComputerName $computer
+$baseboard = Get-CimInstance -ClassName Win32_BaseBoard -ComputerName $computer | Select-Object -First 1
 $cpu = Get-CimInstance -ClassName Win32_Processor -ComputerName $computer | Select-Object -First 1
 $os = Get-CimInstance -ClassName Win32_OperatingSystem -ComputerName $computer
 $disks = Get-CimInstance -ClassName Win32_LogicalDisk -ComputerName $computer -Filter "DriveType=3"
@@ -144,6 +261,14 @@ try {{
     $physicalDisks = @()
 }}
 $physicalDisksEx = @()
+$macAddresses = @()
+try {{
+    $macAddresses = Get-CimInstance -ClassName Win32_NetworkAdapterConfiguration -ComputerName $computer |
+        Where-Object {{ $_.IPEnabled -eq $true -and $_.MACAddress }} |
+        Select-Object -ExpandProperty MACAddress
+}} catch {{
+    $macAddresses = @()
+}}
 try {{
     $session = New-CimSession -ComputerName $computer
     if (Get-Command Get-PhysicalDisk -ErrorAction SilentlyContinue) {{
@@ -218,6 +343,10 @@ $result = [PSCustomObject]@{{
     Model = $cs.Model
     Brand = $cs.Manufacturer
     Serial = $bios.SerialNumber
+    BiosUUID = $csProduct.UUID
+    BiosSerial = $bios.SerialNumber
+    BaseboardSerial = $baseboard.SerialNumber
+    MacAddresses = @($macAddresses)
     Memory = $cs.TotalPhysicalMemory
     Processor = $cpu.Name
     Generation = $cpuGeneration
@@ -296,10 +425,20 @@ def upsert_inventory_from_payload(payload: dict[str, Any], source: str = 'rede')
     hd = _parse_total_disk(payload.get('HD') or [])
     mod_hd = _infer_mod_hd(payload, str(payload.get('ModHD') or ''))
 
-    equipment = (
-        Equipment.objects.filter(hostname__iexact=host).first()
-        or Equipment.objects.filter(serial__iexact=serial).first()
-        or Equipment.objects.filter(user__iexact=user_name, model__iexact=model).first()
+    bios_uuid = _norm_identifier(payload.get('BiosUUID') or payload.get('UUID'))
+    bios_serial = _norm_identifier(payload.get('BiosSerial') or payload.get('Serial'))
+    baseboard_serial = _norm_identifier(payload.get('BaseboardSerial'))
+    mac_addresses = _parse_payload_mac_addresses(payload)
+
+    equipment = _find_equipment_by_inventory_identifiers(
+        host=host,
+        bios_uuid=bios_uuid,
+        bios_serial=bios_serial,
+        baseboard_serial=baseboard_serial,
+        mac_addresses=mac_addresses,
+        serial=serial,
+        model=model,
+        user_name=user_name,
     )
     is_new_equipment = equipment is None
     if equipment is None:
@@ -307,25 +446,31 @@ def upsert_inventory_from_payload(payload: dict[str, Any], source: str = 'rede')
 
     if is_new_equipment or not (equipment.tag_code or '').strip():
         equipment.tag_code = next_equipment_tag_code()
+    old_hostname = equipment.hostname or ''
     equipment.user = user_name or equipment.user
     equipment.sector = sector or equipment.sector
     equipment.equipment = equipment.equipment or 'Computador'
     equipment.model = model
     equipment.brand = brand
     equipment.serial = serial
+    equipment.bios_uuid = bios_uuid or equipment.bios_uuid
+    equipment.bios_serial = bios_serial or equipment.bios_serial
+    equipment.baseboard_serial = baseboard_serial or equipment.baseboard_serial
+    equipment.mac_addresses = _merge_mac_addresses(equipment.mac_addresses, mac_addresses)
     equipment.memory = memory
     equipment.processor = processor
     equipment.generation = generation
     equipment.hd = hd
     equipment.mod_hd = mod_hd
     equipment.windows = windows
+    equipment.hostname_aliases = _merge_hostname_aliases(equipment.hostname_aliases, old_hostname, host)
     equipment.hostname = host
     equipment.inventory_source = source
     equipment.last_inventory_at = now
     equipment.save()
 
     software_items = payload.get('Software') or []
-    SoftwareInventory.objects.filter(hostname__iexact=host).delete()
+    SoftwareInventory.objects.filter(equipment=equipment).delete()
 
     new_items = []
     for item in software_items:
