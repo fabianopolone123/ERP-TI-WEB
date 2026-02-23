@@ -934,22 +934,37 @@ class EquipamentosView(LoginRequiredMixin, TemplateView):
         tag_code = request.POST.get('tag_code', '').strip()
         if not tag_code:
             tag_code = _infer_tag_code_from_hostname(hostname)
-        Equipment.objects.create(
-            tag_code=tag_code,
-            sector=request.POST.get('sector', '').strip(),
-            user=request.POST.get('user', '').strip(),
-            hostname=hostname,
-            equipment=request.POST.get('equipment', '').strip(),
-            model=request.POST.get('model', '').strip(),
-            brand=request.POST.get('brand', '').strip(),
-            serial=request.POST.get('serial', '').strip(),
-            memory=request.POST.get('memory', '').strip(),
-            processor=request.POST.get('processor', '').strip(),
-            generation=request.POST.get('generation', '').strip(),
-            hd=request.POST.get('hd', '').strip(),
-            mod_hd=request.POST.get('mod_hd', '').strip(),
-            windows=request.POST.get('windows', '').strip(),
-        )
+
+        equipment_payload = {
+            'tag_code': tag_code,
+            'sector': request.POST.get('sector', '').strip(),
+            'user': request.POST.get('user', '').strip(),
+            'hostname': hostname,
+            'equipment': request.POST.get('equipment', '').strip(),
+            'model': request.POST.get('model', '').strip(),
+            'brand': request.POST.get('brand', '').strip(),
+            'serial': request.POST.get('serial', '').strip(),
+            'memory': request.POST.get('memory', '').strip(),
+            'processor': request.POST.get('processor', '').strip(),
+            'generation': request.POST.get('generation', '').strip(),
+            'hd': request.POST.get('hd', '').strip(),
+            'mod_hd': request.POST.get('mod_hd', '').strip(),
+            'windows': request.POST.get('windows', '').strip(),
+        }
+
+        if action == 'update':
+            equipment_id = (request.POST.get('equipment_id') or '').strip()
+            equipment_obj = Equipment.objects.filter(id=equipment_id).first()
+            if not equipment_obj:
+                messages.error(request, 'Equipamento n?o encontrado para edi??o.')
+                return self.get(request, *args, **kwargs)
+            for field_name, field_value in equipment_payload.items():
+                setattr(equipment_obj, field_name, field_value)
+            equipment_obj.save()
+            messages.success(request, 'Equipamento atualizado com sucesso.')
+            return self.get(request, *args, **kwargs)
+
+        Equipment.objects.create(**equipment_payload)
         messages.success(request, 'Equipamento cadastrado com sucesso.')
         return self.get(request, *args, **kwargs)
 

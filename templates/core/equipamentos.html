@@ -79,10 +79,31 @@
                             <td>{{ item.mod_hd }}</td>
                             <td>{{ item.windows }}</td>
                             <td>{% if item.last_inventory_at %}{{ item.last_inventory_at|date:"d/m/Y H:i" }}{% else %}-{% endif %}</td>
+                            <td>
+                                <button
+                                    type="button"
+                                    data-edit-equipment
+                                    data-id="{{ item.id }}"
+                                    data-tag-code="{{ item.tag_code|default:''|escape }}"
+                                    data-hostname="{{ item.hostname|default:''|escape }}"
+                                    data-sector="{{ item.sector|default:''|escape }}"
+                                    data-user="{{ item.user|default:''|escape }}"
+                                    data-equipment="{{ item.equipment|default:''|escape }}"
+                                    data-model="{{ item.model|default:''|escape }}"
+                                    data-brand="{{ item.brand|default:''|escape }}"
+                                    data-serial="{{ item.serial|default:''|escape }}"
+                                    data-memory="{{ item.memory|default:''|escape }}"
+                                    data-processor="{{ item.processor|default:''|escape }}"
+                                    data-generation="{{ item.generation|default:''|escape }}"
+                                    data-hd="{{ item.hd|default:''|escape }}"
+                                    data-mod-hd="{{ item.mod_hd|default:''|escape }}"
+                                    data-windows="{{ item.windows|default:''|escape }}"
+                                >Editar</button>
+                            </td>
                         </tr>
                     {% empty %}
                         <tr>
-                            <td colspan="15" class="muted">Nenhum equipamento cadastrado.</td>
+                            <td colspan="16" class="muted">Nenhum equipamento cadastrado.</td>
                         </tr>
                     {% endfor %}
                 </tbody>
@@ -98,10 +119,12 @@
         <div class="modal-backdrop" data-close-equipment></div>
         <div class="modal-content">
             <div class="topbar" style="margin-bottom: 8px;">
-                <h3>Novo equipamento</h3>
+                <h3 data-equipment-modal-title>Novo equipamento</h3>
                 <button type="button" data-close-equipment>Fechar</button>
             </div>
-            <form method="post">
+            <form method="post" data-equipment-form>
+                <input type="hidden" name="action" value="create" data-equipment-action />
+                <input type="hidden" name="equipment_id" value="" data-equipment-id />
                 {% csrf_token %}
                 <div class="form-row">
                     <div>
@@ -178,13 +201,71 @@
         const modal = document.querySelector('[data-equipment-modal]');
         const openBtn = document.querySelector('[data-open-equipment]');
         const closeEls = document.querySelectorAll('[data-close-equipment]');
-        if (!modal || !openBtn) return;
+        const form = document.querySelector('[data-equipment-form]');
+        const modalTitle = document.querySelector('[data-equipment-modal-title]');
+        const actionInput = document.querySelector('[data-equipment-action]');
+        const equipmentIdInput = document.querySelector('[data-equipment-id]');
+        if (!modal || !openBtn || !form) return;
+
+        const fieldMap = {
+            tagCode: form.querySelector('[name="tag_code"]'),
+            hostname: form.querySelector('[name="hostname"]'),
+            sector: form.querySelector('[name="sector"]'),
+            user: form.querySelector('[name="user"]'),
+            equipment: form.querySelector('[name="equipment"]'),
+            model: form.querySelector('[name="model"]'),
+            brand: form.querySelector('[name="brand"]'),
+            serial: form.querySelector('[name="serial"]'),
+            memory: form.querySelector('[name="memory"]'),
+            processor: form.querySelector('[name="processor"]'),
+            generation: form.querySelector('[name="generation"]'),
+            hd: form.querySelector('[name="hd"]'),
+            modHd: form.querySelector('[name="mod_hd"]'),
+            windows: form.querySelector('[name="windows"]'),
+        };
+        const submitBtn = form.querySelector('button[type="submit"]');
 
         const open = () => { modal.hidden = false; };
         const close = () => { modal.hidden = true; };
+        const resetCreate = () => {
+            form.reset();
+            if (actionInput) actionInput.value = 'create';
+            if (equipmentIdInput) equipmentIdInput.value = '';
+            if (modalTitle) modalTitle.textContent = 'Novo equipamento';
+            if (submitBtn) submitBtn.textContent = 'Salvar';
+        };
+        const openCreate = () => {
+            resetCreate();
+            open();
+        };
+        const openEdit = (btn) => {
+            resetCreate();
+            if (actionInput) actionInput.value = 'update';
+            if (equipmentIdInput) equipmentIdInput.value = btn.dataset.id || '';
+            if (modalTitle) modalTitle.textContent = 'Editar equipamento';
+            if (submitBtn) submitBtn.textContent = 'Salvar altera??es';
+            if (fieldMap.tagCode) fieldMap.tagCode.value = btn.dataset.tagCode || '';
+            if (fieldMap.hostname) fieldMap.hostname.value = btn.dataset.hostname || '';
+            if (fieldMap.sector) fieldMap.sector.value = btn.dataset.sector || '';
+            if (fieldMap.user) fieldMap.user.value = btn.dataset.user || '';
+            if (fieldMap.equipment) fieldMap.equipment.value = btn.dataset.equipment || '';
+            if (fieldMap.model) fieldMap.model.value = btn.dataset.model || '';
+            if (fieldMap.brand) fieldMap.brand.value = btn.dataset.brand || '';
+            if (fieldMap.serial) fieldMap.serial.value = btn.dataset.serial || '';
+            if (fieldMap.memory) fieldMap.memory.value = btn.dataset.memory || '';
+            if (fieldMap.processor) fieldMap.processor.value = btn.dataset.processor || '';
+            if (fieldMap.generation) fieldMap.generation.value = btn.dataset.generation || '';
+            if (fieldMap.hd) fieldMap.hd.value = btn.dataset.hd || '';
+            if (fieldMap.modHd) fieldMap.modHd.value = btn.dataset.modHd || '';
+            if (fieldMap.windows) fieldMap.windows.value = btn.dataset.windows || '';
+            open();
+        };
 
-        openBtn.addEventListener('click', open);
+        openBtn.addEventListener('click', openCreate);
         closeEls.forEach((el) => el.addEventListener('click', close));
+        document.querySelectorAll('[data-edit-equipment]').forEach((btn) => {
+            btn.addEventListener('click', () => openEdit(btn));
+        });
     })();
 </script>
 <script>
