@@ -663,6 +663,16 @@ class UsersListView(LoginRequiredMixin, TemplateView):
             return self.get(request, *args, **kwargs)
 
         action = (request.POST.get('action') or '').strip().lower()
+        if action == 'delete':
+            equipment_id = (request.POST.get('equipment_id') or '').strip()
+            equipment_obj = Equipment.objects.filter(id=equipment_id).first()
+            if not equipment_obj:
+                messages.error(request, 'Equipamento nao encontrado para exclusao.')
+                return self.get(request, *args, **kwargs)
+            equipment_obj.delete()
+            messages.success(request, 'Equipamento excluido com sucesso.')
+            return self.get(request, *args, **kwargs)
+
         if action == 'create_manual_user':
             full_name = (request.POST.get('full_name') or '').strip()
             username_raw = (request.POST.get('username') or '').strip()
