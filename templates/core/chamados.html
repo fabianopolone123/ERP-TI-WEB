@@ -421,6 +421,9 @@
                                     {% endif %}
                                 </span>
                             </div>
+                            <div class="ticket-meta" style="margin-top: 6px;">
+                                <span class="ticket-extra">Fechado em: {{ ticket_meta|get_item:ticket.id|default:""|get_item:'closed_at_text'|default:"-" }}</span>
+                            </div>
                         </div>
                     {% endfor %}
                 </div>
