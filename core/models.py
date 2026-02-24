@@ -214,6 +214,7 @@ class RequisitionQuote(models.Model):
     is_selected = models.BooleanField(default=False)
     photo = models.ImageField(upload_to='requisitions/quotes/', null=True, blank=True)
     link = models.URLField(blank=True, default='')
+    payment_terms = models.TextField(blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self) -> str:

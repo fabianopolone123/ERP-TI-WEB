@@ -1161,6 +1161,7 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
             value_raw = (request.POST.get(f'budget_value_{idx}') or '').strip()
             freight_raw = (request.POST.get(f'budget_freight_{idx}') or '').strip()
             link = (request.POST.get(f'budget_link_{idx}') or '').strip()
+            payment_terms = (request.POST.get(f'budget_payment_terms_{idx}') or '').strip()
             photo = request.FILES.get(f'budget_photo_{idx}')
 
             if not name and not value_raw and not link and not photo and not quote_id:
@@ -1191,13 +1192,14 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
                 quote.value = value
                 quote.freight = freight
                 quote.link = link
+                quote.payment_terms = payment_terms
                 quote.parent = None
                 quote.is_selected = False
                 if photo:
                     quote.photo = photo
                     quote.save()
                 else:
-                    quote.save(update_fields=['name', 'quantity', 'value', 'freight', 'link', 'parent', 'is_selected'])
+                    quote.save(update_fields=['name', 'quantity', 'value', 'freight', 'link', 'payment_terms', 'parent', 'is_selected'])
                 kept_ids.add(quote.id)
                 idx_to_quote[idx] = quote
                 saved_count += 1
@@ -1212,6 +1214,7 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
                 freight=freight,
                 is_selected=False,
                 link=link,
+                payment_terms=payment_terms,
                 photo=photo,
             )
             if not photo and source_quote_id:

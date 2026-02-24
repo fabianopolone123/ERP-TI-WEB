@@ -374,6 +374,12 @@
                 </div>
             </div>
         </div>
+        <div class="form-row">
+            <div style="flex: 1;">
+                <label>Formas de pagamento</label>
+                <textarea rows="2" data-field="payment-terms" placeholder="Ex.: PIX: R$ 2.500,00 | Cartao: R$ 2.800,00"></textarea>
+            </div>
+        </div>
         <div class="muted" data-budget-created-at style="margin-top: 6px; font-size: 0.82rem;">
             Cadastrado em: novo (data/hora atual ao salvar)
         </div>
@@ -407,6 +413,7 @@
                         link: "{{ quote.link|escapejs }}",
                         created_at: "{{ quote.created_at|date:'d/m/Y H:i'|escapejs }}",
                         photo_url: "{% if quote.photo %}{{ quote.photo.url|escapejs }}{% endif %}",
+                        payment_terms: "{{ quote.payment_terms|default:''|escapejs }}",
                     }{% if not forloop.last %},{% endif %}
                     {% endfor %}
                 ],
@@ -799,6 +806,7 @@
             const srcValue = sourceItem.querySelector('[data-field="value"]');
             const srcFreight = sourceItem.querySelector('[data-field="freight"]');
             const srcLink = sourceItem.querySelector('[data-field="link"]');
+            const srcPaymentTerms = sourceItem.querySelector('[data-field="payment-terms"]');
             const srcPreview = sourceItem.querySelector('[data-photo-preview]');
             const srcPhoto = sourceItem.querySelector('[data-field="photo"]');
 
@@ -807,6 +815,7 @@
             const dstValue = created.item.querySelector('[data-field="value"]');
             const dstFreight = created.item.querySelector('[data-field="freight"]');
             const dstLink = created.item.querySelector('[data-field="link"]');
+            const dstPaymentTerms = created.item.querySelector('[data-field="payment-terms"]');
             const dstPreview = created.item.querySelector('[data-photo-preview]');
             const dstPhoto = created.item.querySelector('[data-field="photo"]');
 
@@ -815,6 +824,7 @@
             if (dstValue && srcValue) dstValue.value = srcValue.value || '';
             if (dstFreight && srcFreight) dstFreight.value = srcFreight.value || '';
             if (dstLink && srcLink) dstLink.value = srcLink.value || '';
+            if (dstPaymentTerms && srcPaymentTerms) dstPaymentTerms.value = srcPaymentTerms.value || '';
 
             // Best-effort clone for local files (unsaved captures/uploads).
             const srcFile = srcPhoto?.files?.[0];
@@ -843,11 +853,12 @@
                 const value = (item.querySelector('[data-field="value"]')?.value || '').trim();
                 const freight = (item.querySelector('[data-field="freight"]')?.value || '').trim();
                 const linkRaw = (item.querySelector('[data-field="link"]')?.value || '').trim();
+                const paymentTerms = (item.querySelector('[data-field="payment-terms"]')?.value || '').trim();
                 const link = normalizeExternalLink(linkRaw);
                 const linkLabel = shortLinkLabel(linkRaw);
                 const createdAt = (item.querySelector('[data-budget-created-at]')?.textContent || '').trim();
                 const previewSrc = (item.querySelector('[data-photo-preview]')?.getAttribute('src') || '').trim();
-                if (!name && !value && !freight && !link) return null;
+                if (!name && !value && !freight && !link && !paymentTerms) return null;
                 return {
                     idx,
                     parentIdx,
@@ -857,6 +868,7 @@
                     freight: freight || '0,00',
                     link,
                     linkLabel,
+                    paymentTerms,
                     createdAt,
                     previewSrc,
                 };
@@ -884,6 +896,7 @@
             item.querySelector('[data-field="value"]').name = `budget_value_${idx}`;
             item.querySelector('[data-field="freight"]').name = `budget_freight_${idx}`;
             item.querySelector('[data-field="link"]').name = `budget_link_${idx}`;
+            item.querySelector('[data-field="payment-terms"]').name = `budget_payment_terms_${idx}`;
             item.querySelector('[data-field="photo"]').name = `budget_photo_${idx}`;
             item.querySelector('[data-field="approved"]').name = 'approved_budget_idx';
             item.querySelector('[data-field="approved"]').value = String(idx);
@@ -905,6 +918,7 @@
             const valueInput = item.querySelector('[data-field="value"]');
             const freightInput = item.querySelector('[data-field="freight"]');
             const linkInput = item.querySelector('[data-field="link"]');
+            const paymentTermsInput = item.querySelector('[data-field="payment-terms"]');
             const createdAtEl = item.querySelector('[data-budget-created-at]');
             const packageTotalEl = item.querySelector('[data-budget-package-total]');
             const removeBtn = item.querySelector('[data-remove-budget]');
@@ -1041,6 +1055,7 @@
                 valueInput.value = toBrValue(initialData.value || '');
                 freightInput.value = toBrValue(initialData.freight || '');
                 linkInput.value = initialData.link || '';
+                if (paymentTermsInput) paymentTermsInput.value = initialData.payment_terms || '';
                 if (approvedInput) {
                     approvedInput.checked = !!initialData.is_selected && !initialData.parent_id;
                 }
@@ -1410,6 +1425,7 @@
 
                 lines.push(`[ORÇAMENTO ${i + 1}] ${main.name || '(sem nome)'}`);
                 lines.push(`   Qtd: ${mainQty} | Valor unit.: R$ ${main.value} | Frete: R$ ${main.freight} | Total pacote: R$ ${toBrMoney(total)}`);
+                if (main.paymentTerms) lines.push(`   Pagamento: ${main.paymentTerms}`);
                 if (main.link) lines.push(`   Link (${main.linkLabel || 'site'}): ${main.link}`);
                 let mainImageText = '';
                 const mainImg = await resolveClipboardImage(main.previewSrc);
@@ -1424,6 +1440,7 @@
                 htmlParts.push(`<div><strong>${escapeHtml(main.name || '(sem nome)')}</strong></div>`);
                 htmlParts.push(`<div>Qtd: <strong>${escapeHtml(String(mainQty))}</strong> | Valor unit.: <strong>R$ ${escapeHtml(main.value)}</strong> | Frete: <strong>R$ ${escapeHtml(main.freight)}</strong> | Total pacote: <strong>R$ ${escapeHtml(toBrMoney(total))}</strong></div>`);
                 if (main.link) htmlParts.push(`<div>Link: <a href="${escapeHtml(main.link)}" target="_blank" rel="noopener noreferrer">${escapeHtml(main.linkLabel || 'Abrir orçamento')}</a></div>`);
+                if (main.paymentTerms) htmlParts.push(`<div>Pagamento: <strong>${escapeHtml(main.paymentTerms)}</strong></div>`);
                 if (mainImg.htmlSrc) {
                     htmlParts.push(`<div style="margin-top:6px;"><img src="${escapeHtml(mainImg.htmlSrc)}" alt="Orçamento" style="margin-top:4px;max-width:360px;max-height:180px;border:1px solid #cbd5e1;border-radius:6px;"></div>`);
                 } else if (mainImg.fallbackLink) {
@@ -1438,6 +1455,7 @@
                         const subQty = parsePositiveInt(sub.quantity || '1');
                         lines.push(`   - ${sub.name || '(sem nome)'} | Qtd: ${subQty} | Valor unit.: R$ ${sub.value} | Frete: R$ ${sub.freight}`);
                         if (sub.link) lines.push(`     Link (${sub.linkLabel || 'site'}): ${sub.link}`);
+                        if (sub.paymentTerms) lines.push(`     Pagamento: ${sub.paymentTerms}`);
                         const subImg = await resolveClipboardImage(sub.previewSrc);
                         if (subImg.htmlSrc) {
                             lines.push(`     Imagem: incorporada no conteúdo copiado.`);
@@ -1447,6 +1465,7 @@
 
                         htmlParts.push(`<li style="margin-bottom:8px;"><strong>${escapeHtml(sub.name || '(sem nome)')}</strong> - Qtd: ${escapeHtml(String(subQty))} | Valor unit.: R$ ${escapeHtml(sub.value)} | Frete: R$ ${escapeHtml(sub.freight)}`);
                         if (sub.link) htmlParts.push(`<br>Link: <a href="${escapeHtml(sub.link)}" target="_blank" rel="noopener noreferrer">${escapeHtml(sub.linkLabel || 'Abrir')}</a>`);
+                        if (sub.paymentTerms) htmlParts.push(`<br>Pagamento: <strong>${escapeHtml(sub.paymentTerms)}</strong>`);
                         if (subImg.htmlSrc) {
                             htmlParts.push(`<br><img src="${escapeHtml(subImg.htmlSrc)}" alt="Suborçamento" style="margin-top:4px;max-width:300px;max-height:150px;border:1px solid #cbd5e1;border-radius:6px;">`);
                         } else if (subImg.fallbackLink) {
@@ -1515,6 +1534,7 @@
                 lines.push(`${i + 1}) *${main.name || '(sem nome)'}*`);
                 lines.push(`   Qtd: ${mainQty} | Valor unit.: R$ ${main.value} | Frete: R$ ${main.freight}`);
                 lines.push(`   Total do pacote: *R$ ${toBrMoney(total)}*`);
+                if (main.paymentTerms) lines.push(`   Pagamento: ${main.paymentTerms}`);
                 if (main.link) lines.push(`   Link: ${main.linkLabel || 'site'} - ${main.link}`);
 
                 if (subs.length) {
@@ -1523,6 +1543,7 @@
                         const subQty = parsePositiveInt(sub.quantity || '1');
                         lines.push(`   - ${sub.name || '(sem nome)'} | Qtd: ${subQty} | R$ ${sub.value} + frete R$ ${sub.freight}`);
                         if (sub.link) lines.push(`     Link: ${sub.linkLabel || 'site'} - ${sub.link}`);
+                        if (sub.paymentTerms) lines.push(`     Pagamento: ${sub.paymentTerms}`);
                     }
                 }
 
