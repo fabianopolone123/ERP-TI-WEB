@@ -15,7 +15,7 @@ class AuditTrailMiddleware:
         path = (getattr(request, 'path', '') or '')
         if path.startswith('/static/') or path.startswith('/media/'):
             return response
-        if path in {'/ws/tickets/'}:
+        if path in {'/ws/tickets/', '/favicon.ico'}:
             return response
 
         # Skip unauthenticated requests except logout/login POST if already authenticated state is present.
