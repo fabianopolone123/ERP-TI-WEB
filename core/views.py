@@ -331,7 +331,11 @@ def _build_whatsapp_summary(ticket, event_label="Novo chamado", extra_line=None)
 def _notify_whatsapp(ticket, event_type="new_ticket", event_label="Novo chamado", extra_line=None):
     settings_obj = _get_whatsapp_settings()
     group_jid = _get_whatsapp_group_jid(settings_obj)
-    summary = _build_whatsapp_summary(ticket, event_label=event_label, extra_line=extra_line)
+    try:
+        summary = _build_whatsapp_summary(ticket, event_label=event_label, extra_line=extra_line)
+    except Exception:
+        logger.exception("Nao foi possivel montar mensagem WhatsApp do chamado %s", getattr(ticket, 'id', '?'))
+        return
 
     send_group = False
     send_individual = False
@@ -399,16 +403,16 @@ def _notify_ticket_email(ticket, event_label="Novo chamado", extra_line=None):
         }
     )
     label = (event_label or '').strip().lower()
-    if 'nova mensagem' in label:
-        subject = (templates.new_message_subject or DEFAULT_EMAIL_TEMPLATES['new_message_subject']).format_map(payload)
-        body = (templates.new_message_body or DEFAULT_EMAIL_TEMPLATES['new_message_body']).format_map(payload)
-    elif 'status atualizado' in label or 'atualizado' in label or 'em atendimento' in label:
-        subject = (templates.status_update_subject or DEFAULT_EMAIL_TEMPLATES['status_update_subject']).format_map(payload)
-        body = (templates.status_update_body or DEFAULT_EMAIL_TEMPLATES['status_update_body']).format_map(payload)
-    else:
-        subject = (templates.new_ticket_subject or DEFAULT_EMAIL_TEMPLATES['new_ticket_subject']).format_map(payload)
-        body = (templates.new_ticket_body or DEFAULT_EMAIL_TEMPLATES['new_ticket_body']).format_map(payload)
     try:
+        if 'nova mensagem' in label:
+            subject = (templates.new_message_subject or DEFAULT_EMAIL_TEMPLATES['new_message_subject']).format_map(payload)
+            body = (templates.new_message_body or DEFAULT_EMAIL_TEMPLATES['new_message_body']).format_map(payload)
+        elif 'status atualizado' in label or 'atualizado' in label or 'em atendimento' in label:
+            subject = (templates.status_update_subject or DEFAULT_EMAIL_TEMPLATES['status_update_subject']).format_map(payload)
+            body = (templates.status_update_body or DEFAULT_EMAIL_TEMPLATES['status_update_body']).format_map(payload)
+        else:
+            subject = (templates.new_ticket_subject or DEFAULT_EMAIL_TEMPLATES['new_ticket_subject']).format_map(payload)
+            body = (templates.new_ticket_body or DEFAULT_EMAIL_TEMPLATES['new_ticket_body']).format_map(payload)
         send_mail(
             subject,
             body,
@@ -471,10 +475,9 @@ def _notify_new_ticket_watchers_email(ticket):
             'message': description or title,
         }
     )
-    subject = (templates.new_ticket_subject or DEFAULT_EMAIL_TEMPLATES['new_ticket_subject']).format_map(payload)
-    body = (templates.new_ticket_body or DEFAULT_EMAIL_TEMPLATES['new_ticket_body']).format_map(payload)
-
     try:
+        subject = (templates.new_ticket_subject or DEFAULT_EMAIL_TEMPLATES['new_ticket_subject']).format_map(payload)
+        body = (templates.new_ticket_body or DEFAULT_EMAIL_TEMPLATES['new_ticket_body']).format_map(payload)
         send_mail(
             subject,
             body,
@@ -1631,8 +1634,14 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
             to_status=initial_status,
             note=f'Chamado criado no quadro como {_timeline_status_label(initial_status)}.',
         )
-        _notify_whatsapp(ticket, event_type="new_ticket", event_label="Novo chamado")
-        _notify_new_ticket_watchers_email(ticket)
+        try:
+            _notify_whatsapp(ticket, event_type="new_ticket", event_label="Novo chamado")
+        except Exception:
+            logger.exception("Falha inesperada em notificacao WhatsApp do chamado %s", ticket.id)
+        try:
+            _notify_new_ticket_watchers_email(ticket)
+        except Exception:
+            logger.exception("Falha inesperada em notificacao por e-mail de observadores do chamado %s", ticket.id)
         messages.success(request, 'Chamado aberto com sucesso.')
         return redirect('chamados')
 
