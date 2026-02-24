@@ -655,6 +655,14 @@ class DashboardView(LoginRequiredMixin, TemplateView):
 class CustomLoginView(auth_views.LoginView):
     template_name = 'auth/login.html'
 
+    def post(self, request, *args, **kwargs):
+        try:
+            return super().post(request, *args, **kwargs)
+        except Exception:
+            logger.exception('Falha inesperada no login para usuario=%s', (request.POST.get('username') or '').strip())
+            messages.error(request, 'Falha temporaria ao entrar no sistema. Tente novamente em alguns segundos.')
+            return self.get(request, *args, **kwargs)
+
     def get_success_url(self):
         if is_ti_user(self.request):
             return reverse('chamados')

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from time import time
 from django.utils import timezone
 
 from .audit import describe_request, log_audit_event
@@ -8,6 +9,7 @@ from .audit import describe_request, log_audit_event
 class AuditTrailMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
+        self._recent_gets = {}
 
     def __call__(self, request):
         response = self.get_response(request)
@@ -16,6 +18,8 @@ class AuditTrailMiddleware:
         if path.startswith('/static/') or path.startswith('/media/'):
             return response
         if path in {'/ws/tickets/', '/favicon.ico'}:
+            return response
+        if path.startswith('/login') or path.startswith('/logout'):
             return response
 
         # Skip unauthenticated requests except logout/login POST if already authenticated state is present.
@@ -27,15 +31,19 @@ class AuditTrailMiddleware:
         if method not in {'GET', 'POST'}:
             return response
 
-        # Reduce noise from rapid refresh loops: dedupe same GET path in a short interval per session.
+        # Reduce noise from rapid refresh loops without writing to session (avoids extra DB locks on SQLite).
         if method == 'GET':
             try:
-                key = '_audit_last_access'
-                current_ts = timezone.now().timestamp()
-                last = request.session.get(key) or {}
-                if last.get('path') == path and (current_ts - float(last.get('ts') or 0)) < 20:
+                user_id = getattr(user, 'id', None) or 0
+                dedupe_key = (int(user_id), path)
+                current_ts = time()
+                last_ts = float(self._recent_gets.get(dedupe_key) or 0)
+                if (current_ts - last_ts) < 20:
                     return response
-                request.session[key] = {'path': path, 'ts': current_ts}
+                self._recent_gets[dedupe_key] = current_ts
+                if len(self._recent_gets) > 5000:
+                    cutoff = current_ts - 120
+                    self._recent_gets = {k: v for k, v in self._recent_gets.items() if v >= cutoff}
             except Exception:
                 pass
 
