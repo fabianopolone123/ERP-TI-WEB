@@ -40,6 +40,7 @@ from .models import (
     RequisitionQuote,
     AccessFolder,
     AccessMember,
+    AuditLog,
     Dica,
     Ticket,
     TicketMessage,
@@ -59,6 +60,7 @@ from .network_inventory import (
     format_inventory_run_stamp,
     upsert_inventory_from_payload,
 )
+from .audit import log_audit_event
 
 logger = logging.getLogger(__name__)
 DEFAULT_EMAIL_TEMPLATES = {
@@ -89,6 +91,7 @@ ERP_MODULES = [
     {'slug': 'dicas', 'label': 'Dicas', 'url_name': 'dicas'},
     {'slug': 'emprestimos', 'label': 'Empréstimos', 'url_name': None},
     {'slug': 'relatorios', 'label': 'Relatórios', 'url_name': 'relatorios'},
+    {'slug': 'auditoria', 'label': 'Auditoria', 'url_name': 'auditoria'},
 ]
 
 
@@ -2738,6 +2741,19 @@ def inventory_push_api(request):
             logger.exception('Falha ao processar payload de inventário do agente: host=%s', host)
 
     status = 200 if ok_count else 400
+    try:
+        log_audit_event(
+            event_type=AuditLog.EventType.SYSTEM,
+            description='Recebeu inventario via agente GPO',
+            details=f'processed={len(items)} updated={ok_count} failed={failed_count}',
+            status_code=status,
+            route_name='inventory_push_api',
+            path='/api/inventory/push/',
+            method='POST',
+        )
+    except Exception:
+        pass
+
     return JsonResponse(
         {
             'ok': ok_count > 0,
@@ -2787,6 +2803,38 @@ def chamados_fill_spreadsheet(request):
     else:
         messages.error(request, f'{attendant.full_name}: {detail}')
     return redirect('chamados')
+
+
+class AuditoriaView(LoginRequiredMixin, TemplateView):
+    template_name = 'core/auditoria.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        is_ti = is_ti_user(self.request)
+        context['is_ti_group'] = is_ti
+        context['modules'] = build_modules('auditoria') if is_ti else []
+
+        logs = AuditLog.objects.all()
+        q = (self.request.GET.get('q') or '').strip()
+        event_type = (self.request.GET.get('tipo') or '').strip()
+        if q:
+            logs = logs.filter(
+                Q(description__icontains=q)
+                | Q(details__icontains=q)
+                | Q(username__icontains=q)
+                | Q(full_name__icontains=q)
+                | Q(path__icontains=q)
+                | Q(route_name__icontains=q)
+            )
+        if event_type in {AuditLog.EventType.ACCESS, AuditLog.EventType.ACTION, AuditLog.EventType.SYSTEM}:
+            logs = logs.filter(event_type=event_type)
+
+        context['audit_logs'] = logs.order_by('-created_at', '-id')[:500]
+        context['audit_total_count'] = logs.count()
+        context['audit_q'] = q
+        context['audit_tipo'] = event_type
+        context['audit_event_types'] = AuditLog.EventType.choices
+        return context
 
 
 @login_required

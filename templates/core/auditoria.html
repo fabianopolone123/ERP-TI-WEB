@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block title %}Auditoria | ERP TI{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="topbar">
+        <div>
+            <h2>Auditoria</h2>
+            <p class="muted">Acessos e alteracoes registradas com descricao amigavel.</p>
+        </div>
+        <form method="post" action="{% url 'logout' %}" class="inline-form">
+            {% csrf_token %}
+            <button type="submit">Sair</button>
+        </form>
+    </div>
+
+    {% if is_ti_group %}
+        {% include "core/_tabs.html" %}
+
+        <form method="get" class="ticket-form" style="margin-top: 16px;">
+            <div class="form-row">
+                <div>
+                    <label for="id_audit_q">Busca</label>
+                    <input id="id_audit_q" type="text" name="q" value="{{ audit_q }}" placeholder="Usuario, descricao, rota, caminho..." />
+                </div>
+                <div style="max-width: 220px;">
+                    <label for="id_audit_tipo">Tipo</label>
+                    <select id="id_audit_tipo" name="tipo">
+                        <option value="">Todos</option>
+                        {% for value, label in audit_event_types %}
+                            <option value="{{ value }}" {% if audit_tipo == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div style="align-self:flex-end; flex:0 0 auto;">
+                    <button type="submit">Filtrar</button>
+                </div>
+            </div>
+        </form>
+
+        <div class="topbar" style="margin-top: 12px; margin-bottom: 8px;">
+            <div class="muted">Registros encontrados: <strong>{{ audit_total_count }}</strong> (mostrando ate 500)</div>
+        </div>
+
+        <div style="overflow:auto; border:1px solid #1f2a44; border-radius:10px; background:#0c1527;">
+            <table class="data-table" style="min-width: 1200px; margin:0; border:0; border-radius:0; overflow:visible;">
+                <thead>
+                    <tr>
+                        <th>Data/Hora</th>
+                        <th>Tipo</th>
+                        <th>Usuario</th>
+                        <th>Descricao</th>
+                        <th>Rota</th>
+                        <th>Metodo</th>
+                        <th>Status</th>
+                        <th>IP</th>
+                        <th>Caminho</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in audit_logs %}
+                        <tr>
+                            <td>{{ log.created_at|date:"d/m/Y H:i:s" }}</td>
+                            <td>{{ log.get_event_type_display }}</td>
+                            <td>{% if log.full_name %}<strong>{{ log.full_name }}</strong>{% elif log.username %}{{ log.username }}{% else %}-{% endif %}{% if log.username and log.full_name %}<div class="muted" style="font-size:0.78rem;">{{ log.username }}</div>{% endif %}</td>
+                            <td><div>{{ log.description }}</div>{% if log.details %}<div class="muted" style="font-size:0.78rem; white-space:pre-wrap;">{{ log.details }}</div>{% endif %}</td>
+                            <td>{{ log.route_name|default:"-" }}</td>
+                            <td>{{ log.method|default:"-" }}</td>
+                            <td>{{ log.status_code }}</td>
+                            <td>{{ log.ip_address|default:"-" }}</td>
+                            <td title="{{ log.path }}">{{ log.path|default:"-" }}</td>
+                        </tr>
+                    {% empty %}
+                        <tr><td colspan="9" class="muted">Nenhum registro de auditoria.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <p>Solicite ao administrador a inclusao no departamento <strong>TI</strong>.</p>
+    {% endif %}
+</div>
+{% endblock %}

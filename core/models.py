@@ -485,3 +485,29 @@ class WhatsAppOptOut(models.Model):
 
     def __str__(self) -> str:
         return f'WhatsAppOptOut {self.user_id}'
+
+
+class AuditLog(models.Model):
+    class EventType(models.TextChoices):
+        ACCESS = 'access', 'Acesso'
+        ACTION = 'action', 'Acao'
+        SYSTEM = 'system', 'Sistema'
+
+    user = models.ForeignKey('auth.User', null=True, blank=True, on_delete=models.SET_NULL, related_name='audit_logs')
+    username = models.CharField(max_length=150, blank=True, default='')
+    full_name = models.CharField(max_length=200, blank=True, default='')
+    event_type = models.CharField(max_length=20, choices=EventType.choices, default=EventType.ACCESS)
+    method = models.CharField(max_length=10, blank=True, default='')
+    path = models.CharField(max_length=300, blank=True, default='')
+    route_name = models.CharField(max_length=120, blank=True, default='')
+    status_code = models.PositiveSmallIntegerField(default=0)
+    description = models.CharField(max_length=300)
+    details = models.TextField(blank=True, default='')
+    ip_address = models.CharField(max_length=64, blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+    def __str__(self) -> str:
+        return f'{self.created_at:%d/%m/%Y %H:%M} - {self.description}'
