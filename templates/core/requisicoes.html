@@ -373,14 +373,6 @@
                     <img data-photo-preview alt="Preview" style="max-height: 90px; display: none; border: 1px solid #1f2a44; border-radius: 6px;" />
                 </div>
             </div>
-            <div style="flex: 2;">
-                <label>Anexos (arquivos)</label>
-                <input type="file" data-field="attachments" multiple />
-                <div class="muted" style="margin-top: 6px; font-size: 0.78rem;">
-                    <div data-attachments-list style="display:grid; gap:4px;"></div>
-                    <span data-attachments-empty>Sem anexos</span>
-                </div>
-            </div>
         </div>
         <div class="muted" data-budget-created-at style="margin-top: 6px; font-size: 0.82rem;">
             Cadastrado em: novo (data/hora atual ao salvar)
@@ -415,14 +407,6 @@
                         link: "{{ quote.link|escapejs }}",
                         created_at: "{{ quote.created_at|date:'d/m/Y H:i'|escapejs }}",
                         photo_url: "{% if quote.photo %}{{ quote.photo.url|escapejs }}{% endif %}",
-                        attachment_url: "{% if quote.attachment %}{{ quote.attachment.url|escapejs }}{% endif %}",
-                        attachment_name: "{% if quote.attachment %}{{ quote.attachment.name|cut:'requisitions/quotes/files/'|escapejs }}{% endif %}",
-                        attachments: [
-                            {% if quote.attachment %}{ url: "{{ quote.attachment.url|escapejs }}", name: "{{ quote.attachment.name|cut:'requisitions/quotes/files/'|escapejs }}" },{% endif %}
-                            {% for extra in quote.attachments.all %}
-                            { url: "{{ extra.file.url|escapejs }}", name: "{{ extra.file.name|cut:'requisitions/quotes/files/'|escapejs }}" }{% if not forloop.last %},{% endif %}
-                            {% endfor %}
-                        ],
                     }{% if not forloop.last %},{% endif %}
                     {% endfor %}
                 ],
@@ -817,7 +801,6 @@
             const srcLink = sourceItem.querySelector('[data-field="link"]');
             const srcPreview = sourceItem.querySelector('[data-photo-preview]');
             const srcPhoto = sourceItem.querySelector('[data-field="photo"]');
-            const srcAttachments = sourceItem.querySelector('[data-field="attachments"]');
 
             const dstName = created.item.querySelector('[data-field="name"]');
             const dstQuantity = created.item.querySelector('[data-field="quantity"]');
@@ -826,7 +809,6 @@
             const dstLink = created.item.querySelector('[data-field="link"]');
             const dstPreview = created.item.querySelector('[data-photo-preview]');
             const dstPhoto = created.item.querySelector('[data-field="photo"]');
-            const dstAttachments = created.item.querySelector('[data-field="attachments"]');
 
             if (dstName && srcName) dstName.value = srcName.value || '';
             if (dstQuantity && srcQuantity) dstQuantity.value = srcQuantity.value || '1';
@@ -840,15 +822,7 @@
                 const dt = new DataTransfer();
                 dt.items.add(srcFile);
                 dstPhoto.files = dt.files;
-            }
-            const srcAttachmentFiles = Array.from(srcAttachments?.files || []);
-            if (srcAttachmentFiles.length && dstAttachments) {
-                const dtAttach = new DataTransfer();
-                srcAttachmentFiles.forEach((f) => dtAttach.items.add(f));
-                dstAttachments.files = dtAttach.files;
-                dstAttachments.dispatchEvent(new Event('change'));
-            }
-            if (srcPreview && dstPreview) {
+            } else if (srcPreview && dstPreview) {
                 const src = (srcPreview.getAttribute('src') || '').trim();
                 if (src) {
                     dstPreview.setAttribute('src', src);
@@ -911,7 +885,6 @@
             item.querySelector('[data-field="freight"]').name = `budget_freight_${idx}`;
             item.querySelector('[data-field="link"]').name = `budget_link_${idx}`;
             item.querySelector('[data-field="photo"]').name = `budget_photo_${idx}`;
-            item.querySelector('[data-field="attachments"]').name = `budget_attachments_${idx}`;
             item.querySelector('[data-field="approved"]').name = 'approved_budget_idx';
             item.querySelector('[data-field="approved"]').value = String(idx);
         };
@@ -941,9 +914,6 @@
             const openLinkBtn = item.querySelector('[data-open-budget-link]');
             const captureBtn = item.querySelector('[data-capture-budget]');
             const photoInput = item.querySelector('[data-field="photo"]');
-            const attachmentsInput = item.querySelector('[data-field="attachments"]');
-            const attachmentsList = item.querySelector('[data-attachments-list]');
-            const attachmentsEmpty = item.querySelector('[data-attachments-empty]');
             const preview = item.querySelector('[data-photo-preview]');
 
             const clearAsParent = (removedIdx) => {
@@ -1081,46 +1051,6 @@
                     preview.src = initialData.photo_url;
                     preview.style.display = 'block';
                 }
-                if (attachmentsList && attachmentsEmpty) {
-                    const savedAttachments = Array.isArray(initialData.attachments) ? initialData.attachments.filter((a) => a && a.url) : [];
-                    attachmentsList.innerHTML = '';
-                    savedAttachments.forEach((att) => {
-                        const a = document.createElement('a');
-                        a.href = att.url;
-                        a.target = '_blank';
-                        a.rel = 'noopener noreferrer';
-                        a.textContent = att.name || 'Abrir anexo';
-                        attachmentsList.appendChild(a);
-                    });
-                    attachmentsEmpty.style.display = savedAttachments.length ? 'none' : 'inline';
-                }
-            }
-
-            if (attachmentsInput) {
-                attachmentsInput.addEventListener('change', () => {
-                    if (!attachmentsList || !attachmentsEmpty) return;
-                    attachmentsList.innerHTML = '';
-                    const files = Array.from(attachmentsInput.files || []);
-                    if (files.length) {
-                        files.forEach((file) => {
-                            const span = document.createElement('span');
-                            span.textContent = file.name;
-                            attachmentsList.appendChild(span);
-                        });
-                        attachmentsEmpty.style.display = 'none';
-                        return;
-                    }
-                    const savedAttachments = Array.isArray(initialData?.attachments) ? initialData.attachments.filter((a) => a && a.url) : [];
-                    savedAttachments.forEach((att) => {
-                        const a = document.createElement('a');
-                        a.href = att.url;
-                        a.target = '_blank';
-                        a.rel = 'noopener noreferrer';
-                        a.textContent = att.name || 'Abrir anexo';
-                        attachmentsList.appendChild(a);
-                    });
-                    attachmentsEmpty.style.display = savedAttachments.length ? 'none' : 'inline';
-                });
             }
 
             photoInput.addEventListener('change', () => {

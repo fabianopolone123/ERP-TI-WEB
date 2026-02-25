@@ -213,21 +213,11 @@ class RequisitionQuote(models.Model):
     freight = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     is_selected = models.BooleanField(default=False)
     photo = models.ImageField(upload_to='requisitions/quotes/', null=True, blank=True)
-    attachment = models.FileField(upload_to='requisitions/quotes/files/', null=True, blank=True)
     link = models.URLField(blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self) -> str:
         return f'{self.requisition_id} - {self.name}'
-
-
-class RequisitionQuoteAttachment(models.Model):
-    quote = models.ForeignKey(RequisitionQuote, on_delete=models.CASCADE, related_name='attachments')
-    file = models.FileField(upload_to='requisitions/quotes/files/')
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self) -> str:
-        return f'{self.quote_id} - {self.file.name}'
 
 
 class AccessFolder(models.Model):

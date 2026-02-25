@@ -38,7 +38,6 @@ from .models import (
     _extract_equipment_tag_number,
     Requisition,
     RequisitionQuote,
-    RequisitionQuoteAttachment,
     AccessFolder,
     AccessMember,
     AuditLog,
@@ -1174,10 +1173,8 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
             freight_raw = (request.POST.get(f'budget_freight_{idx}') or '').strip()
             link = (request.POST.get(f'budget_link_{idx}') or '').strip()
             photo = request.FILES.get(f'budget_photo_{idx}')
-            attachment = request.FILES.get(f'budget_attachment_{idx}')
-            attachments = [f for f in request.FILES.getlist(f'budget_attachments_{idx}') if f]
 
-            if not name and not value_raw and not link and not photo and not attachment and not attachments and not quote_id:
+            if not name and not value_raw and not link and not photo and not quote_id:
                 continue
 
             if not name:
@@ -1209,15 +1206,9 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
                 quote.is_selected = False
                 if photo:
                     quote.photo = photo
-                if attachment:
-                    quote.attachment = attachment
-                if photo or attachment:
                     quote.save()
                 else:
                     quote.save(update_fields=['name', 'quantity', 'value', 'freight', 'link', 'parent', 'is_selected'])
-                if attachments:
-                    for file_obj in attachments:
-                        RequisitionQuoteAttachment.objects.create(quote=quote, file=file_obj)
                 kept_ids.add(quote.id)
                 idx_to_quote[idx] = quote
                 saved_count += 1
@@ -1233,27 +1224,12 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
                 is_selected=False,
                 link=link,
                 photo=photo,
-                attachment=attachment,
             )
-            if source_quote_id and (not photo or not attachment or not attachments):
+            if not photo and source_quote_id:
                 source_quote = RequisitionQuote.objects.filter(id=source_quote_id).first()
-                updates = []
-                if source_quote:
-                    if (not photo) and source_quote.photo:
-                        created.photo = source_quote.photo.name
-                        updates.append('photo')
-                    if (not attachment) and source_quote.attachment:
-                        created.attachment = source_quote.attachment.name
-                        updates.append('attachment')
-                if updates:
-                    created.save(update_fields=updates)
-                if source_quote and not attachments:
-                    for extra in source_quote.attachments.all():
-                        if extra.file:
-                            RequisitionQuoteAttachment.objects.create(quote=created, file=extra.file.name)
-            if attachments:
-                for file_obj in attachments:
-                    RequisitionQuoteAttachment.objects.create(quote=created, file=file_obj)
+                if source_quote and source_quote.photo:
+                    created.photo = source_quote.photo.name
+                    created.save(update_fields=['photo'])
             kept_ids.add(created.id)
             idx_to_quote[idx] = created
             saved_count += 1
@@ -1385,7 +1361,7 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
         context['modules'] = build_modules('requisicoes') if is_ti else []
         requisitions = (
             Requisition.objects
-            .prefetch_related('quotes__subquotes', 'quotes__attachments', 'quotes__subquotes__attachments')
+            .prefetch_related('quotes__subquotes')
             .order_by('-created_at', '-id')
         )
         for req in requisitions:
