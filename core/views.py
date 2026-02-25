@@ -2455,6 +2455,8 @@ def ticket_timer_action(request):
 def _can_delete_ticket(request, ticket: Ticket) -> bool:
     if not ticket:
         return False
+    if ticket.status == Ticket.Status.CANCELADO:
+        return False
     if getattr(request.user, 'id', None) and ticket.created_by_id == request.user.id:
         return True
     if not is_ti_user(request):
@@ -2694,18 +2696,24 @@ def ticket_delete(request):
     if not _can_delete_ticket(request, ticket):
         return JsonResponse({'ok': False, 'error': 'forbidden'}, status=403)
 
-    try:
-        ticket_attachment = ticket.attachment
-        if ticket_attachment:
-            ticket_attachment.delete(save=False)
-        for msg in TicketMessage.objects.filter(ticket=ticket).exclude(attachment=''):
-            if msg.attachment:
-                msg.attachment.delete(save=False)
-    except Exception:
-        logger.exception('Falha ao remover anexos do chamado %s antes da exclusao', ticket.id)
-
-    ticket.delete()
-    return JsonResponse({'ok': True})
+    previous_status = ticket.status
+    TicketAttendantCycle.objects.filter(ticket=ticket).exclude(current_cycle_started_at__isnull=True).update(
+        current_cycle_started_at=None,
+        updated_at=timezone.now(),
+    )
+    ticket.current_cycle_started_at = None
+    ticket.status = Ticket.Status.CANCELADO
+    ticket.save(update_fields=['status', 'current_cycle_started_at', 'updated_at'])
+    _sync_ticket_cycle_snapshot(ticket)
+    _log_ticket_timeline(
+        ticket=ticket,
+        event_type=TicketTimelineEvent.EventType.STATUS_CHANGED,
+        request_user=request.user,
+        from_status=previous_status,
+        to_status=Ticket.Status.CANCELADO,
+        note='Chamado cancelado (registro mantido para auditoria).',
+    )
+    return JsonResponse({'ok': True, 'cancelled': True})
 
 
 @login_required

@@ -297,6 +297,7 @@ class Ticket(models.Model):
         PROGRAMADO = 'programado', 'Programado'
         EM_ATENDIMENTO = 'em_atendimento', 'Em atendimento'
         FECHADO = 'fechado', 'Fechado'
+        CANCELADO = 'cancelado', 'Cancelado'
 
     class FailureType(models.TextChoices):
         NA = 'na', 'N/A'
