@@ -213,6 +213,7 @@ class RequisitionQuote(models.Model):
     freight = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     is_selected = models.BooleanField(default=False)
     photo = models.ImageField(upload_to='requisitions/quotes/', null=True, blank=True)
+    attachment = models.FileField(upload_to='requisitions/quotes/files/', null=True, blank=True)
     link = models.URLField(blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
 

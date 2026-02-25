@@ -373,6 +373,14 @@
                     <img data-photo-preview alt="Preview" style="max-height: 90px; display: none; border: 1px solid #1f2a44; border-radius: 6px;" />
                 </div>
             </div>
+            <div style="flex: 2;">
+                <label>Anexo (arquivo)</label>
+                <input type="file" data-field="attachment" />
+                <div class="muted" style="margin-top: 6px; font-size: 0.78rem;">
+                    <a href="#" data-attachment-link target="_blank" rel="noopener noreferrer" style="display:none;">Abrir anexo atual</a>
+                    <span data-attachment-empty>Sem anexo</span>
+                </div>
+            </div>
         </div>
         <div class="muted" data-budget-created-at style="margin-top: 6px; font-size: 0.82rem;">
             Cadastrado em: novo (data/hora atual ao salvar)
@@ -407,6 +415,8 @@
                         link: "{{ quote.link|escapejs }}",
                         created_at: "{{ quote.created_at|date:'d/m/Y H:i'|escapejs }}",
                         photo_url: "{% if quote.photo %}{{ quote.photo.url|escapejs }}{% endif %}",
+                        attachment_url: "{% if quote.attachment %}{{ quote.attachment.url|escapejs }}{% endif %}",
+                        attachment_name: "{% if quote.attachment %}{{ quote.attachment.name|cut:'requisitions/quotes/files/'|escapejs }}{% endif %}",
                     }{% if not forloop.last %},{% endif %}
                     {% endfor %}
                 ],
@@ -885,6 +895,7 @@
             item.querySelector('[data-field="freight"]').name = `budget_freight_${idx}`;
             item.querySelector('[data-field="link"]').name = `budget_link_${idx}`;
             item.querySelector('[data-field="photo"]').name = `budget_photo_${idx}`;
+            item.querySelector('[data-field="attachment"]').name = `budget_attachment_${idx}`;
             item.querySelector('[data-field="approved"]').name = 'approved_budget_idx';
             item.querySelector('[data-field="approved"]').value = String(idx);
         };
@@ -914,6 +925,9 @@
             const openLinkBtn = item.querySelector('[data-open-budget-link]');
             const captureBtn = item.querySelector('[data-capture-budget]');
             const photoInput = item.querySelector('[data-field="photo"]');
+            const attachmentInput = item.querySelector('[data-field="attachment"]');
+            const attachmentLink = item.querySelector('[data-attachment-link]');
+            const attachmentEmpty = item.querySelector('[data-attachment-empty]');
             const preview = item.querySelector('[data-photo-preview]');
 
             const clearAsParent = (removedIdx) => {
@@ -1051,6 +1065,38 @@
                     preview.src = initialData.photo_url;
                     preview.style.display = 'block';
                 }
+                if (attachmentLink && attachmentEmpty) {
+                    if (initialData.attachment_url) {
+                        attachmentLink.href = initialData.attachment_url;
+                        attachmentLink.textContent = initialData.attachment_name || 'Abrir anexo atual';
+                        attachmentLink.style.display = 'inline';
+                        attachmentEmpty.style.display = 'none';
+                    } else {
+                        attachmentLink.style.display = 'none';
+                        attachmentEmpty.style.display = 'inline';
+                    }
+                }
+            }
+
+            if (attachmentInput) {
+                attachmentInput.addEventListener('change', () => {
+                    if (!attachmentLink || !attachmentEmpty) return;
+                    const file = attachmentInput.files && attachmentInput.files[0];
+                    if (file) {
+                        attachmentLink.removeAttribute('href');
+                        attachmentLink.textContent = file.name;
+                        attachmentLink.style.display = 'inline';
+                        attachmentEmpty.style.display = 'none';
+                    } else if (initialData && initialData.attachment_url) {
+                        attachmentLink.href = initialData.attachment_url;
+                        attachmentLink.textContent = initialData.attachment_name || 'Abrir anexo atual';
+                        attachmentLink.style.display = 'inline';
+                        attachmentEmpty.style.display = 'none';
+                    } else {
+                        attachmentLink.style.display = 'none';
+                        attachmentEmpty.style.display = 'inline';
+                    }
+                });
             }
 
             photoInput.addEventListener('change', () => {

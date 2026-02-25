@@ -1173,8 +1173,9 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
             freight_raw = (request.POST.get(f'budget_freight_{idx}') or '').strip()
             link = (request.POST.get(f'budget_link_{idx}') or '').strip()
             photo = request.FILES.get(f'budget_photo_{idx}')
+            attachment = request.FILES.get(f'budget_attachment_{idx}')
 
-            if not name and not value_raw and not link and not photo and not quote_id:
+            if not name and not value_raw and not link and not photo and not attachment and not quote_id:
                 continue
 
             if not name:
@@ -1206,6 +1207,9 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
                 quote.is_selected = False
                 if photo:
                     quote.photo = photo
+                if attachment:
+                    quote.attachment = attachment
+                if photo or attachment:
                     quote.save()
                 else:
                     quote.save(update_fields=['name', 'quantity', 'value', 'freight', 'link', 'parent', 'is_selected'])
@@ -1224,12 +1228,20 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
                 is_selected=False,
                 link=link,
                 photo=photo,
+                attachment=attachment,
             )
-            if not photo and source_quote_id:
+            if source_quote_id and (not photo or not attachment):
                 source_quote = RequisitionQuote.objects.filter(id=source_quote_id).first()
-                if source_quote and source_quote.photo:
-                    created.photo = source_quote.photo.name
-                    created.save(update_fields=['photo'])
+                updates = []
+                if source_quote:
+                    if (not photo) and source_quote.photo:
+                        created.photo = source_quote.photo.name
+                        updates.append('photo')
+                    if (not attachment) and source_quote.attachment:
+                        created.attachment = source_quote.attachment.name
+                        updates.append('attachment')
+                if updates:
+                    created.save(update_fields=updates)
             kept_ids.add(created.id)
             idx_to_quote[idx] = created
             saved_count += 1
