@@ -161,6 +161,10 @@ class SoftwareInventory(models.Model):
 
 
 class Requisition(models.Model):
+    class Kind(models.TextChoices):
+        PHYSICAL = 'physical', 'Requisicao fisica'
+        DIGITAL = 'digital', 'Requisicao de produtos digitais'
+
     class Status(models.TextChoices):
         PENDING_APPROVAL = 'pending_approval', 'Pendente de aprovação'
         APPROVED = 'approved', 'Aprovado'
@@ -168,6 +172,7 @@ class Requisition(models.Model):
         RECEIVED = 'received', 'Recebido'
 
     title = models.CharField(max_length=200, blank=True, default='')
+    kind = models.CharField(max_length=20, choices=Kind.choices, default=Kind.PHYSICAL)
     request = models.CharField(max_length=300)
     status = models.CharField(max_length=30, choices=Status.choices, default=Status.PENDING_APPROVAL)
     quantity = models.PositiveIntegerField(default=1)
@@ -218,6 +223,17 @@ class RequisitionQuote(models.Model):
 
     def __str__(self) -> str:
         return f'{self.requisition_id} - {self.name}'
+
+
+
+
+class RequisitionQuoteAttachment(models.Model):
+    quote = models.ForeignKey(RequisitionQuote, on_delete=models.CASCADE, related_name='attachments')
+    file = models.FileField(upload_to='requisitions/quotes/files/')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self) -> str:
+        return f'Anexo orcamento {self.quote_id} - {self.id}'
 
 
 class AccessFolder(models.Model):

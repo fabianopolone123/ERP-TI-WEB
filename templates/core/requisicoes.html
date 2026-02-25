@@ -122,7 +122,13 @@
 
         <div class="topbar" style="margin-top: 16px;">
             <h3>Requisições</h3>
-            <button type="button" data-open-requisition>Nova requisição</button>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+
+                <button type="button" data-open-requisition data-requisition-kind="physical">Requisição física</button>
+
+                <button type="button" data-open-requisition data-requisition-kind="digital">Requisição de produtos digitais</button>
+
+            </div>
         </div>
 
         <div class="form-row" style="margin-bottom: 10px;">
@@ -168,7 +174,7 @@
                                         {% for quote in item.main_quotes %}
                                             <div style="margin-bottom: 6px;">
                                                 {{ quote.name }} (R$ {{ quote.package_total|br_money }})
-                                                {% if item.approved_quote_id == quote.id %}
+                                                {% if quote.is_display_selected %}
                                                     <span class="status-pill status-approved" style="margin-left: 6px;">Aprovado</span>
                                                 {% endif %}
                                             </div>
@@ -216,13 +222,14 @@
     <div class="modal-backdrop" data-close-requisition></div>
     <div class="modal-content">
         <div class="topbar" style="margin-bottom: 8px;">
-            <h3 data-requisition-modal-title>Nova requisição</h3>
+            <div style="display:flex; align-items:center; gap:8px;"><h3 data-requisition-modal-title style="margin:0;">Nova requisição</h3><span class="status-pill" data-requisition-kind-badge>Física</span></div>
             <button type="button" data-close-requisition>Fechar</button>
         </div>
         <form method="post" enctype="multipart/form-data" data-requisition-form>
             {% csrf_token %}
             <input type="hidden" name="mode" value="create" data-requisition-mode />
             <input type="hidden" name="requisition_id" value="" data-requisition-id-input />
+            <input type="hidden" name="requisition_kind" value="physical" data-requisition-kind-input />
             <div class="form-row">
                 <div style="max-width: 520px;">
                     <label for="id_requisition_title">Título</label>
@@ -346,8 +353,12 @@
                 <input type="text" data-field="freight" placeholder="Ex.: 120,00" />
             </div>
             <div class="budget-actions-row">
-                <label class="approve-pill">
+                <label class="approve-pill" data-approve-single-wrap>
                     <input type="radio" data-field="approved" />
+                    Aprovar
+                </label>
+                <label class="approve-pill" data-approve-multi-wrap style="display: none;">
+                    <input type="checkbox" data-field="approved-multi" />
                     Aprovar
                 </label>
                 <button type="button" data-add-sub-budget>Suborçamentos (0)</button>
@@ -363,7 +374,7 @@
                     <button type="button" data-open-budget-link>Abrir link</button>
                 </div>
             </div>
-            <div style="flex: 2;">
+            <div style="flex: 2;" data-photo-block>
                 <label>Foto</label>
                 <div style="display: flex; gap: 8px; align-items: center;">
                     <input type="file" accept="image/*" data-field="photo" />
@@ -372,6 +383,12 @@
                 <div style="margin-top: 8px;">
                     <img data-photo-preview alt="Preview" style="max-height: 90px; display: none; border: 1px solid #1f2a44; border-radius: 6px;" />
                 </div>
+            </div>
+            <div style="flex: 2; display: none;" data-files-block>
+                <label>Anexos (propostas)</label>
+                <input type="file" data-field="proposal-files" multiple />
+                <div class="muted" style="margin-top: 6px; font-size: 0.82rem;">Arquivos anexados neste orçamento:</div>
+                <div data-proposal-files-list style="margin-top: 4px; display: grid; gap: 4px;"></div>
             </div>
         </div>
         <div class="muted" data-budget-created-at style="margin-top: 6px; font-size: 0.82rem;">
@@ -393,6 +410,7 @@
                 title: "{{ item.title|escapejs }}",
                 request: "{{ item.request|escapejs }}",
                 status: "{{ item.status|escapejs }}",
+                kind: "{{ item.kind|default:'physical'|escapejs }}",
                 quotes: [
                     {% for quote in item.quotes.all %}
                     {
@@ -407,6 +425,11 @@
                         link: "{{ quote.link|escapejs }}",
                         created_at: "{{ quote.created_at|date:'d/m/Y H:i'|escapejs }}",
                         photo_url: "{% if quote.photo %}{{ quote.photo.url|escapejs }}{% endif %}",
+                        attachments: [
+                            {% for attachment in quote.attachments.all %}
+                            { url: "{{ attachment.file.url|escapejs }}", name: "{{ attachment.file.name|escapejs }}" }{% if not forloop.last %},{% endif %}
+                            {% endfor %}
+                        ],
                     }{% if not forloop.last %},{% endif %}
                     {% endfor %}
                 ],
@@ -415,11 +438,13 @@
         };
 
         const modal = document.querySelector('[data-requisition-modal]');
-        const openBtn = document.querySelector('[data-open-requisition]');
+        const openBtns = Array.from(document.querySelectorAll('[data-open-requisition]'));
         const closeEls = document.querySelectorAll('[data-close-requisition]');
         const modalTitle = document.querySelector('[data-requisition-modal-title]');
         const modeInput = document.querySelector('[data-requisition-mode]');
         const requisitionIdInput = document.querySelector('[data-requisition-id-input]');
+        const requisitionKindInput = document.querySelector('[data-requisition-kind-input]');
+        const requisitionKindBadge = document.querySelector('[data-requisition-kind-badge]');
         const requisitionStatus = document.querySelector('#id_requisition_status');
         const requisitionTitle = document.querySelector('#id_requisition_title');
         const addBtn = document.querySelector('[data-add-budget]');
@@ -444,7 +469,7 @@
         const imageViewer = document.querySelector('[data-image-viewer-src]');
         const closeImageViewerEls = document.querySelectorAll('[data-close-image-viewer]');
 
-        if (!modal || !openBtn || !budgetList || !template || !form || !modeInput || !requisitionIdInput || !requisitionStatus || !requisitionTitle || !subBudgetModal || !subBudgetTitle || !subBudgetList || !subBudgetEmpty || !subBudgetAddBtn) return;
+        if (!modal || !openBtns.length || !budgetList || !template || !form || !modeInput || !requisitionIdInput || !requisitionKindInput || !requisitionStatus || !requisitionTitle || !subBudgetModal || !subBudgetTitle || !subBudgetList || !subBudgetEmpty || !subBudgetAddBtn) return;
 
         let budgetIndex = 0;
         let captureTargetInput = null;
@@ -455,6 +480,64 @@
         let startX = 0;
         let startY = 0;
         let activeSubBudgetParent = null;
+        let currentRequisitionKind = 'physical';
+
+        const normalizeRequisitionKind = (value) => String(value || '').trim().toLowerCase() === 'digital' ? 'digital' : 'physical';
+        const isDigitalRequisition = () => normalizeRequisitionKind(currentRequisitionKind) === 'digital';
+        const kindLabel = (kind) => normalizeRequisitionKind(kind) === 'digital' ? 'Produtos digitais' : 'Física';
+        const setRequisitionKind = (kind) => {
+            currentRequisitionKind = normalizeRequisitionKind(kind);
+            if (requisitionKindInput) requisitionKindInput.value = currentRequisitionKind;
+            if (requisitionKindBadge) {
+                requisitionKindBadge.textContent = kindLabel(currentRequisitionKind);
+                requisitionKindBadge.classList.toggle('status-approved', currentRequisitionKind === 'digital');
+            }
+        };
+        const renderProposalAttachmentList = (listEl, attachments = []) => {
+            if (!listEl) return;
+            const rows = Array.isArray(attachments) ? attachments.filter(Boolean) : [];
+            if (!rows.length) {
+                listEl.innerHTML = '<div class="muted">Nenhum anexo salvo.</div>';
+                return;
+            }
+            listEl.innerHTML = rows.map((att) => {
+                const rawName = String(att.name || '').split('/').pop() || 'Arquivo';
+                const safeName = escapeHtml(rawName);
+                const safeUrl = escapeHtml(att.url || '#');
+                return `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${safeName}</a>`;
+            }).join('');
+        };
+        const applyBudgetItemMode = (item) => {
+            if (!item) return;
+            const isDigital = isDigitalRequisition();
+            const photoBlock = item.querySelector('[data-photo-block]');
+            const filesBlock = item.querySelector('[data-files-block]');
+            const photoInput = item.querySelector('[data-field="photo"]');
+            const captureBtn = item.querySelector('[data-capture-budget]');
+            const singleWrap = item.querySelector('[data-approve-single-wrap]');
+            const multiWrap = item.querySelector('[data-approve-multi-wrap]');
+            const singleInput = item.querySelector('[data-field="approved"]');
+            const multiInput = item.querySelector('[data-field="approved-multi"]');
+            const isSub = !!itemParentIdx(item);
+
+            if (photoBlock) photoBlock.style.display = isDigital ? 'none' : '';
+            if (filesBlock) filesBlock.style.display = isDigital ? '' : 'none';
+            if (photoInput) photoInput.disabled = isDigital;
+            if (captureBtn) captureBtn.style.display = isDigital ? 'none' : '';
+            if (singleWrap) singleWrap.style.display = isDigital ? 'none' : '';
+            if (multiWrap) multiWrap.style.display = isDigital ? '' : 'none';
+            if (singleInput) {
+                singleInput.disabled = isSub || isDigital;
+                if (isDigital) singleInput.checked = false;
+            }
+            if (multiInput) {
+                multiInput.disabled = isSub || !isDigital;
+                if (!isDigital) multiInput.checked = false;
+            }
+        };
+        const applyRequisitionKindMode = () => {
+            allBudgetItems().forEach((item) => applyBudgetItemMode(item));
+        };
 
         const openImageViewer = (src) => {
             if (!imageViewerModal || !imageViewer || !src) return;
@@ -885,8 +968,11 @@
             item.querySelector('[data-field="freight"]').name = `budget_freight_${idx}`;
             item.querySelector('[data-field="link"]').name = `budget_link_${idx}`;
             item.querySelector('[data-field="photo"]').name = `budget_photo_${idx}`;
+            item.querySelector('[data-field="proposal-files"]').name = `budget_files_${idx}`;
             item.querySelector('[data-field="approved"]').name = 'approved_budget_idx';
             item.querySelector('[data-field="approved"]').value = String(idx);
+            item.querySelector('[data-field="approved-multi"]').name = 'approved_budget_idx_list';
+            item.querySelector('[data-field="approved-multi"]').value = String(idx);
         };
 
         const addBudgetItem = (initialData = null, parentMeta = null) => {
@@ -911,6 +997,9 @@
             const addSubBtn = item.querySelector('[data-add-sub-budget]');
             const copySubBtn = item.querySelector('[data-copy-sub-budget]');
             const approvedInput = item.querySelector('[data-field="approved"]');
+            const approvedMultiInput = item.querySelector('[data-field="approved-multi"]');
+            const proposalFilesInput = item.querySelector('[data-field="proposal-files"]');
+            const proposalFilesList = item.querySelector('[data-proposal-files-list]');
             const openLinkBtn = item.querySelector('[data-open-budget-link]');
             const captureBtn = item.querySelector('[data-capture-budget]');
             const photoInput = item.querySelector('[data-field="photo"]');
@@ -1007,6 +1096,10 @@
                     approvedInput.checked = false;
                     approvedInput.disabled = true;
                 }
+                if (approvedMultiInput) {
+                    approvedMultiInput.checked = false;
+                    approvedMultiInput.disabled = true;
+                }
                 if (addSubBtn) {
                     addSubBtn.style.display = 'none';
                 }
@@ -1021,6 +1114,9 @@
                 parentQuoteIdInput.value = '';
                 if (approvedInput) {
                     approvedInput.disabled = false;
+                }
+                if (approvedMultiInput) {
+                    approvedMultiInput.disabled = false;
                 }
                 if (packageTotalEl) {
                     packageTotalEl.style.display = '';
@@ -1044,6 +1140,10 @@
                 if (approvedInput) {
                     approvedInput.checked = !!initialData.is_selected && !initialData.parent_id;
                 }
+                if (approvedMultiInput) {
+                    approvedMultiInput.checked = !!initialData.is_selected && !initialData.parent_id;
+                }
+                renderProposalAttachmentList(proposalFilesList, initialData.attachments || []);
                 if (createdAtEl) {
                     createdAtEl.textContent = `Cadastrado em: ${initialData.created_at || 'data indisponível'}`;
                 }
@@ -1051,6 +1151,10 @@
                     preview.src = initialData.photo_url;
                     preview.style.display = 'block';
                 }
+            }
+
+            if (!initialData) {
+                renderProposalAttachmentList(proposalFilesList, []);
             }
 
             photoInput.addEventListener('change', () => {
@@ -1076,7 +1180,15 @@
                 nameInput.addEventListener('change', refreshBudgetCardStyles);
             }
 
+            if (proposalFilesInput) {
+                proposalFilesInput.addEventListener('change', () => {
+                    const files = Array.from(proposalFilesInput.files || []).map((f) => ({ name: f.name, url: '' }));
+                    renderProposalAttachmentList(proposalFilesList, files);
+                });
+            }
+
             captureBtn.addEventListener('click', async () => {
+                if (isDigitalRequisition()) return;
                 try {
                     const stream = await getDisplayStream();
                     const video = document.createElement('video');
@@ -1115,6 +1227,7 @@
                 }
             });
 
+            applyBudgetItemMode(item);
             budgetList.appendChild(item);
             applySubBudgetVisibility();
             return { idx, item };
@@ -1216,17 +1329,20 @@
             }, 'image/png');
         });
 
-        const openCreate = () => {
+        const openCreate = (kind = 'physical') => {
             closeSubBudgetModal();
+            const normalizedKind = normalizeRequisitionKind(kind);
+            setRequisitionKind(normalizedKind);
             modeInput.value = 'create';
             requisitionIdInput.value = '';
-            modalTitle.textContent = 'Nova requisição';
+            modalTitle.textContent = normalizedKind === 'digital' ? 'Nova requisição de produtos digitais' : 'Nova requisição física';
             requisitionTitle.value = '';
             requestInput.value = '';
             requisitionStatus.value = 'pending_approval';
             clearBudgetItems();
             budgetIndex = 0;
             addBudgetItem();
+            applyRequisitionKindMode();
             modal.hidden = false;
         };
 
@@ -1236,6 +1352,7 @@
             if (!data) return;
             modeInput.value = 'update';
             requisitionIdInput.value = String(data.id);
+            setRequisitionKind(data.kind || 'physical');
             modalTitle.textContent = `Editar requisição ${data.code || ('TI - ' + String(data.id).padStart(4, '0'))}`;
             requisitionTitle.value = data.title || '';
             requestInput.value = data.request || '';
@@ -1282,6 +1399,7 @@
             } else {
                 addBudgetItem();
             }
+            applyRequisitionKindMode();
             modal.hidden = false;
         };
 
@@ -1291,6 +1409,7 @@
             if (!data) return;
             modeInput.value = 'create';
             requisitionIdInput.value = '';
+            setRequisitionKind(data.kind || 'physical');
             modalTitle.textContent = `Duplicar requisição ${data.code || ('TI - ' + String(data.id).padStart(4, '0'))}`;
             requisitionTitle.value = data.title || '';
             requestInput.value = data.request || '';
@@ -1344,6 +1463,7 @@
             } else {
                 addBudgetItem();
             }
+            applyRequisitionKindMode();
             modal.hidden = false;
         };
 
@@ -1352,7 +1472,9 @@
             modal.hidden = true;
         };
 
-        openBtn.addEventListener('click', openCreate);
+        openBtns.forEach((btn) => {
+            btn.addEventListener('click', () => openCreate(btn.getAttribute('data-requisition-kind') || 'physical'));
+        });
         closeEls.forEach((el) => el.addEventListener('click', close));
         addBtn.addEventListener('click', addBudgetItem);
 

@@ -38,6 +38,7 @@ from .models import (
     _extract_equipment_tag_number,
     Requisition,
     RequisitionQuote,
+    RequisitionQuoteAttachment,
     AccessFolder,
     AccessMember,
     AuditLog,
@@ -1159,6 +1160,7 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
         kept_ids: set[int] = set()
         idx_to_quote: dict[str, RequisitionQuote] = {}
         saved_count = 0
+        is_digital = requisition.kind == Requisition.Kind.DIGITAL
 
         for idx in request.POST.getlist('budget_index'):
             idx = (idx or '').strip()
@@ -1173,8 +1175,9 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
             freight_raw = (request.POST.get(f'budget_freight_{idx}') or '').strip()
             link = (request.POST.get(f'budget_link_{idx}') or '').strip()
             photo = request.FILES.get(f'budget_photo_{idx}')
+            uploaded_files = request.FILES.getlist(f'budget_files_{idx}')
 
-            if not name and not value_raw and not link and not photo and not quote_id:
+            if not name and not value_raw and not link and not photo and not quote_id and not uploaded_files:
                 continue
 
             if not name:
@@ -1209,6 +1212,12 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
                     quote.save()
                 else:
                     quote.save(update_fields=['name', 'quantity', 'value', 'freight', 'link', 'parent', 'is_selected'])
+                if is_digital:
+                    for file_obj in uploaded_files:
+                        if file_obj:
+                            RequisitionQuoteAttachment.objects.create(quote=quote, file=file_obj)
+                else:
+                    quote.attachments.all().delete()
                 kept_ids.add(quote.id)
                 idx_to_quote[idx] = quote
                 saved_count += 1
@@ -1230,6 +1239,14 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
                 if source_quote and source_quote.photo:
                     created.photo = source_quote.photo.name
                     created.save(update_fields=['photo'])
+                if is_digital and source_quote:
+                    for src_attachment in source_quote.attachments.all():
+                        if src_attachment.file:
+                            RequisitionQuoteAttachment.objects.create(quote=created, file=src_attachment.file.name)
+            if is_digital:
+                for file_obj in uploaded_files:
+                    if file_obj:
+                        RequisitionQuoteAttachment.objects.create(quote=created, file=file_obj)
             kept_ids.add(created.id)
             idx_to_quote[idx] = created
             saved_count += 1
@@ -1250,15 +1267,31 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
                 quote.parent = parent_quote
                 quote.save(update_fields=['parent'])
 
-        selected_idx = (request.POST.get('approved_budget_idx') or '').strip()
-        selected_quote = idx_to_quote.get(selected_idx) if selected_idx else None
-        if selected_quote and selected_quote.parent_id:
-            return 0, 'Selecione como aprovado apenas um orçamento principal.'
+        selected_quotes: list[RequisitionQuote] = []
+        if is_digital:
+            selected_idx_values = [str(v).strip() for v in request.POST.getlist('approved_budget_idx_list') if str(v).strip()]
+            seen_idx: set[str] = set()
+            for selected_idx in selected_idx_values:
+                if selected_idx in seen_idx:
+                    continue
+                seen_idx.add(selected_idx)
+                selected_quote = idx_to_quote.get(selected_idx)
+                if not selected_quote:
+                    continue
+                if selected_quote.parent_id:
+                    return 0, 'Selecione como aprovado apenas orçamento principal.'
+                selected_quotes.append(selected_quote)
+        else:
+            selected_idx = (request.POST.get('approved_budget_idx') or '').strip()
+            selected_quote = idx_to_quote.get(selected_idx) if selected_idx else None
+            if selected_quote and selected_quote.parent_id:
+                return 0, 'Selecione como aprovado apenas um orçamento principal.'
+            if selected_quote:
+                selected_quotes.append(selected_quote)
 
         requisition.quotes.update(is_selected=False)
-        if selected_quote:
-            selected_quote.is_selected = True
-            selected_quote.save(update_fields=['is_selected'])
+        if selected_quotes:
+            RequisitionQuote.objects.filter(id__in=[q.id for q in selected_quotes]).update(is_selected=True)
 
         if update_mode:
             requisition.quotes.exclude(id__in=kept_ids).delete()
@@ -1299,6 +1332,10 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
             return self.get(request, *args, **kwargs)
 
         mode = (request.POST.get('mode') or 'create').strip().lower()
+        kind_value = (request.POST.get('requisition_kind') or Requisition.Kind.PHYSICAL).strip()
+        valid_kinds = {choice[0] for choice in Requisition.Kind.choices}
+        if kind_value not in valid_kinds:
+            kind_value = Requisition.Kind.PHYSICAL
         title_text = (request.POST.get('title') or '').strip()
         if not title_text:
             messages.error(request, 'Informe o título da requisição.')
@@ -1322,9 +1359,10 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
                 status_value = Requisition.Status.PENDING_APPROVAL
 
             requisition.title = title_text
+            requisition.kind = kind_value
             requisition.request = request_text
             requisition.status = status_value
-            requisition.save(update_fields=['title', 'request', 'status', 'updated_at'])
+            requisition.save(update_fields=['title', 'kind', 'request', 'status', 'updated_at'])
 
             saved_count, error = self._save_quotes(request, requisition, update_mode=True)
             if error:
@@ -1338,6 +1376,7 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
 
         requisition = Requisition.objects.create(
             title=title_text,
+            kind=kind_value,
             request=request_text,
             requested_at=timezone.localdate(),
             status=Requisition.Status.PENDING_APPROVAL,
@@ -1361,21 +1400,24 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
         context['modules'] = build_modules('requisicoes') if is_ti else []
         requisitions = (
             Requisition.objects
-            .prefetch_related('quotes__subquotes')
+            .prefetch_related('quotes__subquotes', 'quotes__attachments')
             .order_by('-created_at', '-id')
         )
         for req in requisitions:
             all_quotes = list(req.quotes.all())
             subs_by_parent: dict[int, list[RequisitionQuote]] = {}
             main_quotes: list[RequisitionQuote] = []
-            selected_main: RequisitionQuote | None = None
+            selected_mains: list[RequisitionQuote] = []
             for quote in all_quotes:
                 if quote.parent_id:
                     subs_by_parent.setdefault(quote.parent_id, []).append(quote)
                     continue
                 main_quotes.append(quote)
                 if quote.is_selected:
-                    selected_main = quote
+                    selected_mains.append(quote)
+
+            selected_main = selected_mains[0] if selected_mains else None
+            approved_quote_ids = {q.id for q in selected_mains}
 
             for quote in main_quotes:
                 quote.sub_items = subs_by_parent.get(quote.id, [])
@@ -1384,16 +1426,23 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
                 for sub_item in quote.sub_items:
                     package_total += (Decimal(sub_item.quantity or 1) * (sub_item.value or Decimal('0'))) + (sub_item.freight or Decimal('0'))
                 quote.package_total = package_total
+                quote.is_display_selected = quote.id in approved_quote_ids
+                quote.attachment_items = list(quote.attachments.all())
 
             req.main_quotes = main_quotes
             req.main_quotes_count = len(main_quotes)
             req.sub_quotes_count = max(0, len(all_quotes) - len(main_quotes))
             req.approved_quote_id = selected_main.id if selected_main else None
+            req.approved_quote_ids = approved_quote_ids
+            req.kind_display = req.get_kind_display() if hasattr(req, 'get_kind_display') else ''
 
-            if selected_main:
-                total = (Decimal(selected_main.quantity or 1) * (selected_main.value or Decimal('0'))) + (selected_main.freight or Decimal('0'))
-                for sub_item in getattr(selected_main, 'sub_items', []):
-                    total += (Decimal(sub_item.quantity or 1) * (sub_item.value or Decimal('0'))) + (sub_item.freight or Decimal('0'))
+            if selected_mains:
+                total = Decimal('0')
+                for selected_item in selected_mains:
+                    selected_total = (Decimal(selected_item.quantity or 1) * (selected_item.value or Decimal('0'))) + (selected_item.freight or Decimal('0'))
+                    for sub_item in getattr(selected_item, 'sub_items', []):
+                        selected_total += (Decimal(sub_item.quantity or 1) * (sub_item.value or Decimal('0'))) + (sub_item.freight or Decimal('0'))
+                    total += selected_total
                 req.quotes_total = total
             else:
                 req.quotes_total = None
