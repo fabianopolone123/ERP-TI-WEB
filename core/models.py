@@ -221,6 +221,15 @@ class RequisitionQuote(models.Model):
         return f'{self.requisition_id} - {self.name}'
 
 
+class RequisitionQuoteAttachment(models.Model):
+    quote = models.ForeignKey(RequisitionQuote, on_delete=models.CASCADE, related_name='attachments')
+    file = models.FileField(upload_to='requisitions/quotes/files/')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self) -> str:
+        return f'{self.quote_id} - {self.file.name}'
+
+
 class AccessFolder(models.Model):
     name = models.CharField(max_length=200)
     path = models.CharField(max_length=500)
