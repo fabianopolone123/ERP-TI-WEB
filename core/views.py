@@ -2452,6 +2452,20 @@ def ticket_timer_action(request):
     return JsonResponse({'ok': True, 'running': False, 'failure_type': failure_type, 'status': ticket.status})
 
 
+def _can_delete_ticket(request, ticket: Ticket) -> bool:
+    if not ticket:
+        return False
+    if getattr(request.user, 'id', None) and ticket.created_by_id == request.user.id:
+        return True
+    if not is_ti_user(request):
+        return False
+    return TicketTimelineEvent.objects.filter(
+        ticket=ticket,
+        event_type=TicketTimelineEvent.EventType.CREATED,
+        actor_user_id=getattr(request.user, 'id', None),
+    ).exists()
+
+
 @login_required
 @require_GET
 def ticket_detail(request, ticket_id: int):
@@ -2521,6 +2535,7 @@ def ticket_detail(request, ticket_id: int):
         historical_names.append(name)
 
     can_edit = ticket.created_by_id == request.user.id
+    can_delete = _can_delete_ticket(request, ticket)
     data = {
         'ok': True,
         'ticket': {
@@ -2539,6 +2554,7 @@ def ticket_detail(request, ticket_id: int):
             'attachment_url': ticket.attachment.url if ticket.attachment else '',
             'created_at': timezone.localtime(ticket.created_at).strftime('%d/%m/%Y %H:%M'),
             'can_edit': can_edit,
+            'can_delete': can_delete,
         },
         'messages': {
             'public': public_messages,
@@ -2661,6 +2677,34 @@ def ticket_update(request):
     ticket.title = title
     ticket.description = description
     ticket.save(update_fields=['title', 'description', 'updated_at'])
+    return JsonResponse({'ok': True})
+
+
+@login_required
+@require_POST
+def ticket_delete(request):
+    ticket_id = request.POST.get('ticket_id')
+    if not ticket_id:
+        return JsonResponse({'ok': False, 'error': 'invalid'}, status=400)
+
+    ticket = Ticket.objects.filter(id=ticket_id).first()
+    if not ticket:
+        return JsonResponse({'ok': False, 'error': 'not_found'}, status=404)
+
+    if not _can_delete_ticket(request, ticket):
+        return JsonResponse({'ok': False, 'error': 'forbidden'}, status=403)
+
+    try:
+        ticket_attachment = ticket.attachment
+        if ticket_attachment:
+            ticket_attachment.delete(save=False)
+        for msg in TicketMessage.objects.filter(ticket=ticket).exclude(attachment=''):
+            if msg.attachment:
+                msg.attachment.delete(save=False)
+    except Exception:
+        logger.exception('Falha ao remover anexos do chamado %s antes da exclusao', ticket.id)
+
+    ticket.delete()
     return JsonResponse({'ok': True})
 
 

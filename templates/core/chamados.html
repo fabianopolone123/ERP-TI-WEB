@@ -588,8 +588,9 @@
                     Somente quem abriu o chamado pode editar.
                 </div>
             </form>
-            <div style="margin-top: 12px;">
+            <div style="margin-top: 12px; display:flex; gap:8px; flex-wrap:wrap;">
                 <button type="button" data-edit-toggle hidden>Editar título/descrição</button>
+                <button type="button" data-detail-delete hidden style="background:#b91c1c; border-color:#ef4444; color:#fff;">Excluir chamado</button>
             </div>
         {% if not is_ti_group %}
             <div style="margin-top: 12px;">
@@ -1642,6 +1643,35 @@
                 editToggle.onclick = () => {
                     if (!canEdit) return;
                     editForm.hidden = !editForm.hidden;
+                };
+            }
+
+            const detailDelete = detailsModal.querySelector('[data-detail-delete]');
+            if (detailDelete) {
+                const canDelete = !!data.ticket.can_delete;
+                detailDelete.hidden = !canDelete;
+                detailDelete.onclick = async () => {
+                    if (!currentTicketId || !canDelete) return;
+                    if (!window.confirm(`Excluir o chamado #${currentTicketId}? Esta ação não pode ser desfeita.`)) return;
+                    const response = await fetch('{% url "chamados_excluir" %}', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                            'X-CSRFToken': getCookie('csrftoken'),
+                        },
+                        body: new URLSearchParams({ ticket_id: currentTicketId }),
+                    });
+                    const payload = await response.json().catch(() => ({}));
+                    if (!response.ok || !payload.ok) {
+                        alert('Não foi possível excluir o chamado.');
+                        return;
+                    }
+                    document.querySelectorAll(`.ticket-card[data-ticket-id="${currentTicketId}"]`).forEach((card) => card.remove());
+                    closeDetails();
+                    document.dispatchEvent(new Event('tickets-updated'));
+                    if (!document.querySelector('[data-board]')) {
+                        window.location.reload();
+                    }
                 };
             }
 
