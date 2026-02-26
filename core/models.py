@@ -160,6 +160,21 @@ class SoftwareInventory(models.Model):
         return f'{self.hostname} - {self.software_name}'
 
 
+class Insumo(models.Model):
+    item = models.CharField(max_length=120)
+    date = models.DateField()
+    quantity = models.DecimalField(max_digits=10, decimal_places=2, default=1)
+    name = models.CharField(max_length=200)
+    department = models.CharField(max_length=120, blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-date', '-id']
+
+    def __str__(self) -> str:
+        return f'{self.item} - {self.name} ({self.date:%d/%m/%Y})'
+
+
 class Requisition(models.Model):
     class Kind(models.TextChoices):
         PHYSICAL = 'physical', 'Requisicao fisica'

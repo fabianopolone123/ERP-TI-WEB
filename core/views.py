@@ -38,6 +38,7 @@ from .models import (
     EmailAccount,
     Equipment,
     SoftwareInventory,
+    Insumo,
     next_equipment_tag_code,
     _extract_equipment_tag_number,
     Requisition,
@@ -91,7 +92,7 @@ ERP_MODULES = [
     {'slug': 'emails', 'label': 'Emails', 'url_name': None},
     {'slug': 'ramais', 'label': 'Ramais', 'url_name': None},
     {'slug': 'softwares', 'label': 'Softwares', 'url_name': 'softwares'},
-    {'slug': 'insumos', 'label': 'Insumos', 'url_name': None},
+    {'slug': 'insumos', 'label': 'Insumos', 'url_name': 'insumos'},
     {'slug': 'requisicoes', 'label': 'Requisições', 'url_name': 'requisicoes'},
     {'slug': 'dicas', 'label': 'Dicas', 'url_name': 'dicas'},
     {'slug': 'emprestimos', 'label': 'Empréstimos', 'url_name': None},
@@ -1200,6 +1201,79 @@ class SoftwaresView(LoginRequiredMixin, TemplateView):
         )
         context['inventory_default_hosts'] = _inventory_default_hosts()
         context['inventory_timeout_seconds'] = int(getattr(settings, 'INVENTORY_POWERSHELL_TIMEOUT', 120) or 120)
+        return context
+
+
+class InsumosView(LoginRequiredMixin, TemplateView):
+    template_name = 'core/insumos.html'
+
+    @staticmethod
+    def _parse_decimal_br(raw_value: str) -> Decimal:
+        normalized_value = (raw_value or '').strip().replace(' ', '')
+        if ',' in normalized_value and '.' in normalized_value:
+            if normalized_value.rfind(',') > normalized_value.rfind('.'):
+                normalized_value = normalized_value.replace('.', '').replace(',', '.')
+            else:
+                normalized_value = normalized_value.replace(',', '')
+        elif ',' in normalized_value:
+            normalized_value = normalized_value.replace('.', '').replace(',', '.')
+        elif normalized_value.count('.') > 1:
+            normalized_value = normalized_value.replace('.', '')
+        value = Decimal(normalized_value or '0')
+        if value <= 0:
+            raise InvalidOperation
+        return value
+
+    def post(self, request, *args, **kwargs):
+        if not is_ti_user(request):
+            messages.error(request, 'Apenas usuários do departamento TI podem cadastrar insumos.')
+            return self.get(request, *args, **kwargs)
+
+        item = (request.POST.get('item') or '').strip()
+        date_raw = (request.POST.get('date') or '').strip()
+        quantity_raw = (request.POST.get('quantity') or '').strip()
+        name = (request.POST.get('name') or '').strip()
+        department = (request.POST.get('department') or '').strip()
+
+        if not item:
+            messages.error(request, 'Informe o insumo.')
+            return self.get(request, *args, **kwargs)
+        if not date_raw:
+            messages.error(request, 'Informe a data.')
+            return self.get(request, *args, **kwargs)
+        if not name:
+            messages.error(request, 'Informe o nome.')
+            return self.get(request, *args, **kwargs)
+
+        try:
+            entry_date = datetime.strptime(date_raw, '%Y-%m-%d').date()
+        except ValueError:
+            messages.error(request, 'Data inválida.')
+            return self.get(request, *args, **kwargs)
+
+        try:
+            quantity = self._parse_decimal_br(quantity_raw)
+        except (InvalidOperation, ValueError):
+            messages.error(request, 'Quantidade inválida. Ex.: 1,00')
+            return self.get(request, *args, **kwargs)
+
+        Insumo.objects.create(
+            item=item,
+            date=entry_date,
+            quantity=quantity,
+            name=name,
+            department=department,
+        )
+        messages.success(request, 'Insumo cadastrado com sucesso.')
+        return redirect('insumos')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        is_ti = is_ti_user(self.request)
+        context['is_ti_group'] = is_ti
+        context['modules'] = build_modules('insumos') if is_ti else []
+        context['insumos'] = Insumo.objects.all().order_by('-date', '-id') if is_ti else []
+        context['insumo_default_date'] = timezone.localdate().isoformat()
         return context
 
 
