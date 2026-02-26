@@ -23,48 +23,17 @@
     {% if is_ti_group %}
         {% include "core/_tabs.html" %}
 
-        <div class="ticket-form" style="margin-top: 16px;">
-            <div class="topbar" style="margin-bottom: 8px;">
-                <h3 style="margin: 0;">Novo registro</h3>
-            </div>
-            <form method="post">
-                {% csrf_token %}
-                <div class="form-row">
-                    <div>
-                        <label for="id_item">Insumo</label>
-                        <input id="id_item" name="item" type="text" required placeholder="Ex.: Bateria, Mouse, Teclado" />
-                    </div>
-                    <div>
-                        <label for="id_date">Data</label>
-                        <input id="id_date" name="date" type="date" value="{{ insumo_default_date }}" required />
-                    </div>
-                    <div>
-                        <label for="id_quantity">Qtd</label>
-                        <input id="id_quantity" name="quantity" type="text" required value="1,00" />
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div>
-                        <label for="id_name">Nome</label>
-                        <input id="id_name" name="name" type="text" required placeholder="Ex.: Miguel" />
-                    </div>
-                    <div>
-                        <label for="id_department">Departamento</label>
-                        <input id="id_department" name="department" type="text" placeholder="Ex.: PCP" />
-                    </div>
-                </div>
-                <button type="submit">Adicionar</button>
-            </form>
-        </div>
-
         <div class="topbar" style="margin-top: 16px; margin-bottom: 10px;">
             <h3>Registros</h3>
-            <input
-                type="text"
-                class="table-search"
-                placeholder="Pesquisar por insumo, nome ou departamento..."
-                data-table-search="insumos"
-            />
+            <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                <input
+                    type="text"
+                    class="table-search"
+                    placeholder="Pesquisar por insumo, nome ou departamento..."
+                    data-table-search="insumos"
+                />
+                <button type="button" data-open-insumo-modal>Adicionar</button>
+            </div>
         </div>
 
         <div style="overflow-x: auto;">
@@ -77,6 +46,7 @@
                         <th>Qtd</th>
                         <th>Nome</th>
                         <th>Departamento</th>
+                        <th>Ações</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -88,15 +58,120 @@
                             <td data-sort-value="{{ item.quantity|floatformat:2 }}">{{ item.quantity|br_money }}</td>
                             <td>{{ item.name }}</td>
                             <td>{{ item.department|default:'-' }}</td>
+                            <td>
+                                <button
+                                    type="button"
+                                    data-edit-insumo
+                                    data-insumo-id="{{ item.id }}"
+                                    data-insumo-item="{{ item.item|escape }}"
+                                    data-insumo-date="{{ item.date|date:'Y-m-d' }}"
+                                    data-insumo-quantity="{{ item.quantity|br_money }}"
+                                    data-insumo-name="{{ item.name|escape }}"
+                                    data-insumo-department="{{ item.department|default:''|escape }}"
+                                >
+                                    Editar
+                                </button>
+                            </td>
                         </tr>
                     {% empty %}
                         <tr>
-                            <td colspan="6" class="muted">Nenhum insumo cadastrado.</td>
+                            <td colspan="7" class="muted">Nenhum insumo cadastrado.</td>
                         </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
+
+        <div class="modal" data-insumo-modal hidden>
+            <div class="modal-backdrop" data-close-insumo-modal></div>
+            <div class="modal-content">
+                <div class="topbar" style="margin-bottom: 8px;">
+                    <h3 data-insumo-modal-title style="margin: 0;">Novo registro</h3>
+                    <button type="button" data-close-insumo-modal>Fechar</button>
+                </div>
+                <form method="post" data-insumo-form>
+                    {% csrf_token %}
+                    <input type="hidden" name="mode" value="create" data-insumo-mode />
+                    <input type="hidden" name="insumo_id" value="" data-insumo-id-input />
+                    <div class="form-row">
+                        <div>
+                            <label for="id_insumo_item">Insumo</label>
+                            <input id="id_insumo_item" name="item" type="text" required placeholder="Ex.: Bateria, Mouse, Teclado" data-insumo-item-input />
+                        </div>
+                        <div>
+                            <label for="id_insumo_date">Data</label>
+                            <input id="id_insumo_date" name="date" type="date" value="{{ insumo_default_date }}" required data-insumo-date-input />
+                        </div>
+                        <div>
+                            <label for="id_insumo_quantity">Qtd</label>
+                            <input id="id_insumo_quantity" name="quantity" type="text" required value="1,00" data-insumo-quantity-input />
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div>
+                            <label for="id_insumo_name">Nome</label>
+                            <input id="id_insumo_name" name="name" type="text" required placeholder="Ex.: Miguel" data-insumo-name-input />
+                        </div>
+                        <div>
+                            <label for="id_insumo_department">Departamento</label>
+                            <input id="id_insumo_department" name="department" type="text" placeholder="Ex.: PCP" data-insumo-department-input />
+                        </div>
+                    </div>
+                    <button type="submit">Salvar</button>
+                </form>
+            </div>
+        </div>
+
+        <script>
+            (function () {
+                const modal = document.querySelector('[data-insumo-modal]');
+                const openBtn = document.querySelector('[data-open-insumo-modal]');
+                const closeEls = document.querySelectorAll('[data-close-insumo-modal]');
+                const modalTitle = document.querySelector('[data-insumo-modal-title]');
+                const modeInput = document.querySelector('[data-insumo-mode]');
+                const idInput = document.querySelector('[data-insumo-id-input]');
+                const itemInput = document.querySelector('[data-insumo-item-input]');
+                const dateInput = document.querySelector('[data-insumo-date-input]');
+                const quantityInput = document.querySelector('[data-insumo-quantity-input]');
+                const nameInput = document.querySelector('[data-insumo-name-input]');
+                const departmentInput = document.querySelector('[data-insumo-department-input]');
+                if (!modal || !openBtn || !modeInput || !idInput || !itemInput || !dateInput || !quantityInput || !nameInput || !departmentInput) return;
+
+                const openCreate = () => {
+                    modeInput.value = 'create';
+                    idInput.value = '';
+                    modalTitle.textContent = 'Novo registro';
+                    itemInput.value = '';
+                    dateInput.value = '{{ insumo_default_date }}';
+                    quantityInput.value = '1,00';
+                    nameInput.value = '';
+                    departmentInput.value = '';
+                    modal.hidden = false;
+                };
+
+                const openEdit = (btn) => {
+                    modeInput.value = 'update';
+                    idInput.value = btn.getAttribute('data-insumo-id') || '';
+                    modalTitle.textContent = `Editar registro #${idInput.value}`;
+                    itemInput.value = btn.getAttribute('data-insumo-item') || '';
+                    dateInput.value = btn.getAttribute('data-insumo-date') || '{{ insumo_default_date }}';
+                    quantityInput.value = btn.getAttribute('data-insumo-quantity') || '1,00';
+                    nameInput.value = btn.getAttribute('data-insumo-name') || '';
+                    departmentInput.value = btn.getAttribute('data-insumo-department') || '';
+                    modal.hidden = false;
+                };
+
+                const close = () => {
+                    modal.hidden = true;
+                };
+
+                openBtn.addEventListener('click', openCreate);
+                closeEls.forEach((el) => el.addEventListener('click', close));
+                document.querySelectorAll('[data-edit-insumo]').forEach((btn) => {
+                    btn.addEventListener('click', () => openEdit(btn));
+                });
+            })();
+        </script>
     {% else %}
         <p>Solicite ao administrador a inclusao no departamento <strong>TI</strong>.</p>
     {% endif %}

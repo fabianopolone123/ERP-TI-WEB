@@ -1229,6 +1229,8 @@ class InsumosView(LoginRequiredMixin, TemplateView):
             messages.error(request, 'Apenas usuários do departamento TI podem cadastrar insumos.')
             return self.get(request, *args, **kwargs)
 
+        mode = (request.POST.get('mode') or 'create').strip().lower()
+        insumo_id = (request.POST.get('insumo_id') or '').strip()
         item = (request.POST.get('item') or '').strip()
         date_raw = (request.POST.get('date') or '').strip()
         quantity_raw = (request.POST.get('quantity') or '').strip()
@@ -1256,6 +1258,20 @@ class InsumosView(LoginRequiredMixin, TemplateView):
         except (InvalidOperation, ValueError):
             messages.error(request, 'Quantidade inválida. Ex.: 1,00')
             return self.get(request, *args, **kwargs)
+
+        if mode == 'update':
+            insumo = Insumo.objects.filter(id=insumo_id).first()
+            if not insumo:
+                messages.error(request, 'Registro de insumo não encontrado para edição.')
+                return redirect('insumos')
+            insumo.item = item
+            insumo.date = entry_date
+            insumo.quantity = quantity
+            insumo.name = name
+            insumo.department = department
+            insumo.save(update_fields=['item', 'date', 'quantity', 'name', 'department'])
+            messages.success(request, 'Insumo atualizado com sucesso.')
+            return redirect('insumos')
 
         Insumo.objects.create(
             item=item,
