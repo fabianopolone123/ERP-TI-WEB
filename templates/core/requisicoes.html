@@ -100,6 +100,27 @@
         font-weight: 700;
         min-height: 40px;
     }
+
+    .req-actions {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        align-items: stretch;
+        min-width: 150px;
+    }
+
+    .req-actions .inline-form {
+        margin: 0;
+    }
+
+    .req-actions button {
+        width: 100%;
+        min-height: 38px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        white-space: nowrap;
+    }
 </style>
 <div class="card">
     <div class="topbar">
@@ -201,15 +222,17 @@
                                 <div class="muted">Entrega: {% if item.received_at %}{{ item.received_at|date:'d/m/Y' }}{% else %}-{% endif %}</div>
                             </td>
                             <td>
-                                {% if item.status == 'approved' %}
-                                    <form method="post" class="inline-form" data-mark-received-form style="display:inline-flex; margin-right:6px;">
-                                        {% csrf_token %}
-                                        <input type="hidden" name="action" value="mark_received" />
-                                        <input type="hidden" name="requisition_id" value="{{ item.id }}" />
-                                        <button type="submit" data-mark-received-button>Marcar entrega</button>
-                                    </form>
-                                {% endif %}
-                                <button type="button" data-duplicate-requisition data-requisition-id="{{ item.id }}">Duplicar</button>
+                                <div class="req-actions">
+                                    {% if item.status == 'approved' %}
+                                        <form method="post" class="inline-form" data-mark-received-form>
+                                            {% csrf_token %}
+                                            <input type="hidden" name="action" value="mark_received" />
+                                            <input type="hidden" name="requisition_id" value="{{ item.id }}" />
+                                            <button type="submit" data-mark-received-button>Marcar entrega</button>
+                                        </form>
+                                    {% endif %}
+                                    <button type="button" data-duplicate-requisition data-requisition-id="{{ item.id }}">Duplicar</button>
+                                </div>
                             </td>
                         </tr>
                     {% empty %}
