@@ -661,6 +661,7 @@
         };
 
         const toBrMoney = (value) => value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const formatMoneyForCopy = (value) => toBrMoney(parseBrNumber(value));
         const normalizeExternalLink = (value) => {
             const raw = (value || '').trim();
             if (!raw) return '';
@@ -1589,9 +1590,11 @@
                     const subQty = parsePositiveInt(sub.quantity || '1');
                     total += (subQty * parseBrNumber(sub.value)) + parseBrNumber(sub.freight);
                 }
+                const mainValueFormatted = formatMoneyForCopy(main.value);
+                const mainFreightFormatted = formatMoneyForCopy(main.freight);
 
                 lines.push(`[ORÇAMENTO ${i + 1}] ${main.name || '(sem nome)'}`);
-                lines.push(`   Qtd: ${mainQty} | Valor unit.: R$ ${main.value} | Frete: R$ ${main.freight} | Total pacote: R$ ${toBrMoney(total)}`);
+                lines.push(`   Qtd: ${mainQty} | Valor unit.: R$ ${mainValueFormatted} | Frete: R$ ${mainFreightFormatted} | Total pacote: R$ ${toBrMoney(total)}`);
                 if (main.link) lines.push(`   Link (${main.linkLabel || 'site'}): ${main.link}`);
                 let mainImageText = '';
                 const mainImg = await resolveClipboardImage(main.previewSrc);
@@ -1604,7 +1607,7 @@
 
                 htmlParts.push(`<li style="margin-bottom:12px;padding:10px;border:1px solid #cbd5e1;border-radius:8px;background:#f8fafc;">`);
                 htmlParts.push(`<div><strong>${escapeHtml(main.name || '(sem nome)')}</strong></div>`);
-                htmlParts.push(`<div>Qtd: <strong>${escapeHtml(String(mainQty))}</strong> | Valor unit.: <strong>R$ ${escapeHtml(main.value)}</strong> | Frete: <strong>R$ ${escapeHtml(main.freight)}</strong> | Total pacote: <strong>R$ ${escapeHtml(toBrMoney(total))}</strong></div>`);
+                htmlParts.push(`<div>Qtd: <strong>${escapeHtml(String(mainQty))}</strong> | Valor unit.: <strong>R$ ${escapeHtml(mainValueFormatted)}</strong> | Frete: <strong>R$ ${escapeHtml(mainFreightFormatted)}</strong> | Total pacote: <strong>R$ ${escapeHtml(toBrMoney(total))}</strong></div>`);
                 if (main.link) htmlParts.push(`<div>Link: <a href="${escapeHtml(main.link)}" target="_blank" rel="noopener noreferrer">${escapeHtml(main.linkLabel || 'Abrir orçamento')}</a></div>`);
                 if (mainImg.htmlSrc) {
                     htmlParts.push(`<div style="margin-top:6px;"><img src="${escapeHtml(mainImg.htmlSrc)}" alt="Orçamento" style="margin-top:4px;max-width:360px;max-height:180px;border:1px solid #cbd5e1;border-radius:6px;"></div>`);
@@ -1618,7 +1621,9 @@
                     htmlParts.push(`<ul style="margin-top:8px;padding-left:18px;">`);
                     for (const sub of subs) {
                         const subQty = parsePositiveInt(sub.quantity || '1');
-                        lines.push(`   - ${sub.name || '(sem nome)'} | Qtd: ${subQty} | Valor unit.: R$ ${sub.value} | Frete: R$ ${sub.freight}`);
+                        const subValueFormatted = formatMoneyForCopy(sub.value);
+                        const subFreightFormatted = formatMoneyForCopy(sub.freight);
+                        lines.push(`   - ${sub.name || '(sem nome)'} | Qtd: ${subQty} | Valor unit.: R$ ${subValueFormatted} | Frete: R$ ${subFreightFormatted}`);
                         if (sub.link) lines.push(`     Link (${sub.linkLabel || 'site'}): ${sub.link}`);
                         const subImg = await resolveClipboardImage(sub.previewSrc);
                         if (subImg.htmlSrc) {
@@ -1627,7 +1632,7 @@
                             lines.push(`     Imagem: ${subImg.fallbackLink}`);
                         }
 
-                        htmlParts.push(`<li style="margin-bottom:8px;"><strong>${escapeHtml(sub.name || '(sem nome)')}</strong> - Qtd: ${escapeHtml(String(subQty))} | Valor unit.: R$ ${escapeHtml(sub.value)} | Frete: R$ ${escapeHtml(sub.freight)}`);
+                        htmlParts.push(`<li style="margin-bottom:8px;"><strong>${escapeHtml(sub.name || '(sem nome)')}</strong> - Qtd: ${escapeHtml(String(subQty))} | Valor unit.: R$ ${escapeHtml(subValueFormatted)} | Frete: R$ ${escapeHtml(subFreightFormatted)}`);
                         if (sub.link) htmlParts.push(`<br>Link: <a href="${escapeHtml(sub.link)}" target="_blank" rel="noopener noreferrer">${escapeHtml(sub.linkLabel || 'Abrir')}</a>`);
                         if (subImg.htmlSrc) {
                             htmlParts.push(`<br><img src="${escapeHtml(subImg.htmlSrc)}" alt="Suborçamento" style="margin-top:4px;max-width:300px;max-height:150px;border:1px solid #cbd5e1;border-radius:6px;">`);
@@ -1693,9 +1698,11 @@
                     const subQty = parsePositiveInt(sub.quantity || '1');
                     total += (subQty * parseBrNumber(sub.value)) + parseBrNumber(sub.freight);
                 }
+                const mainValueFormatted = formatMoneyForCopy(main.value);
+                const mainFreightFormatted = formatMoneyForCopy(main.freight);
 
                 lines.push(`${i + 1}) *${main.name || '(sem nome)'}*`);
-                lines.push(`   Qtd: ${mainQty} | Valor unit.: R$ ${main.value} | Frete: R$ ${main.freight}`);
+                lines.push(`   Qtd: ${mainQty} | Valor unit.: R$ ${mainValueFormatted} | Frete: R$ ${mainFreightFormatted}`);
                 lines.push(`   Total do pacote: *R$ ${toBrMoney(total)}*`);
                 if (main.link) lines.push(`   Link: ${main.linkLabel || 'site'} - ${main.link}`);
 
@@ -1703,7 +1710,9 @@
                     lines.push(`   Itens adicionais do pacote:`);
                     for (const sub of subs) {
                         const subQty = parsePositiveInt(sub.quantity || '1');
-                        lines.push(`   - ${sub.name || '(sem nome)'} | Qtd: ${subQty} | R$ ${sub.value} + frete R$ ${sub.freight}`);
+                        const subValueFormatted = formatMoneyForCopy(sub.value);
+                        const subFreightFormatted = formatMoneyForCopy(sub.freight);
+                        lines.push(`   - ${sub.name || '(sem nome)'} | Qtd: ${subQty} | R$ ${subValueFormatted} + frete R$ ${subFreightFormatted}`);
                         if (sub.link) lines.push(`     Link: ${sub.linkLabel || 'site'} - ${sub.link}`);
                     }
                 }
