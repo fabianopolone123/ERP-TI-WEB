@@ -1452,14 +1452,35 @@
         const modal = document.querySelector('[data-modal]');
         const openBtn = document.querySelector('[data-open-modal]');
         const closeEls = document.querySelectorAll('[data-close-modal]');
+        const createForm = document.querySelector('#ticket-create-form');
+        const createSubmitBtn = createForm ? createForm.querySelector('button[type="submit"]') : null;
         if (!modal || !openBtn) return;
 
+        const setCreateSubmitting = (isSubmitting) => {
+            if (!createForm || !createSubmitBtn) return;
+            createForm.dataset.submitting = isSubmitting ? '1' : '0';
+            createSubmitBtn.disabled = !!isSubmitting;
+            createSubmitBtn.textContent = isSubmitting ? 'Abrindo...' : 'Abrir chamado';
+        };
+
         const open = () => {
+            setCreateSubmitting(false);
             modal.hidden = false;
         };
         const close = () => {
+            if (createForm && createForm.dataset.submitting === '1') return;
             modal.hidden = true;
         };
+
+        if (createForm) {
+            createForm.addEventListener('submit', (event) => {
+                if (createForm.dataset.submitting === '1') {
+                    event.preventDefault();
+                    return;
+                }
+                setCreateSubmitting(true);
+            });
+        }
 
         openBtn.addEventListener('click', open);
         closeEls.forEach((el) => el.addEventListener('click', close));

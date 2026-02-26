@@ -1752,6 +1752,23 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
             created_by=creator_user,
             attachment=attachment,
         )
+        # Protege contra cliques múltiplos quase simultâneos: mantém apenas o primeiro chamado.
+        first_recent_id = (
+            Ticket.objects.filter(
+                created_by=creator_user,
+                title=title,
+                description=description,
+                created_at__gte=recent_cutoff,
+            )
+            .order_by('id')
+            .values_list('id', flat=True)
+            .first()
+        )
+        if first_recent_id and first_recent_id != ticket.id:
+            ticket.delete()
+            messages.info(request, 'Chamado idêntico detectado em envio repetido. Mantivemos apenas o primeiro.')
+            return redirect('chamados')
+
         if opened_at_dt:
             Ticket.objects.filter(id=ticket.id).update(created_at=opened_at_dt)
             ticket.created_at = opened_at_dt
