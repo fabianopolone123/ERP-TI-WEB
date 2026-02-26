@@ -1,13 +1,13 @@
 ﻿{% extends "base.html" %}
 
-{% block title %}RelatÃ³rios | ERP TI{% endblock %}
+{% block title %}Relatórios | ERP TI{% endblock %}
 
 {% block content %}
 <div class="card">
     <div class="topbar">
         <div>
-            <h2>RelatÃ³rios de Chamados</h2>
-            <p class="muted">Filtros e indicadores para anÃ¡lise dos chamados da TI.</p>
+            <h2>Relatórios de Chamados</h2>
+            <p class="muted">Filtros e indicadores para análise dos chamados da TI.</p>
         </div>
         <form method="post" action="{% url 'logout' %}" class="inline-form">
             {% csrf_token %}
@@ -84,7 +84,7 @@
                     <input id="id_date_from" type="date" name="date_from" value="{{ filters.date_from }}" />
                 </div>
                 <div>
-                    <label for="id_date_to">AtÃ©</label>
+                    <label for="id_date_to">Até</label>
                     <input id="id_date_to" type="date" name="date_to" value="{{ filters.date_to }}" />
                 </div>
                 <div>
@@ -120,7 +120,7 @@
                 </div>
                 <div>
                     <label for="id_q">Busca</label>
-                    <input id="id_q" type="text" name="q" value="{{ filters.q }}" placeholder="TÃ­tulo ou descriÃ§Ã£o..." />
+                    <input id="id_q" type="text" name="q" value="{{ filters.q }}" placeholder="Título ou descrição..." />
                 </div>
             </div>
             <div style="display:flex; gap:8px;">
@@ -156,7 +156,7 @@
                 <div class="chart-wrap"><canvas id="chart-status"></canvas></div>
             </div>
             <div class="chart-card">
-                <h4>UrgÃªncia</h4>
+                <h4>Urgência</h4>
                 <div class="chart-wrap"><canvas id="chart-urgency"></canvas></div>
             </div>
             <div class="chart-card">
@@ -168,7 +168,7 @@
                 <div class="chart-wrap"><canvas id="chart-requesters"></canvas></div>
             </div>
             <div class="chart-card full-width">
-                <h4>EvoluÃ§Ã£o por Dia</h4>
+                <h4>Evolução por Dia</h4>
                 <div class="chart-wrap"><canvas id="chart-days"></canvas></div>
             </div>
         </div>
@@ -234,7 +234,7 @@
             })();
         </script>
     {% else %}
-        <p>Solicite ao administrador a inclusÃ£o no departamento <strong>TI</strong>.</p>
+        <p>Solicite ao administrador a inclusão no departamento <strong>TI</strong>.</p>
     {% endif %}
 </div>
 {% endblock %}
