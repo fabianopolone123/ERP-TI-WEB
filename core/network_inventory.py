@@ -92,48 +92,51 @@ def _find_equipment_by_inventory_identifiers(
     serial: str,
     model: str,
     user_name: str,
+    queryset=None,
 ) -> Equipment | None:
+    base_qs = queryset if queryset is not None else Equipment.objects.all()
+
     if bios_uuid:
-        equipment = Equipment.objects.filter(bios_uuid__iexact=bios_uuid).first()
+        equipment = base_qs.filter(bios_uuid__iexact=bios_uuid).first()
         if equipment:
             return equipment
 
     if bios_serial:
         equipment = (
-            Equipment.objects.filter(bios_serial__iexact=bios_serial).first()
-            or Equipment.objects.filter(serial__iexact=bios_serial).first()
+            base_qs.filter(bios_serial__iexact=bios_serial).first()
+            or base_qs.filter(serial__iexact=bios_serial).first()
         )
         if equipment:
             return equipment
 
     if baseboard_serial:
-        equipment = Equipment.objects.filter(baseboard_serial__iexact=baseboard_serial).first()
+        equipment = base_qs.filter(baseboard_serial__iexact=baseboard_serial).first()
         if equipment:
             return equipment
 
     if mac_addresses:
-        for equipment in Equipment.objects.exclude(mac_addresses='').only('id', 'mac_addresses'):
+        for equipment in base_qs.exclude(mac_addresses='').only('id', 'mac_addresses'):
             existing = {_norm_mac(item) for item in _split_lines_unique(equipment.mac_addresses)}
             if existing.intersection(mac_addresses):
                 return equipment
 
     host_norm = _norm_hostname(host)
     if host_norm:
-        equipment = Equipment.objects.filter(hostname__iexact=host).first()
+        equipment = base_qs.filter(hostname__iexact=host).first()
         if equipment:
             return equipment
-        for equipment in Equipment.objects.exclude(hostname_aliases='').only('id', 'hostname_aliases'):
+        for equipment in base_qs.exclude(hostname_aliases='').only('id', 'hostname_aliases'):
             aliases = {_norm_hostname(item) for item in _split_lines_unique(equipment.hostname_aliases)}
             if host_norm in aliases:
                 return equipment
 
     if serial:
-        equipment = Equipment.objects.filter(serial__iexact=serial).first()
+        equipment = base_qs.filter(serial__iexact=serial).first()
         if equipment:
             return equipment
 
     if user_name and model:
-        equipment = Equipment.objects.filter(user__iexact=user_name, model__iexact=model).first()
+        equipment = base_qs.filter(user__iexact=user_name, model__iexact=model).first()
         if equipment:
             return equipment
 
@@ -443,6 +446,12 @@ def upsert_inventory_from_payload(payload: dict[str, Any], source: str = 'rede')
     baseboard_serial = _norm_identifier(payload.get('BaseboardSerial'))
     mac_addresses = _parse_payload_mac_addresses(payload)
 
+    inventory_scope_qs = Equipment.objects.all()
+    if source == 'agent':
+        # Inventário vindo do agente GPO fica sempre no bloco de conciliação
+        # e não deve atualizar diretamente a lista principal importada.
+        inventory_scope_qs = Equipment.objects.filter(needs_reconciliation=True)
+
     equipment = _find_equipment_by_inventory_identifiers(
         host=host,
         bios_uuid=bios_uuid,
@@ -452,6 +461,7 @@ def upsert_inventory_from_payload(payload: dict[str, Any], source: str = 'rede')
         serial=serial,
         model=model,
         user_name=user_name,
+        queryset=inventory_scope_qs,
     )
     is_new_equipment = equipment is None
     if equipment is None:
@@ -459,7 +469,7 @@ def upsert_inventory_from_payload(payload: dict[str, Any], source: str = 'rede')
 
     if is_new_equipment or not (equipment.tag_code or '').strip():
         equipment.tag_code = next_equipment_tag_code()
-    equipment.needs_reconciliation = bool(source == 'agent' and is_new_equipment)
+    equipment.needs_reconciliation = bool(source == 'agent')
     old_hostname = equipment.hostname or ''
     equipment.user = user_name or equipment.user
     equipment.sector = sector or equipment.sector

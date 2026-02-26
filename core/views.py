@@ -1143,7 +1143,15 @@ class EquipamentosView(LoginRequiredMixin, TemplateView):
         is_ti = is_ti_user(self.request)
         context['is_ti_group'] = is_ti
         context['modules'] = build_modules('equipamentos') if is_ti else []
-        equipments_qs = sorted(Equipment.objects.all(), key=lambda e: (_extract_equipment_tag_number(e.tag_code or '') is None, _extract_equipment_tag_number(e.tag_code or '') or 10**9, (e.tag_code or '').lower(), e.id))
+        equipments_qs = sorted(
+            Equipment.objects.filter(needs_reconciliation=False),
+            key=lambda e: (
+                _extract_equipment_tag_number(e.tag_code or '') is None,
+                _extract_equipment_tag_number(e.tag_code or '') or 10**9,
+                (e.tag_code or '').lower(),
+                e.id,
+            ),
+        )
         context['equipments'] = equipments_qs
         context['equipment_total_count'] = len(equipments_qs)
         context['inventory_default_hosts'] = _inventory_default_hosts()
