@@ -1,6 +1,6 @@
 ﻿param(
     [Parameter(Mandatory = $false)]
-    [string]$ServerUrl = 'http://ti-fabiano:8000/api/inventory/push/',
+    [string]$ServerUrl = 'https://erp-ti.local/api/inventory/push/',
 
     [Parameter(Mandatory = $false)]
     [string]$Token = '',

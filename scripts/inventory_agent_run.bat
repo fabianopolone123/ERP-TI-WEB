@@ -1,8 +1,8 @@
 @echo off
 setlocal
 
-set "SERVER_URL=http://ti-fabiano:8000/api/inventory/push/"
-set "TOKEN=inv-4303e90894724852b3f2ea858209b010-5f506a1ec1b5"
+set "SERVER_URL=https://erp-ti.local/api/inventory/push/"
+set "TOKEN=%INVENTORY_AGENT_TOKEN%"
 set "SCRIPT_PATH=%~dp0inventory_agent.ps1"
 set "LOG_DIR=%ProgramData%\ERP-TI\logs"
 set "LOG_FILE=%LOG_DIR%\inventory_agent.log"
@@ -20,6 +20,13 @@ echo [%date% %time%] Script=%SCRIPT_PATH%>> "%LOG_FILE%"
 if not exist "%SCRIPT_PATH%" (
   echo [ERRO] Script nao encontrado: %SCRIPT_PATH%
   echo [%date% %time%] [ERRO] Script nao encontrado: %SCRIPT_PATH%>> "%LOG_FILE%"
+  exit /b 1
+)
+
+if "%TOKEN%"=="" (
+  echo [ERRO] Token nao informado.
+  echo Defina INVENTORY_AGENT_TOKEN no ambiente ou passe como 2o parametro.
+  echo [%date% %time%] [ERRO] Token nao informado.>> "%LOG_FILE%"
   exit /b 1
 )
 

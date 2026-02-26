@@ -1,9 +1,12 @@
 ﻿import logging
 import json
+import secrets
+import mimetypes
 import unicodedata
 from uuid import uuid4
 from textwrap import shorten
 from decimal import Decimal, InvalidOperation
+from pathlib import Path
 from django.conf import settings
 from django.contrib import messages
 from django.core.mail import send_mail
@@ -16,7 +19,7 @@ from datetime import datetime, timedelta
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth import get_user_model
-from django.http import JsonResponse
+from django.http import JsonResponse, FileResponse, Http404
 from django.urls import reverse
 from django.utils.dateparse import parse_date
 from django.views.decorators.http import require_GET, require_POST
@@ -155,6 +158,36 @@ def _split_email_tokens(raw_email: str) -> list[str]:
         if token and '@' in token:
             parts.append(token)
     return parts
+
+
+def _upload_max_bytes() -> int:
+    mb = int(getattr(settings, 'UPLOAD_MAX_FILE_MB', 10) or 10)
+    return max(1, mb) * 1024 * 1024
+
+
+def _allowed_upload_extensions() -> set[str]:
+    values = getattr(settings, 'UPLOAD_ALLOWED_EXTENSIONS', []) or []
+    normalized = {(item or '').strip().lower() for item in values}
+    return {item if item.startswith('.') else f'.{item}' for item in normalized if item}
+
+
+def _allowed_image_extensions() -> set[str]:
+    values = getattr(settings, 'UPLOAD_ALLOWED_IMAGE_EXTENSIONS', []) or []
+    normalized = {(item or '').strip().lower() for item in values}
+    return {item if item.startswith('.') else f'.{item}' for item in normalized if item}
+
+
+def _validate_upload(file_obj, *, image_only: bool = False) -> str:
+    if not file_obj:
+        return ''
+    ext = Path(file_obj.name or '').suffix.lower()
+    allowed_exts = _allowed_image_extensions() if image_only else _allowed_upload_extensions()
+    if allowed_exts and ext not in allowed_exts:
+        return f'Extensao de arquivo nao permitida: {ext or "(sem extensao)"}'
+    if int(getattr(file_obj, 'size', 0) or 0) > _upload_max_bytes():
+        max_mb = int(getattr(settings, 'UPLOAD_MAX_FILE_MB', 10) or 10)
+        return f'Arquivo excede o limite de {max_mb}MB.'
+    return ''
 
 
 def _get_user_ad_groups(username: str) -> list[str]:
@@ -1176,6 +1209,13 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
             link = (request.POST.get(f'budget_link_{idx}') or '').strip()
             photo = request.FILES.get(f'budget_photo_{idx}')
             uploaded_files = request.FILES.getlist(f'budget_files_{idx}')
+            photo_error = _validate_upload(photo, image_only=True)
+            if photo_error:
+                return 0, f'Orçamento #{idx}: {photo_error}'
+            for file_obj in uploaded_files:
+                file_error = _validate_upload(file_obj, image_only=False)
+                if file_error:
+                    return 0, f'Orçamento #{idx}: {file_error}'
 
             if not name and not value_raw and not link and not photo and not quote_id and not uploaded_files:
                 continue
@@ -1474,6 +1514,10 @@ class DicasView(LoginRequiredMixin, TemplateView):
         title = (request.POST.get('title') or '').strip()
         content = (request.POST.get('content') or '').strip()
         attachment = request.FILES.get('attachment')
+        attachment_error = _validate_upload(attachment, image_only=False)
+        if attachment_error:
+            messages.error(request, attachment_error)
+            return self.get(request, *args, **kwargs)
         category = (request.POST.get('category') or Dica.Category.GERAL).strip()
         valid_categories = {choice[0] for choice in Dica.Category.choices}
         if category not in valid_categories:
@@ -1608,6 +1652,10 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
         ticket_type = request.POST.get('ticket_type', '').strip()
         urgency = request.POST.get('urgency', '').strip()
         attachment = request.FILES.get('attachment')
+        attachment_error = _validate_upload(attachment, image_only=False)
+        if attachment_error:
+            messages.error(request, attachment_error)
+            return self.get(request, *args, **kwargs)
         creator_user = request.user
         opened_at_dt = None
 
@@ -2652,6 +2700,9 @@ def ticket_message(request):
     message = (request.POST.get('message') or '').strip()
     internal = request.POST.get('internal') == '1'
     attachment = request.FILES.get('attachment')
+    attachment_error = _validate_upload(attachment, image_only=False)
+    if attachment_error:
+        return JsonResponse({'ok': False, 'error': 'invalid_attachment', 'detail': attachment_error}, status=400)
 
     if not ticket_id:
         return JsonResponse({'ok': False, 'error': 'invalid'}, status=400)
@@ -2804,6 +2855,56 @@ def ws_tickets_ping(request):
     return JsonResponse({'ok': True, 'transport': 'http-fallback'})
 
 
+def _resolve_media_file(relative_path: str) -> tuple[str, Path]:
+    normalized = (relative_path or '').strip().replace('\\', '/').lstrip('/')
+    if not normalized:
+        raise Http404('Arquivo nao encontrado.')
+    media_root = Path(getattr(settings, 'MEDIA_ROOT', '') or '').resolve()
+    candidate = (media_root / normalized).resolve()
+    if not media_root.exists():
+        raise Http404('Media indisponivel.')
+    if media_root != candidate and media_root not in candidate.parents:
+        raise Http404('Arquivo invalido.')
+    if not candidate.is_file():
+        raise Http404('Arquivo nao encontrado.')
+    return normalized, candidate
+
+
+def _can_access_media_file(request, relative_path: str) -> bool:
+    path_lower = (relative_path or '').lower()
+    ti_user = is_ti_user(request)
+
+    if path_lower.startswith('tickets/'):
+        ticket = Ticket.objects.filter(attachment=relative_path).first()
+        if not ticket:
+            return ti_user
+        return ti_user or ticket.created_by_id == request.user.id
+
+    if path_lower.startswith('ticket_messages/'):
+        message = TicketMessage.objects.select_related('ticket').filter(attachment=relative_path).first()
+        if not message:
+            return ti_user
+        return ti_user or message.created_by_id == request.user.id or message.ticket.created_by_id == request.user.id
+
+    if path_lower.startswith('requisitions/') or path_lower.startswith('dicas/'):
+        return ti_user
+
+    return ti_user
+
+
+@login_required
+@require_GET
+def protected_media(request, path: str):
+    relative_path, file_path = _resolve_media_file(path)
+    if not _can_access_media_file(request, relative_path):
+        return JsonResponse({'ok': False, 'error': 'forbidden'}, status=403)
+
+    content_type, _ = mimetypes.guess_type(file_path.name)
+    response = FileResponse(open(file_path, 'rb'), content_type=content_type or 'application/octet-stream')
+    response['X-Content-Type-Options'] = 'nosniff'
+    return response
+
+
 @csrf_exempt
 @require_POST
 def inventory_push_api(request):
@@ -2817,11 +2918,16 @@ def inventory_push_api(request):
         header_token = auth_header[7:].strip()
     if not header_token:
         header_token = (request.headers.get('X-Inventory-Token') or '').strip()
-    if header_token != token:
+    if not header_token or not secrets.compare_digest(header_token, token):
         return JsonResponse({'ok': False, 'error': 'unauthorized'}, status=401)
 
+    raw_body = request.body or b''
+    max_payload_bytes = int(getattr(settings, 'INVENTORY_AGENT_MAX_PAYLOAD_BYTES', 2 * 1024 * 1024) or (2 * 1024 * 1024))
+    if len(raw_body) > max_payload_bytes:
+        return JsonResponse({'ok': False, 'error': 'payload_too_large'}, status=413)
+
     try:
-        body_text = (request.body or b'').decode('utf-8')
+        body_text = raw_body.decode('utf-8')
         payload = json.loads(body_text or '{}')
     except Exception:
         return JsonResponse({'ok': False, 'error': 'invalid_json'}, status=400)

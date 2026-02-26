@@ -156,12 +156,19 @@
         const search = document.querySelector('[data-access-search]');
         if (!list || !details) return;
 
+        const escapeHtml = (value) => String(value || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/\"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+
         const render = (folder) => {
             if (!folder) {
                 details.innerHTML = '<div class="muted">Selecione uma pasta para ver os acessos.</div>';
                 return;
             }
-            let html = `<strong>${folder.name}</strong>`;
+            let html = `<strong>${escapeHtml(folder.name)}</strong>`;
             if (!folder.groups.length) {
                 html += '<div class="muted" style="margin-top:6px;">Nenhum grupo encontrado.</div>';
                 details.innerHTML = html;
@@ -169,7 +176,7 @@
             }
             folder.groups.forEach((group) => {
                 const levelLabel = group.level === 'leitura_escrita' ? 'Leitura e escrita' : 'Somente leitura';
-                html += `<div style="margin-top:12px;"><strong>${group.name}</strong> <span class="muted">(${levelLabel})</span></div>`;
+                html += `<div style="margin-top:12px;"><strong>${escapeHtml(group.name)}</strong> <span class="muted">(${levelLabel})</span></div>`;
                 if (!group.members.length) {
                     html += '<div class="muted">Sem membros no grupo.</div>';
                     return;
@@ -177,7 +184,7 @@
                 html += '<ul style="margin:6px 0 0 16px;">';
                 group.members.forEach((member) => {
                     const label = member.username ? `${member.name} (${member.username})` : member.name;
-                    html += `<li>${label}</li>`;
+                    html += `<li>${escapeHtml(label)}</li>`;
                 });
                 html += '</ul>';
             });

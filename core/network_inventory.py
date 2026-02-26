@@ -13,6 +13,18 @@ from .models import Equipment, SoftwareInventory, next_equipment_tag_code
 
 logger = logging.getLogger(__name__)
 
+_VALID_HOST_RE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]{0,254}$')
+
+
+def _sanitize_hostname_for_powershell(hostname: str) -> str:
+    host = (hostname or '').strip()
+    if not host:
+        raise RuntimeError('Hostname nao informado para inventario remoto.')
+    if not _VALID_HOST_RE.fullmatch(host):
+        raise RuntimeError(f'Hostname invalido para inventario remoto: {host}')
+    # Single-quoted PowerShell strings escape a quote by doubling it.
+    return host.replace("'", "''")
+
 
 
 def _norm_identifier(value: Any) -> str:
@@ -243,9 +255,10 @@ def _infer_mod_hd(payload: dict[str, Any], payload_mod_hd: str = '') -> str:
 
 
 def _run_inventory_powershell(hostname: str, timeout_seconds: int = 120) -> dict[str, Any]:
+    safe_hostname = _sanitize_hostname_for_powershell(hostname)
     ps_script = rf"""
 $ErrorActionPreference = 'Stop'
-$computer = '{hostname}'
+$computer = '{safe_hostname}'
 
 $cs = Get-CimInstance -ClassName Win32_ComputerSystem -ComputerName $computer
 $bios = Get-CimInstance -ClassName Win32_BIOS -ComputerName $computer

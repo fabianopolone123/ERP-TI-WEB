@@ -23,6 +23,7 @@ staticfiles/
 .env
 .env.*
 !.env.example
+.django_secret_key
 
 # Tooling caches
 .pytest_cache/

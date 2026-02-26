@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 from pathlib import Path
 import os
+import secrets
 import socket
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -30,16 +31,36 @@ if ENV_PATH.exists():
             os.environ[key] = value
 
 
+def _env_bool(name: str, default: bool = False) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return bool(default)
+    return raw.strip().lower() in {'1', 'true', 'yes', 'on'}
+
+
+def _env_csv(name: str, default: str = '') -> list[str]:
+    raw = os.environ.get(name, default)
+    return [item.strip() for item in (raw or '').split(',') if item.strip()]
+
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-0_@z3ayq+ia$467tp90s#4bxdg5zhd@e&4vaf(glre_t@#f=nq'
+SECRET_KEY = (os.environ.get('DJANGO_SECRET_KEY', '') or os.environ.get('SECRET_KEY', '')).strip()
+if not SECRET_KEY:
+    # Local fallback for development: persistent file outside repository defaults.
+    secret_file = BASE_DIR / '.django_secret_key'
+    if secret_file.exists():
+        SECRET_KEY = secret_file.read_text(encoding='utf-8').strip()
+    if not SECRET_KEY:
+        SECRET_KEY = secrets.token_urlsafe(64)
+        secret_file.write_text(SECRET_KEY, encoding='utf-8')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = False
+DEBUG = _env_bool('DEBUG', False)
 
-ALLOWED_HOSTS = ['127.0.0.1', 'localhost', '0.0.0.0', socket.gethostname()]
+ALLOWED_HOSTS = ['127.0.0.1', 'localhost', socket.gethostname()]
 extra_hosts = os.environ.get('EXTRA_ALLOWED_HOSTS', '')
 if extra_hosts:
     for host in extra_hosts.split(','):
@@ -153,6 +174,14 @@ MEDIA_ROOT = BASE_DIR / 'media'
 LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = 'chamados'
 LOGOUT_REDIRECT_URL = 'login'
+SECURE_HSTS_SECONDS = int(os.environ.get('SECURE_HSTS_SECONDS', '0'))
+SECURE_HSTS_INCLUDE_SUBDOMAINS = _env_bool('SECURE_HSTS_INCLUDE_SUBDOMAINS', False)
+SECURE_HSTS_PRELOAD = _env_bool('SECURE_HSTS_PRELOAD', False)
+SECURE_SSL_REDIRECT = _env_bool('SECURE_SSL_REDIRECT', False)
+SESSION_COOKIE_SECURE = _env_bool('SESSION_COOKIE_SECURE', False)
+CSRF_COOKIE_SECURE = _env_bool('CSRF_COOKIE_SECURE', False)
+if _env_bool('SECURE_PROXY_SSL_HEADER_ENABLED', False):
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 # LDAP / Active Directory (SIDERTEC) - via ldap3
 AUTHENTICATION_BACKENDS = [
@@ -160,9 +189,9 @@ AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',
 ]
 
-AD_LDAP_SERVER_URI = 'ldap://192.168.22.8:389'
-AD_LDAP_BASE_DN = 'dc=sidertec,dc=intra,dc=net'
-AD_LDAP_BIND_DN = 'glpi_ldap@sidertec.intra.net'
+AD_LDAP_SERVER_URI = os.environ.get('AD_LDAP_SERVER_URI', 'ldaps://192.168.22.8:636')
+AD_LDAP_BASE_DN = os.environ.get('AD_LDAP_BASE_DN', 'dc=sidertec,dc=intra,dc=net')
+AD_LDAP_BIND_DN = os.environ.get('AD_LDAP_BIND_DN', 'glpi_ldap@sidertec.intra.net')
 AD_LDAP_BIND_PASSWORD = os.environ.get('ERP_LDAP_BIND_PASSWORD', '')
 AD_LDAP_USER_FILTER = '(&(objectCategory=person)(objectclass=user)(sAMAccountName=%(user)s))'
 
@@ -209,6 +238,18 @@ ACCESS_ROOT_PATH = os.environ.get('ACCESS_ROOT_PATH', r'\\SRV-FS\\Sidertec')
 INVENTORY_DEFAULT_HOSTS = os.environ.get('INVENTORY_DEFAULT_HOSTS', '')
 INVENTORY_POWERSHELL_TIMEOUT = int(os.environ.get('INVENTORY_POWERSHELL_TIMEOUT', '120'))
 INVENTORY_AGENT_TOKEN = os.environ.get('INVENTORY_AGENT_TOKEN', '')
+INVENTORY_AGENT_MAX_PAYLOAD_BYTES = int(os.environ.get('INVENTORY_AGENT_MAX_PAYLOAD_BYTES', str(2 * 1024 * 1024)))
+
+# Upload safety defaults
+UPLOAD_MAX_FILE_MB = int(os.environ.get('UPLOAD_MAX_FILE_MB', '10'))
+UPLOAD_ALLOWED_EXTENSIONS = _env_csv(
+    'UPLOAD_ALLOWED_EXTENSIONS',
+    '.pdf,.png,.jpg,.jpeg,.gif,.webp,.bmp,.txt,.log,.csv,.xlsx,.xls,.doc,.docx,.ppt,.pptx,.zip,.rar,.7z',
+)
+UPLOAD_ALLOWED_IMAGE_EXTENSIONS = _env_csv(
+    'UPLOAD_ALLOWED_IMAGE_EXTENSIONS',
+    '.png,.jpg,.jpeg,.gif,.webp,.bmp',
+)
 
 # Exportacao de chamados para planilha mensal
 CHAMADOS_XLSX_PATH = os.environ.get(

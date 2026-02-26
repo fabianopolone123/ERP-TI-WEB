@@ -6,7 +6,7 @@
     [string]$ScriptPath = 'C:\ProgramData\ERP-TI\inventory_agent.ps1',
 
     [Parameter(Mandatory = $false)]
-    [string]$ServerUrl = 'http://ti-fabiano:8000/api/inventory/push/',
+    [string]$ServerUrl = 'https://erp-ti.local/api/inventory/push/',
 
     [Parameter(Mandatory = $true)]
     [string]$Token

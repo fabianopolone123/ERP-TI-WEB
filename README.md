@@ -15,9 +15,12 @@ Para inventariar PCs automaticamente sem depender de acesso remoto por WMI:
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/register_inventory_task.ps1 `
   -ScriptPath "C:\ProgramData\ERP-TI\inventory_agent.ps1" `
-  -ServerUrl "http://ti-fabiano:8000/api/inventory/push/" `
+  -ServerUrl "https://erp-ti.local/api/inventory/push/" `
   -Token "<token-forte>"
 ```
+
+Opcionalmente, o `scripts/inventory_agent_run.bat` usa o token da variavel de ambiente
+`INVENTORY_AGENT_TOKEN` (ou recebe o token no segundo parametro).
 
 4. Endpoint de recebimento no ERP:
 - `POST /api/inventory/push/`
