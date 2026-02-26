@@ -3,6 +3,7 @@ import json
 import secrets
 import mimetypes
 import unicodedata
+import threading
 from uuid import uuid4
 from textwrap import shorten
 from decimal import Decimal, InvalidOperation
@@ -521,6 +522,42 @@ def _notify_new_ticket_watchers_email(ticket):
         )
     except Exception:
         logger.exception("Erro ao enviar e-mail de novo chamado para observadores: %s", ', '.join(recipients))
+
+
+def _run_async_task(task_name: str, callback) -> None:
+    def _runner():
+        try:
+            callback()
+        except Exception:
+            logger.exception("Falha inesperada na tarefa em background: %s", task_name)
+
+    threading.Thread(
+        target=_runner,
+        name=f'erp-bg-{task_name}',
+        daemon=True,
+    ).start()
+
+
+def _enqueue_new_ticket_notifications(ticket_id: int) -> None:
+    def _notify_task():
+        ticket = (
+            Ticket.objects.filter(id=ticket_id)
+            .select_related('created_by', 'assigned_to')
+            .prefetch_related('collaborators')
+            .first()
+        )
+        if not ticket:
+            return
+        try:
+            _notify_whatsapp(ticket, event_type="new_ticket", event_label="Novo chamado")
+        except Exception:
+            logger.exception("Falha inesperada em notificacao WhatsApp do chamado %s", ticket_id)
+        try:
+            _notify_new_ticket_watchers_email(ticket)
+        except Exception:
+            logger.exception("Falha inesperada em notificacao por e-mail de observadores do chamado %s", ticket_id)
+
+    transaction.on_commit(lambda: _run_async_task(f'new-ticket-notify-{ticket_id}', _notify_task))
 
 
 def is_ti_user(request) -> bool:
@@ -1779,14 +1816,7 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
             to_status=initial_status,
             note=f'Chamado criado no quadro como {_timeline_status_label(initial_status)}.',
         )
-        try:
-            _notify_whatsapp(ticket, event_type="new_ticket", event_label="Novo chamado")
-        except Exception:
-            logger.exception("Falha inesperada em notificacao WhatsApp do chamado %s", ticket.id)
-        try:
-            _notify_new_ticket_watchers_email(ticket)
-        except Exception:
-            logger.exception("Falha inesperada em notificacao por e-mail de observadores do chamado %s", ticket.id)
+        _enqueue_new_ticket_notifications(ticket.id)
         messages.success(request, 'Chamado aberto com sucesso.')
         return redirect('chamados')
 
