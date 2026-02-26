@@ -195,12 +195,20 @@
                                     <span class="muted">Aguardando aprovação</span>
                                 {% endif %}
                             </td>
-                            <td data-sort-value="{{ item.created_at|date:'YmdHis' }}">
-                                <div class="muted">Feita: {{ item.created_at|date:'d/m/Y H:i' }}</div>
-                                <div class="muted">Aprovada: {% if item.approved_at %}{{ item.approved_at|date:'d/m/Y' }}{% else %}-{% endif %}</div>
-                                <div class="muted">Recebida: {% if item.received_at %}{{ item.received_at|date:'d/m/Y' }}{% else %}-{% endif %}</div>
+                            <td data-sort-value="{% if item.requested_at %}{{ item.requested_at|date:'Ymd' }}{% else %}{{ item.created_at|date:'YmdHis' }}{% endif %}">
+                                <div class="muted">Pedido: {% if item.requested_at %}{{ item.requested_at|date:'d/m/Y' }}{% else %}{{ item.created_at|date:'d/m/Y' }}{% endif %}</div>
+                                <div class="muted">Aprovação: {% if item.approved_at %}{{ item.approved_at|date:'d/m/Y' }}{% else %}-{% endif %}</div>
+                                <div class="muted">Entrega: {% if item.received_at %}{{ item.received_at|date:'d/m/Y' }}{% else %}-{% endif %}</div>
                             </td>
                             <td>
+                                {% if item.status == 'approved' %}
+                                    <form method="post" class="inline-form" data-mark-received-form style="display:inline-flex; margin-right:6px;">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="action" value="mark_received" />
+                                        <input type="hidden" name="requisition_id" value="{{ item.id }}" />
+                                        <button type="submit" data-mark-received-button>Marcar entrega</button>
+                                    </form>
+                                {% endif %}
                                 <button type="button" data-duplicate-requisition data-requisition-id="{{ item.id }}">Duplicar</button>
                             </td>
                         </tr>
@@ -1492,6 +1500,11 @@
                 const id = btn.getAttribute('data-requisition-id');
                 if (!id) return;
                 openDuplicate(id);
+            });
+        });
+        document.querySelectorAll('[data-mark-received-form], [data-mark-received-button]').forEach((el) => {
+            el.addEventListener('click', (event) => {
+                event.stopPropagation();
             });
         });
 

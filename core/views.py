@@ -1371,6 +1371,29 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
             messages.error(request, 'Apenas usuários do departamento TI podem cadastrar requisições.')
             return self.get(request, *args, **kwargs)
 
+        action = (request.POST.get('action') or '').strip().lower()
+        if action == 'mark_received':
+            requisition_id = (request.POST.get('requisition_id') or '').strip()
+            requisition = Requisition.objects.filter(id=requisition_id).first()
+            if not requisition:
+                messages.error(request, 'Requisição não encontrada para marcar entrega.')
+                return redirect('requisicoes')
+
+            self._sync_requisition_status_with_approved_quote(requisition)
+            if requisition.status == Requisition.Status.RECEIVED:
+                messages.success(request, 'Esta requisição já estava marcada como entregue.')
+                return redirect('requisicoes')
+
+            if requisition.status != Requisition.Status.APPROVED:
+                messages.error(request, 'Apenas requisições aprovadas podem ser marcadas como entregues.')
+                return redirect('requisicoes')
+
+            requisition.status = Requisition.Status.RECEIVED
+            requisition.save(update_fields=['status', 'updated_at'])
+            self._sync_requisition_timeline_dates(requisition)
+            messages.success(request, f'Requisição {requisition.code} marcada como entregue.')
+            return redirect('requisicoes')
+
         mode = (request.POST.get('mode') or 'create').strip().lower()
         kind_value = (request.POST.get('requisition_kind') or Requisition.Kind.PHYSICAL).strip()
         valid_kinds = {choice[0] for choice in Requisition.Kind.choices}
