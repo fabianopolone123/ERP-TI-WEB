@@ -1625,20 +1625,9 @@
                         const subFreightFormatted = formatMoneyForCopy(sub.freight);
                         lines.push(`   - ${sub.name || '(sem nome)'} | Qtd: ${subQty} | Valor unit.: R$ ${subValueFormatted} | Frete: R$ ${subFreightFormatted}`);
                         if (sub.link) lines.push(`     Link (${sub.linkLabel || 'site'}): ${sub.link}`);
-                        const subImg = await resolveClipboardImage(sub.previewSrc);
-                        if (subImg.htmlSrc) {
-                            lines.push(`     Imagem: incorporada no conteúdo copiado.`);
-                        } else if (subImg.fallbackLink) {
-                            lines.push(`     Imagem: ${subImg.fallbackLink}`);
-                        }
 
                         htmlParts.push(`<li style="margin-bottom:8px;"><strong>${escapeHtml(sub.name || '(sem nome)')}</strong> - Qtd: ${escapeHtml(String(subQty))} | Valor unit.: R$ ${escapeHtml(subValueFormatted)} | Frete: R$ ${escapeHtml(subFreightFormatted)}`);
                         if (sub.link) htmlParts.push(`<br>Link: <a href="${escapeHtml(sub.link)}" target="_blank" rel="noopener noreferrer">${escapeHtml(sub.linkLabel || 'Abrir')}</a>`);
-                        if (subImg.htmlSrc) {
-                            htmlParts.push(`<br><img src="${escapeHtml(subImg.htmlSrc)}" alt="Suborçamento" style="margin-top:4px;max-width:300px;max-height:150px;border:1px solid #cbd5e1;border-radius:6px;">`);
-                        } else if (subImg.fallbackLink) {
-                            htmlParts.push(`<br><a href="${escapeHtml(subImg.fallbackLink)}" target="_blank" rel="noopener noreferrer">Imagem do suborçamento</a>`);
-                        }
                         htmlParts.push(`</li>`);
                     }
                     htmlParts.push(`</ul>`);
