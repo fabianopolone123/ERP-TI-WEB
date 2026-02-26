@@ -623,9 +623,20 @@
 
         const toBrValue = (value) => {
             const raw = (value || '').toString();
+            if (!raw.trim()) return '';
             const n = Number(raw);
             if (Number.isNaN(n)) return raw;
             return n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        };
+
+        const formatMoneyInputPtBr = (value) => {
+            const digits = (value || '').toString().replace(/\D/g, '');
+            if (!digits) return '';
+            const cents = digits.padStart(3, '0');
+            const integerPartRaw = cents.slice(0, -2).replace(/^0+(?=\d)/, '');
+            const integerPart = (integerPartRaw || '0').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+            const decimalPart = cents.slice(-2);
+            return `${integerPart},${decimalPart}`;
         };
 
         const parseBrNumber = (value) => {
@@ -1201,10 +1212,23 @@
                 preview.style.display = 'block';
             });
 
-            [quantityInput, valueInput, freightInput].forEach((el) => {
-                if (!el) return;
-                el.addEventListener('input', recalculateBudgetPackages);
-                el.addEventListener('change', recalculateBudgetPackages);
+            if (quantityInput) {
+                quantityInput.addEventListener('input', recalculateBudgetPackages);
+                quantityInput.addEventListener('change', recalculateBudgetPackages);
+            }
+            [valueInput, freightInput].forEach((moneyInput) => {
+                if (!moneyInput) return;
+                moneyInput.addEventListener('input', () => {
+                    const formatted = formatMoneyInputPtBr(moneyInput.value);
+                    if (moneyInput.value !== formatted) {
+                        moneyInput.value = formatted;
+                    }
+                    recalculateBudgetPackages();
+                });
+                moneyInput.addEventListener('change', () => {
+                    moneyInput.value = formatMoneyInputPtBr(moneyInput.value);
+                    recalculateBudgetPackages();
+                });
             });
             if (nameInput) {
                 nameInput.addEventListener('input', refreshBudgetCardStyles);
