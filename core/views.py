@@ -1528,6 +1528,28 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
             self._sync_requisition_timeline_dates(requisition)
             messages.success(request, f'Requisição {requisition.code} marcada como entregue.')
             return redirect('requisicoes')
+        if action == 'mark_rejected':
+            requisition_id = (request.POST.get('requisition_id') or '').strip()
+            requisition = Requisition.objects.filter(id=requisition_id).first()
+            if not requisition:
+                messages.error(request, 'Requisição não encontrada para marcar como não aprovada.')
+                return redirect('requisicoes')
+
+            if requisition.status == Requisition.Status.REJECTED:
+                messages.success(request, 'Esta requisição já está marcada como não aprovada.')
+                return redirect('requisicoes')
+
+            if requisition.status == Requisition.Status.RECEIVED:
+                messages.error(request, 'Requisições já entregues não podem ser marcadas como não aprovadas.')
+                return redirect('requisicoes')
+
+            requisition.quotes.update(is_selected=False)
+            requisition.status = Requisition.Status.REJECTED
+            requisition.approved_at = None
+            requisition.received_at = None
+            requisition.save(update_fields=['status', 'approved_at', 'received_at', 'updated_at'])
+            messages.success(request, f'Requisição {requisition.code} marcada como não aprovada.')
+            return redirect('requisicoes')
 
         mode = (request.POST.get('mode') or 'create').strip().lower()
         kind_value = (request.POST.get('requisition_kind') or Requisition.Kind.PHYSICAL).strip()

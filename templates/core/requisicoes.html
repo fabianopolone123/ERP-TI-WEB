@@ -223,6 +223,14 @@
                             </td>
                             <td>
                                 <div class="req-actions">
+                                    {% if item.status != 'rejected' and item.status != 'received' %}
+                                        <form method="post" class="inline-form" data-mark-rejected-form>
+                                            {% csrf_token %}
+                                            <input type="hidden" name="action" value="mark_rejected" />
+                                            <input type="hidden" name="requisition_id" value="{{ item.id }}" />
+                                            <button type="submit" data-mark-rejected-button>Marcar não aprovado</button>
+                                        </form>
+                                    {% endif %}
                                     {% if item.status == 'approved' %}
                                         <form method="post" class="inline-form" data-mark-received-form>
                                             {% csrf_token %}
@@ -1551,6 +1559,11 @@
             });
         });
         document.querySelectorAll('[data-mark-received-form], [data-mark-received-button]').forEach((el) => {
+            el.addEventListener('click', (event) => {
+                event.stopPropagation();
+            });
+        });
+        document.querySelectorAll('[data-mark-rejected-form], [data-mark-rejected-button]').forEach((el) => {
             el.addEventListener('click', (event) => {
                 event.stopPropagation();
             });
