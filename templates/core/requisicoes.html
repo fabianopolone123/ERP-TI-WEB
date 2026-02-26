@@ -194,7 +194,7 @@
                                     <div class="muted" style="margin-top: 4px;">
                                         {% for quote in item.main_quotes %}
                                             <div style="margin-bottom: 6px;">
-                                                {{ quote.name }} (Qtd: {{ quote.quantity|default:1 }} | R$ {{ quote.package_total|br_money }})
+                                                {{ quote.name }} (Qtd: {{ quote.quantity|default:1 }} | Unitário: R$ {{ quote.value|br_money }} | Total: R$ {{ quote.package_total|br_money }})
                                                 {% if quote.is_display_selected %}
                                                     <span class="status-pill status-approved" style="margin-left: 6px;">Aprovado</span>
                                                 {% endif %}
