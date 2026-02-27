@@ -1801,6 +1801,7 @@
                         quantity: "{{ quote.quantity|default:1|escapejs }}",
                         unit: "R$ {{ quote.value|br_money|escapejs }}",
                         total: "R$ {{ quote.package_total|br_money|escapejs }}",
+                        link: "{{ quote.link|default:''|escapejs }}",
                         selected: {% if quote.is_display_selected %}true{% else %}false{% endif %},
                         subs: [
                             {% for sub in quote.sub_items %}
@@ -1808,7 +1809,8 @@
                                 name: "{{ sub.name|escapejs }}",
                                 quantity: "{{ sub.quantity|default:1|escapejs }}",
                                 unit: "R$ {{ sub.value|br_money|escapejs }}",
-                                freight: "R$ {{ sub.freight|br_money|escapejs }}"
+                                freight: "R$ {{ sub.freight|br_money|escapejs }}",
+                                link: "{{ sub.link|default:''|escapejs }}"
                             }{% if not forloop.last %},{% endif %}
                             {% endfor %}
                         ]
@@ -1832,6 +1834,17 @@
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#039;');
+        const normalizeExternalLink = (value) => {
+            const raw = (value || '').trim();
+            if (!raw) return '';
+            if (/^https?:\/\//i.test(raw)) return raw;
+            return `https://${raw}`;
+        };
+        const buildOpenLinkButton = (value) => {
+            const link = normalizeExternalLink(value);
+            if (!link) return '';
+            return ` <a href="${escapeHtml(link)}" target="_blank" rel="noopener noreferrer" style="margin-left:8px;">Abrir link</a>`;
+        };
 
         const open = (id) => {
             const data = requisitionData[String(id)];
@@ -1858,10 +1871,11 @@
                 } else {
                     quotesEl.innerHTML = data.quotes.map((quote) => {
                         const selectedBadge = quote.selected ? '<span class="status-pill status-approved" style="margin-left: 6px;">Aprovado</span>' : '';
+                        const quoteLinkBtn = buildOpenLinkButton(quote.link);
                         const subsHtml = Array.isArray(quote.subs) && quote.subs.length
-                            ? `<div class="muted" style="margin-top: 6px;">Suborçamentos:<ul style="margin:6px 0 0 18px;">${quote.subs.map((sub) => `<li>${escapeHtml(sub.name)} (Qtd: ${escapeHtml(String(sub.quantity || '1'))} | Unitário: ${escapeHtml(sub.unit)} | Frete: ${escapeHtml(sub.freight)})</li>`).join('')}</ul></div>`
+                            ? `<div class="muted" style="margin-top: 6px;">Suborçamentos:<ul style="margin:6px 0 0 18px;">${quote.subs.map((sub) => `<li>${escapeHtml(sub.name)} (Qtd: ${escapeHtml(String(sub.quantity || '1'))} | Unitário: ${escapeHtml(sub.unit)} | Frete: ${escapeHtml(sub.freight)})${buildOpenLinkButton(sub.link)}</li>`).join('')}</ul></div>`
                             : '';
-                        return `<div style="border:1px solid #1f2a44; border-radius:10px; padding:10px;"><strong>${escapeHtml(quote.name || '-')}</strong>${selectedBadge}<div class="muted" style="margin-top:4px;">Qtd: ${escapeHtml(String(quote.quantity || '1'))} | Unitário: ${escapeHtml(quote.unit)} | Total pacote: ${escapeHtml(quote.total)}</div>${subsHtml}</div>`;
+                        return `<div style="border:1px solid #1f2a44; border-radius:10px; padding:10px;"><strong>${escapeHtml(quote.name || '-')}</strong>${selectedBadge}${quoteLinkBtn}<div class="muted" style="margin-top:4px;">Qtd: ${escapeHtml(String(quote.quantity || '1'))} | Unitário: ${escapeHtml(quote.unit)} | Total pacote: ${escapeHtml(quote.total)}</div>${subsHtml}</div>`;
                     }).join('');
                 }
             }
