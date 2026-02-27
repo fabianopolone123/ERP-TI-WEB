@@ -136,11 +136,48 @@ def build_modules(active_slug: str | None, allowed_slugs: set[str] | None = None
     return modules
 
 
+def _username_candidates(raw_username: str) -> list[str]:
+    raw = (raw_username or '').strip()
+    if not raw:
+        return []
+    candidates: list[str] = [raw]
+    if '\\' in raw:
+        tail = raw.rsplit('\\', 1)[-1].strip()
+        if tail:
+            candidates.append(tail)
+    if '@' in raw:
+        local = raw.split('@', 1)[0].strip()
+        if local:
+            candidates.append(local)
+    uniq: list[str] = []
+    seen: set[str] = set()
+    for item in candidates:
+        key = item.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        uniq.append(item)
+    return uniq
+
+
 def _erp_user_from_request(request) -> ERPUser | None:
     username = getattr(getattr(request, 'user', None), 'username', '')
-    if not username:
+    candidates = _username_candidates(username)
+    if not candidates:
         return None
-    return ERPUser.objects.filter(username__iexact=username).first()
+
+    # Tenta primeiro correspondencia exata para evitar colisao por variacao de caixa.
+    for candidate in candidates:
+        exact = ERPUser.objects.filter(username=candidate).first()
+        if exact:
+            return exact
+
+    # Fallback case-insensitive quando o cadastro nao estiver no mesmo formato.
+    for candidate in candidates:
+        fuzzy = ERPUser.objects.filter(username__iexact=candidate).order_by('id').first()
+        if fuzzy:
+            return fuzzy
+    return None
 
 
 def can_view_requisitions_readonly(request) -> bool:
