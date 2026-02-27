@@ -584,13 +584,14 @@ def _log_ticket_timeline(
     from_status: str = '',
     to_status: str = '',
     note: str = '',
+    event_created_at=None,
 ):
     actor_ti = None
     username = getattr(request_user, 'username', '')
     if username:
         actor_ti = ERPUser.objects.filter(username__iexact=username).first()
 
-    TicketTimelineEvent.objects.create(
+    event = TicketTimelineEvent.objects.create(
         ticket=ticket,
         event_type=event_type,
         from_status=from_status or '',
@@ -599,6 +600,8 @@ def _log_ticket_timeline(
         actor_ti=actor_ti,
         note=(note or '').strip(),
     )
+    if event_created_at:
+        TicketTimelineEvent.objects.filter(id=event.id).update(created_at=event_created_at)
 
 
 def _create_ticket_work_log(
@@ -1935,6 +1938,7 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
             request_user=request.user,
             to_status=initial_status,
             note=f'Chamado criado no quadro como {_timeline_status_label(initial_status)}.',
+            event_created_at=ticket.created_at,
         )
         _enqueue_new_ticket_notifications(ticket.id)
         messages.success(request, 'Chamado aberto com sucesso.')
