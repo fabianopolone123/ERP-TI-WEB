@@ -319,7 +319,7 @@
                 <div class="kanban-header">Pendente</div>
                 <div class="kanban-body">
                     {% for ticket in new_tickets %}
-                        <div class="ticket-card urgency-bg-{{ ticket.urgency }}{% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %} shared-ticket{% endif %}" draggable="true" data-ticket-id="{{ ticket.id }}" data-ticket-status="{{ ticket.status }}" data-opened-at="{{ ticket.created_at|date:'c' }}" data-failure-type="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'failure_type' }}" data-last-action="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'last_queue_action_text'|default:''|escape }}">
+                        <div class="ticket-card urgency-bg-{{ ticket.urgency }}{% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %} shared-ticket{% endif %}" draggable="true" data-ticket-id="{{ ticket.id }}" data-ticket-status="{{ ticket.status }}" data-opened-at="{{ ticket.created_at|date:'c' }}" data-requester-priority="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'requester_priority'|default:0 }}" data-urgency-priority="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'urgency_priority'|default:5 }}" data-failure-type="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'failure_type' }}" data-last-action="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'last_queue_action_text'|default:''|escape }}">
                             <div class="ticket-title">
                                 <span class="urgency-dot urgency-{{ ticket.urgency }}"></span>
                                 #{{ ticket.id }} - {{ ticket.title }}
@@ -354,7 +354,7 @@
                     <div class="kanban-header">{{ user.full_name }}</div>
                     <div class="kanban-body">
                         {% for ticket in user_tickets|get_item:user.id %}
-                            <div class="ticket-card urgency-bg-{{ ticket.urgency }}{% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %} shared-ticket{% endif %}{% if ticket_cycle_map|get_item:ticket.id|default:''|get_item:user.id %} playing{% endif %}" draggable="true" data-ticket-id="{{ ticket.id }}" data-ticket-status="{{ ticket.status }}" data-opened-at="{{ ticket.created_at|date:'c' }}" data-failure-type="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'failure_type' }}" data-last-action="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'last_action_text'|default:''|escape }}" data-cycle-running="{% if ticket_cycle_map|get_item:ticket.id|default:''|get_item:user.id %}1{% else %}0{% endif %}">
+                            <div class="ticket-card urgency-bg-{{ ticket.urgency }}{% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %} shared-ticket{% endif %}{% if ticket_cycle_map|get_item:ticket.id|default:''|get_item:user.id %} playing{% endif %}" draggable="true" data-ticket-id="{{ ticket.id }}" data-ticket-status="{{ ticket.status }}" data-opened-at="{{ ticket.created_at|date:'c' }}" data-requester-priority="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'requester_priority'|default:0 }}" data-urgency-priority="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'urgency_priority'|default:5 }}" data-failure-type="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'failure_type' }}" data-last-action="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'last_action_text'|default:''|escape }}" data-cycle-running="{% if ticket_cycle_map|get_item:ticket.id|default:''|get_item:user.id %}1{% else %}0{% endif %}">
                                 <div class="ticket-main-row">
                                     <div class="ticket-main-left">
                                         <div class="ticket-title">
@@ -403,7 +403,7 @@
                 </div>
                 <div class="kanban-body">
                     {% for ticket in closed_tickets %}
-                        <div class="ticket-card urgency-bg-{{ ticket.urgency }}{% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %} shared-ticket{% endif %}" draggable="true" data-ticket-id="{{ ticket.id }}" data-ticket-status="{{ ticket.status }}" data-opened-at="{{ ticket.created_at|date:'c' }}" data-failure-type="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'failure_type' }}" data-ticket-description="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'description'|default:''|escape }}">
+                        <div class="ticket-card urgency-bg-{{ ticket.urgency }}{% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %} shared-ticket{% endif %}" draggable="true" data-ticket-id="{{ ticket.id }}" data-ticket-status="{{ ticket.status }}" data-opened-at="{{ ticket.created_at|date:'c' }}" data-requester-priority="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'requester_priority'|default:0 }}" data-urgency-priority="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'urgency_priority'|default:5 }}" data-failure-type="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'failure_type' }}" data-ticket-description="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'description'|default:''|escape }}">
                             <div class="ticket-title">
                                 <span class="urgency-dot urgency-{{ ticket.urgency }}"></span>
                                 #{{ ticket.id }} - {{ ticket.title }}
@@ -2045,11 +2045,27 @@
             if ((column.dataset.target || '') === 'fechado') return;
             const body = column.querySelector('.kanban-body');
             if (!body) return;
+            const target = (column.dataset.target || '').trim();
+            const toIntOr = (raw, fallback) => {
+                const value = Number.parseInt(String(raw || '').trim(), 10);
+                return Number.isFinite(value) ? value : fallback;
+            };
             const cards = Array.from(body.querySelectorAll('.ticket-card'));
             cards.sort((a, b) => {
-                const aRunning = (a.dataset.cycleRunning || '') === '1' || a.classList.contains('playing');
-                const bRunning = (b.dataset.cycleRunning || '') === '1' || b.classList.contains('playing');
-                if (aRunning !== bRunning) return aRunning ? -1 : 1;
+                if (target === 'novo') {
+                    const aRequester = toIntOr(a.dataset.requesterPriority, 0);
+                    const bRequester = toIntOr(b.dataset.requesterPriority, 0);
+                    if (aRequester !== bRequester) return aRequester - bRequester;
+
+                    const aUrgency = toIntOr(a.dataset.urgencyPriority, 5);
+                    const bUrgency = toIntOr(b.dataset.urgencyPriority, 5);
+                    if (aUrgency !== bUrgency) return aUrgency - bUrgency;
+                }
+                if (target !== 'novo') {
+                    const aRunning = (a.dataset.cycleRunning || '') === '1' || a.classList.contains('playing');
+                    const bRunning = (b.dataset.cycleRunning || '') === '1' || b.classList.contains('playing');
+                    if (aRunning !== bRunning) return aRunning ? -1 : 1;
+                }
                 const ad = parseOpenedAt(a);
                 const bd = parseOpenedAt(b);
                 if (!ad && !bd) return 0;

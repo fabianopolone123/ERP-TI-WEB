@@ -12,7 +12,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.core.mail import send_mail
 from django.db import transaction
-from django.db.models import Count, Q, Case, When, Value, IntegerField
+from django.db.models import Count, Q, Case, When, Value, IntegerField, Exists, OuterRef
 from django.db.models.functions import TruncDate
 from django.shortcuts import redirect
 from django.utils import timezone
@@ -2007,7 +2007,7 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
 
         ti_users = list(ERPUser.objects.filter(department__iexact='TI', is_active=True).order_by('full_name'))
         context['ti_users'] = ti_users
-        ti_usernames = [item.username for item in ti_users if (item.username or '').strip()]
+        ti_usernames_set = {(item.username or '').strip().lower() for item in ti_users if (item.username or '').strip()}
         last_paths: dict[int, str] = {}
         ti_ids = [u.id for u in ti_users]
         if ti_ids:
@@ -2026,6 +2026,10 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
                 if path_value:
                     last_paths[aid] = path_value
         context['attendant_last_workbook_paths'] = last_paths
+        ti_requester_subquery = ERPUser.objects.filter(
+            department__iexact='TI',
+            username__iexact=OuterRef('created_by__username'),
+        )
         context['new_tickets'] = (
             Ticket.objects.filter(
                 status__in=[Ticket.Status.NOVO, Ticket.Status.PENDENTE, Ticket.Status.PROGRAMADO],
@@ -2034,8 +2038,9 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
             )
             .select_related('created_by')
             .annotate(
+                requester_is_ti=Exists(ti_requester_subquery),
                 requester_priority=Case(
-                    When(created_by__username__in=ti_usernames, then=Value(1)),
+                    When(requester_is_ti=True, then=Value(1)),
                     default=Value(0),
                     output_field=IntegerField(),
                 ),
@@ -2158,12 +2163,23 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
         for ticket in all_tickets:
             username = ticket.created_by.username if ticket.created_by else ''
             erp = erp_map.get(username.lower()) if username else None
+            username_norm = (username or '').strip().lower()
+            is_requester_ti = bool(erp and (erp.department or '').strip().upper() == 'TI') or username_norm in ti_usernames_set
             name = erp.full_name if erp and erp.full_name else username
             dept = erp.department if erp else ''
+            urgency_priority = {
+                Ticket.Urgency.ALTA: 0,
+                Ticket.Urgency.MEDIA: 1,
+                Ticket.Urgency.BAIXA: 2,
+                Ticket.Urgency.PROGRAMADA: 3,
+                Ticket.Urgency.NAO_CLASSIFICADO: 4,
+            }.get(ticket.urgency, 5)
             ticket_meta[ticket.id] = {
                 'requester': name or '- ',
                 'department': dept or '',
                 'description': ticket.description or '',
+                'requester_priority': 1 if is_requester_ti else 0,
+                'urgency_priority': urgency_priority,
                 'is_multi_attendant': ticket.id in multi_assigned_ticket_ids,
                 'failure_type': ticket.last_failure_type or '',
                 'last_action_text': latest_worklog_action_by_ticket.get(ticket.id, ''),
