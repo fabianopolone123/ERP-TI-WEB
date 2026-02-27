@@ -2007,6 +2007,7 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
 
         ti_users = list(ERPUser.objects.filter(department__iexact='TI', is_active=True).order_by('full_name'))
         context['ti_users'] = ti_users
+        ti_usernames = [item.username for item in ti_users if (item.username or '').strip()]
         last_paths: dict[int, str] = {}
         ti_ids = [u.id for u in ti_users]
         if ti_ids:
@@ -2033,6 +2034,20 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
             )
             .select_related('created_by')
             .annotate(
+                requester_priority=Case(
+                    When(created_by__username__in=ti_usernames, then=Value(1)),
+                    default=Value(0),
+                    output_field=IntegerField(),
+                ),
+                urgency_priority=Case(
+                    When(urgency=Ticket.Urgency.ALTA, then=Value(0)),
+                    When(urgency=Ticket.Urgency.MEDIA, then=Value(1)),
+                    When(urgency=Ticket.Urgency.BAIXA, then=Value(2)),
+                    When(urgency=Ticket.Urgency.PROGRAMADA, then=Value(3)),
+                    When(urgency=Ticket.Urgency.NAO_CLASSIFICADO, then=Value(4)),
+                    default=Value(5),
+                    output_field=IntegerField(),
+                ),
                 queue_order=Case(
                     When(status=Ticket.Status.NOVO, then=Value(0)),
                     When(status=Ticket.Status.PENDENTE, then=Value(1)),
@@ -2041,7 +2056,7 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
                 )
             )
             .distinct()
-            .order_by('queue_order', '-created_at')
+            .order_by('requester_priority', 'urgency_priority', 'queue_order', '-created_at')
         )
         context['closed_tickets'] = Ticket.objects.filter(status=Ticket.Status.FECHADO).select_related('created_by').order_by('-updated_at', '-id')
         in_progress_tickets = Ticket.objects.filter(
