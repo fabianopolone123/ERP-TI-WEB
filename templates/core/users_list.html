@@ -66,6 +66,7 @@
                                         <th>Email</th>
                                         <th>Ramal</th>
                                         <th>Com e-mail</th>
+                                        <th>Req. leitura</th>
                                         <th>Ativo</th>
                                         <th>Origem</th>
                                         <th>Ação</th>
@@ -90,6 +91,16 @@
                                                     </label>
                                                 </form>
                                             </td>
+                                            <td>
+                                                <form method="post" class="inline-form">
+                                                    {% csrf_token %}
+                                                    <input type="hidden" name="action" value="set_requisition_readonly_flag" />
+                                                    <input type="hidden" name="user_id" value="{{ user.id }}" />
+                                                    <label style="display:inline-flex; align-items:center; gap:6px; cursor:pointer;">
+                                                        <input type="checkbox" name="can_view_requisitions_readonly" value="1" {% if user.can_view_requisitions_readonly %}checked{% endif %} onchange="this.form.submit()" />
+                                                    </label>
+                                                </form>
+                                            </td>
                                             <td>{% if user.is_active %}Sim{% else %}Não{% endif %}</td>
                                             <td>{% if user.is_manual %}Manual{% else %}AD{% endif %}</td>
                                             <td>
@@ -103,7 +114,7 @@
                                         </tr>
                                     {% empty %}
                                         <tr>
-                                            <td colspan="10" class="muted">
+                                            <td colspan="11" class="muted">
                                                 Nenhum usuário cadastrado.
                                             </td>
                                         </tr>
@@ -311,7 +322,7 @@
             form.addEventListener('submit', () => {
                 const actionInput = form.querySelector('input[name="action"]');
                 const action = (actionInput?.value || '').trim().toLowerCase();
-                if (action === 'hide_user_from_list' || action === 'unhide_user_from_list' || action === 'set_email_user_flag') {
+                if (action === 'hide_user_from_list' || action === 'unhide_user_from_list' || action === 'set_email_user_flag' || action === 'set_requisition_readonly_flag') {
                     sessionStorage.setItem(key, String(window.scrollY || 0));
                 }
             });

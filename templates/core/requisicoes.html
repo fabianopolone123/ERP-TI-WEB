@@ -126,8 +126,10 @@
     <div class="topbar">
         <div>
             <h2>Requisições</h2>
-            {% if is_ti_group %}
+            {% if can_manage_requisicoes %}
             <p class="muted">Cadastro de requisição com múltiplos orçamentos.</p>
+            {% elif can_view_requisicoes %}
+            <p class="muted">Consulta de requisições em modo somente leitura.</p>
             {% else %}
             <p class="muted">Seu usuário não está no departamento TI.</p>
             {% endif %}
@@ -138,11 +140,14 @@
         </form>
     </div>
 
-    {% if is_ti_group %}
-        {% include "core/_tabs.html" %}
+    {% if can_view_requisicoes %}
+        {% if modules %}
+            {% include "core/_tabs.html" %}
+        {% endif %}
 
         <div class="topbar" style="margin-top: 16px;">
             <h3>Requisições</h3>
+            {% if can_manage_requisicoes %}
             <div style="display: flex; gap: 8px; flex-wrap: wrap;">
 
                 <button type="button" data-open-requisition data-requisition-kind="physical">Requisição física</button>
@@ -150,6 +155,7 @@
                 <button type="button" data-open-requisition data-requisition-kind="digital">Requisição de produtos digitais</button>
 
             </div>
+            {% endif %}
         </div>
 
         <div class="form-row" style="margin-bottom: 10px;">
@@ -180,7 +186,9 @@
                         <th>Orçamentos</th>
                         <th>Total</th>
                         <th>Timeline</th>
+                        {% if can_manage_requisicoes %}
                         <th>Ações</th>
+                        {% endif %}
                     </tr>
                 </thead>
                 <tbody>
@@ -221,6 +229,7 @@
                                 <div class="muted">Aprovação: {% if item.approved_at %}{{ item.approved_at|date:'d/m/Y' }}{% else %}-{% endif %}</div>
                                 <div class="muted">Entrega: {% if item.received_at %}{{ item.received_at|date:'d/m/Y' }}{% else %}-{% endif %}</div>
                             </td>
+                            {% if can_manage_requisicoes %}
                             <td>
                                 <div class="req-actions">
                                     {% if item.status != 'rejected' and item.status != 'received' %}
@@ -242,21 +251,22 @@
                                     <button type="button" data-duplicate-requisition data-requisition-id="{{ item.id }}">Duplicar</button>
                                 </div>
                             </td>
+                            {% endif %}
                         </tr>
                     {% empty %}
                         <tr>
-                            <td colspan="8" class="muted">Nenhuma requisição cadastrada.</td>
+                            <td colspan="{% if can_manage_requisicoes %}8{% else %}7{% endif %}" class="muted">Nenhuma requisição cadastrada.</td>
                         </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
     {% else %}
-        <p>Solicite ao administrador a inclusão no departamento <strong>TI</strong>.</p>
+        <p>Solicite ao administrador a liberação de acesso para <strong>Requisições (somente leitura)</strong>.</p>
     {% endif %}
 </div>
 
-{% if is_ti_group %}
+{% if can_manage_requisicoes %}
 <div class="modal" data-requisition-modal hidden>
     <div class="modal-backdrop" data-close-requisition></div>
     <div class="modal-content">
@@ -1737,7 +1747,142 @@
         });
     })();
 </script>
+{% endif %}
 
+{% if can_view_requisicoes and not can_manage_requisicoes %}
+<div class="modal" data-requisition-readonly-modal hidden>
+    <div class="modal-backdrop" data-close-requisition-readonly></div>
+    <div class="modal-content" style="width: min(1100px, 96vw);">
+        <div class="topbar" style="margin-bottom: 8px;">
+            <div style="display:flex; align-items:center; gap:8px;">
+                <h3 style="margin:0;">Detalhes da requisição</h3>
+                <span class="status-pill" data-ro-status-badge>-</span>
+            </div>
+            <button type="button" data-close-requisition-readonly>Fechar</button>
+        </div>
+        <div style="display:grid; gap:8px;">
+            <div><strong>Código:</strong> <span data-ro-code>-</span></div>
+            <div><strong>Título:</strong> <span data-ro-title>-</span></div>
+            <div><strong>Tipo:</strong> <span data-ro-kind>-</span></div>
+            <div><strong>Requisição:</strong> <span data-ro-request>-</span></div>
+            <div class="muted">Pedido: <span data-ro-requested>-</span> | Aprovação: <span data-ro-approved>-</span> | Reprovação: <span data-ro-rejected>-</span> | Entrega: <span data-ro-received>-</span></div>
+            <div><strong>Total aprovado:</strong> <span data-ro-total>-</span></div>
+            <div style="margin-top: 6px;">
+                <strong>Orçamentos</strong>
+                <div data-ro-quotes class="muted" style="margin-top: 6px; display:grid; gap:8px;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    (function () {
+        const modal = document.querySelector('[data-requisition-readonly-modal]');
+        if (!modal) return;
+
+        const requisitionData = {
+            {% for item in requisitions %}
+            "{{ item.id }}": {
+                code: "{{ item.code|escapejs }}",
+                title: "{{ item.title|escapejs }}",
+                kind: "{{ item.kind_display|escapejs }}",
+                request: "{{ item.request|escapejs }}",
+                status: "{{ item.get_status_display|escapejs }}",
+                status_code: "{{ item.status|escapejs }}",
+                requested_at: "{% if item.requested_at %}{{ item.requested_at|date:'d/m/Y'|escapejs }}{% else %}{{ item.created_at|date:'d/m/Y'|escapejs }}{% endif %}",
+                approved_at: "{% if item.approved_at %}{{ item.approved_at|date:'d/m/Y'|escapejs }}{% else %}-{% endif %}",
+                rejected_at: "{% if item.rejected_at %}{{ item.rejected_at|date:'d/m/Y'|escapejs }}{% else %}-{% endif %}",
+                received_at: "{% if item.received_at %}{{ item.received_at|date:'d/m/Y'|escapejs }}{% else %}-{% endif %}",
+                total: "{% if item.quotes_total is not None %}R$ {{ item.quotes_total|br_money|escapejs }}{% else %}Aguardando aprovação{% endif %}",
+                quotes: [
+                    {% for quote in item.main_quotes %}
+                    {
+                        name: "{{ quote.name|escapejs }}",
+                        quantity: "{{ quote.quantity|default:1|escapejs }}",
+                        unit: "R$ {{ quote.value|br_money|escapejs }}",
+                        total: "R$ {{ quote.package_total|br_money|escapejs }}",
+                        selected: {% if quote.is_display_selected %}true{% else %}false{% endif %},
+                        subs: [
+                            {% for sub in quote.sub_items %}
+                            {
+                                name: "{{ sub.name|escapejs }}",
+                                quantity: "{{ sub.quantity|default:1|escapejs }}",
+                                unit: "R$ {{ sub.value|br_money|escapejs }}",
+                                freight: "R$ {{ sub.freight|br_money|escapejs }}"
+                            }{% if not forloop.last %},{% endif %}
+                            {% endfor %}
+                        ]
+                    }{% if not forloop.last %},{% endif %}
+                    {% endfor %}
+                ],
+            }{% if not forloop.last %},{% endif %}
+            {% endfor %}
+        };
+
+        const closeEls = document.querySelectorAll('[data-close-requisition-readonly]');
+        const rows = document.querySelectorAll('[data-req-row]');
+        const statusBadge = modal.querySelector('[data-ro-status-badge]');
+        const setText = (selector, value) => {
+            const el = modal.querySelector(selector);
+            if (el) el.textContent = value || '-';
+        };
+        const escapeHtml = (value) => (value || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+
+        const open = (id) => {
+            const data = requisitionData[String(id)];
+            if (!data) return;
+            setText('[data-ro-code]', data.code);
+            setText('[data-ro-title]', data.title);
+            setText('[data-ro-kind]', data.kind || '-');
+            setText('[data-ro-request]', data.request || '-');
+            setText('[data-ro-requested]', data.requested_at || '-');
+            setText('[data-ro-approved]', data.approved_at || '-');
+            setText('[data-ro-rejected]', data.rejected_at || '-');
+            setText('[data-ro-received]', data.received_at || '-');
+            setText('[data-ro-total]', data.total || '-');
+
+            if (statusBadge) {
+                statusBadge.textContent = data.status || '-';
+                statusBadge.className = `status-pill status-${data.status_code || ''}`;
+            }
+
+            const quotesEl = modal.querySelector('[data-ro-quotes]');
+            if (quotesEl) {
+                if (!Array.isArray(data.quotes) || !data.quotes.length) {
+                    quotesEl.innerHTML = '<div class="muted">Nenhum orçamento cadastrado.</div>';
+                } else {
+                    quotesEl.innerHTML = data.quotes.map((quote) => {
+                        const selectedBadge = quote.selected ? '<span class="status-pill status-approved" style="margin-left: 6px;">Aprovado</span>' : '';
+                        const subsHtml = Array.isArray(quote.subs) && quote.subs.length
+                            ? `<div class="muted" style="margin-top: 6px;">Suborçamentos:<ul style="margin:6px 0 0 18px;">${quote.subs.map((sub) => `<li>${escapeHtml(sub.name)} (Qtd: ${escapeHtml(String(sub.quantity || '1'))} | Unitário: ${escapeHtml(sub.unit)} | Frete: ${escapeHtml(sub.freight)})</li>`).join('')}</ul></div>`
+                            : '';
+                        return `<div style="border:1px solid #1f2a44; border-radius:10px; padding:10px;"><strong>${escapeHtml(quote.name || '-')}</strong>${selectedBadge}<div class="muted" style="margin-top:4px;">Qtd: ${escapeHtml(String(quote.quantity || '1'))} | Unitário: ${escapeHtml(quote.unit)} | Total pacote: ${escapeHtml(quote.total)}</div>${subsHtml}</div>`;
+                    }).join('');
+                }
+            }
+
+            modal.hidden = false;
+        };
+
+        const close = () => { modal.hidden = true; };
+        closeEls.forEach((el) => el.addEventListener('click', close));
+        rows.forEach((row) => {
+            row.addEventListener('click', () => {
+                const id = row.getAttribute('data-requisition-id');
+                if (!id) return;
+                open(id);
+            });
+        });
+    })();
+</script>
+{% endif %}
+
+{% if can_view_requisicoes %}
 <script>
     (function () {
         const searchInput = document.querySelector('[data-req-search]');
@@ -1746,7 +1891,6 @@
         if (!searchInput || !statusSelect || !rows.length) return;
 
         const normalize = (value) => (value || '').toString().trim().toLowerCase();
-
         const applyFilters = () => {
             const query = normalize(searchInput.value);
             const status = normalize(statusSelect.value);
@@ -1764,5 +1908,3 @@
 </script>
 {% endif %}
 {% endblock %}
-
-

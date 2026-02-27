@@ -311,9 +311,11 @@
         </div>
     </div>
 
-    {% if is_ti_group %}
+    {% if modules %}
         {% include "core/_tabs.html" %}
+    {% endif %}
 
+    {% if is_ti_group %}
         <div class="kanban" data-board>
             <div class="kanban-column" data-target="novo">
                 <div class="kanban-header">Pendente</div>

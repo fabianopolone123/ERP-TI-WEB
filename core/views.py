@@ -114,9 +114,12 @@ def _normalize_failure_type(raw_value: str) -> str:
     return raw
 
 
-def build_modules(active_slug: str | None) -> list[dict[str, str | bool]]:
+def build_modules(active_slug: str | None, allowed_slugs: set[str] | None = None) -> list[dict[str, str | bool]]:
+    allowed = set(allowed_slugs or [])
     modules = []
     for module in ERP_MODULES:
+        if allowed and module['slug'] not in allowed:
+            continue
         url_name = module.get('url_name')
         if module['slug'] == 'emails':
             url = f"{reverse('usuarios')}?tab={module['slug']}"
@@ -131,6 +134,20 @@ def build_modules(active_slug: str | None) -> list[dict[str, str | bool]]:
             }
         )
     return modules
+
+
+def _erp_user_from_request(request) -> ERPUser | None:
+    username = getattr(getattr(request, 'user', None), 'username', '')
+    if not username:
+        return None
+    return ERPUser.objects.filter(username__iexact=username).first()
+
+
+def can_view_requisitions_readonly(request) -> bool:
+    user = _erp_user_from_request(request)
+    if not user:
+        return False
+    return bool(user.can_view_requisitions_readonly)
 
 
 def _inventory_default_hosts() -> str:
@@ -562,10 +579,7 @@ def _enqueue_new_ticket_notifications(ticket_id: int) -> None:
 
 
 def is_ti_user(request) -> bool:
-    username = getattr(request.user, 'username', '')
-    if not username:
-        return False
-    user = ERPUser.objects.filter(username__iexact=username).first()
+    user = _erp_user_from_request(request)
     if not user:
         return False
     return (user.department or '').strip().upper() == 'TI'
@@ -846,6 +860,23 @@ class UsersListView(LoginRequiredMixin, TemplateView):
             if bool(target.is_email_user) != is_email_user:
                 target.is_email_user = is_email_user
                 target.save(update_fields=['is_email_user'])
+            return redirect('usuarios')
+
+        if action == 'set_requisition_readonly_flag':
+            user_id_raw = (request.POST.get('user_id') or '').strip()
+            try:
+                user_id = int(user_id_raw)
+            except (TypeError, ValueError):
+                messages.error(request, 'Usuário inválido para atualizar acesso de requisições.')
+                return redirect('usuarios')
+            target = ERPUser.objects.filter(id=user_id).first()
+            if not target:
+                messages.error(request, 'Usuário não encontrado.')
+                return redirect('usuarios')
+            allow_readonly = bool(request.POST.get('can_view_requisitions_readonly'))
+            if bool(target.can_view_requisitions_readonly) != allow_readonly:
+                target.can_view_requisitions_readonly = allow_readonly
+                target.save(update_fields=['can_view_requisitions_readonly'])
             return redirect('usuarios')
 
         if action == 'update_emails_json':
@@ -1506,8 +1537,8 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
 
     def post(self, request, *args, **kwargs):
         if not is_ti_user(request):
-            messages.error(request, 'Apenas usuários do departamento TI podem cadastrar requisições.')
-            return self.get(request, *args, **kwargs)
+            messages.error(request, 'Seu acesso em requisições é somente leitura.')
+            return redirect('requisicoes')
 
         action = (request.POST.get('action') or '').strip().lower()
         if action == 'mark_received':
@@ -1619,8 +1650,22 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         is_ti = is_ti_user(self.request)
+        can_readonly = can_view_requisitions_readonly(self.request)
+        can_view = is_ti or can_readonly
         context['is_ti_group'] = is_ti
-        context['modules'] = build_modules('requisicoes') if is_ti else []
+        context['can_manage_requisicoes'] = is_ti
+        context['can_view_requisicoes'] = can_view
+        if is_ti:
+            context['modules'] = build_modules('requisicoes')
+        elif can_readonly:
+            context['modules'] = build_modules('requisicoes', allowed_slugs={'chamados', 'requisicoes'})
+        else:
+            context['modules'] = []
+
+        if not can_view:
+            context['requisitions'] = []
+            return context
+
         requisitions = (
             Requisition.objects
             .prefetch_related('quotes__subquotes', 'quotes__attachments')
@@ -1658,6 +1703,7 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
             req.approved_quote_id = selected_main.id if selected_main else None
             req.approved_quote_ids = approved_quote_ids
             req.kind_display = req.get_kind_display() if hasattr(req, 'get_kind_display') else ''
+            req.rejected_at = req.updated_at.date() if req.status == Requisition.Status.REJECTED and req.updated_at else None
 
             if selected_mains:
                 total = Decimal('0')
@@ -1947,8 +1993,14 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         is_ti = is_ti_user(self.request)
+        can_readonly_requisitions = can_view_requisitions_readonly(self.request)
         context['is_ti_group'] = is_ti
-        context['modules'] = build_modules('chamados') if is_ti else []
+        if is_ti:
+            context['modules'] = build_modules('chamados')
+        elif can_readonly_requisitions:
+            context['modules'] = build_modules('chamados', allowed_slugs={'chamados', 'requisicoes'})
+        else:
+            context['modules'] = []
         context['ti_opened_at_default'] = timezone.localtime(timezone.now()).strftime('%Y-%m-%dT%H:%M')
         if is_ti:
             context['ti_requesters'] = ERPUser.objects.filter(is_active=True).order_by('full_name', 'username')

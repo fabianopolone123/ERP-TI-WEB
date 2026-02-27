@@ -16,6 +16,7 @@ class ERPUser(models.Model):
     is_manual = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
     is_hidden_from_users = models.BooleanField(default=False)
+    can_view_requisitions_readonly = models.BooleanField(default=False)
     email_usage = models.CharField(max_length=40, blank=True, default='')
     email_last_sign_in = models.CharField(max_length=40, blank=True, default='')
 
