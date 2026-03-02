@@ -238,6 +238,7 @@
                             <td>
                                 <div style="display:flex; gap:6px; flex-wrap:wrap;">
                                     <button type="button" data-connect-rdp data-host="{{ item.hostname|default:''|escape }}">RDP</button>
+                                    <button type="button" data-connect-rdp-file data-host="{{ item.hostname|default:''|escape }}">Baixar RDP</button>
                                     <button type="button" data-connect-vnc data-host="{{ item.hostname|default:''|escape }}">VNC</button>
                                 </div>
                             </td>
@@ -387,7 +388,7 @@
             URL.revokeObjectURL(href);
         };
 
-        const tryOpenRdpProtocol = (host, onFallback) => {
+        const tryOpenRdpProtocol = (host) => {
             const protocols = [
                 `ms-rd:connect?pc=${encodeURIComponent(host)}`,
                 `rdp://${host}`,
@@ -396,20 +397,12 @@
             let index = 0;
             const tryNext = () => {
                 if (index >= protocols.length) {
-                    onFallback();
+                    alert('Não foi possível abrir o cliente RDP automaticamente. Use o botão "Baixar RDP".');
                     return;
                 }
 
                 const candidate = protocols[index];
                 index += 1;
-                let appOpened = false;
-
-                const onBlur = () => { appOpened = true; };
-                const onVisibility = () => {
-                    if (document.hidden) appOpened = true;
-                };
-                window.addEventListener('blur', onBlur, { once: true });
-                document.addEventListener('visibilitychange', onVisibility);
 
                 try {
                     window.location.href = candidate;
@@ -418,10 +411,8 @@
                 }
 
                 window.setTimeout(() => {
-                    document.removeEventListener('visibilitychange', onVisibility);
-                    if (appOpened) return;
                     tryNext();
-                }, 1300);
+                }, 750);
             };
 
             tryNext();
@@ -436,7 +427,20 @@
                     alert('Host não informado para conexão RDP.');
                     return;
                 }
-                tryOpenRdpProtocol(host, () => downloadRdpFile(host));
+                tryOpenRdpProtocol(host);
+            });
+        });
+
+        document.querySelectorAll('[data-connect-rdp-file]').forEach((btn) => {
+            btn.addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                const host = (btn.getAttribute('data-host') || '').trim();
+                if (!host) {
+                    alert('Host não informado para gerar arquivo RDP.');
+                    return;
+                }
+                downloadRdpFile(host);
             });
         });
 
