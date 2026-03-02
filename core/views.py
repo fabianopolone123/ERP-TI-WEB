@@ -4,6 +4,7 @@ import secrets
 import mimetypes
 import unicodedata
 import threading
+from io import BytesIO
 from uuid import uuid4
 from textwrap import shorten
 from decimal import Decimal, InvalidOperation
@@ -21,7 +22,7 @@ from datetime import datetime, timedelta
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth import get_user_model
-from django.http import JsonResponse, FileResponse, Http404
+from django.http import JsonResponse, FileResponse, Http404, HttpResponse
 from django.urls import reverse
 from django.utils.dateparse import parse_date
 from django.views.decorators.http import require_GET, require_POST
@@ -30,6 +31,8 @@ from django.views.generic import TemplateView
 from django.contrib.auth import views as auth_views
 from ldap3 import Connection, Server, SUBTREE
 from ldap3.utils.conv import escape_filter_chars
+from openpyxl import Workbook
+from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
 
 from .ldap_importer import import_ad_users
 from .chamados_excel import export_attendant_logs_to_excel
@@ -1247,6 +1250,69 @@ class EquipamentosView(LoginRequiredMixin, TemplateView):
 class SoftwaresView(LoginRequiredMixin, TemplateView):
     template_name = 'core/softwares.html'
 
+    @staticmethod
+    def _base_queryset():
+        return SoftwareInventory.objects.select_related('equipment').order_by(
+            '-collected_at', '-updated_at', 'hostname', 'software_name'
+        )
+
+    @staticmethod
+    def _apply_search(queryset, search_raw: str):
+        term = (search_raw or '').strip()
+        if not term:
+            return queryset
+        return queryset.filter(
+            Q(hostname__icontains=term)
+            | Q(sector__icontains=term)
+            | Q(user__icontains=term)
+            | Q(software_name__icontains=term)
+            | Q(version__icontains=term)
+            | Q(vendor__icontains=term)
+            | Q(install_date__icontains=term)
+        )
+
+    @staticmethod
+    def _excel_safe(value):
+        text = str(value or '-')
+        return ILLEGAL_CHARACTERS_RE.sub('', text)
+
+    def _export_excel(self, search_raw: str):
+        items = list(self._apply_search(self._base_queryset(), search_raw))
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = 'Softwares'
+        ws.append(['Host', 'Setor', 'Usuario', 'Software', 'Versao', 'Fornecedor', 'Instalacao', 'Coletado em'])
+
+        for item in items:
+            collected_at = timezone.localtime(item.collected_at).strftime('%d/%m/%Y %H:%M') if item.collected_at else '-'
+            ws.append(
+                [
+                    self._excel_safe(item.hostname),
+                    self._excel_safe(item.sector),
+                    self._excel_safe(item.user),
+                    self._excel_safe(item.software_name),
+                    self._excel_safe(item.version),
+                    self._excel_safe(item.vendor),
+                    self._excel_safe(item.install_date),
+                    self._excel_safe(collected_at),
+                ]
+            )
+
+        output = BytesIO()
+        wb.save(output)
+        output.seek(0)
+
+        stamp = timezone.localtime(timezone.now()).strftime('%Y%m%d_%H%M%S')
+        suffix = 'pesquisa' if (search_raw or '').strip() else 'todos'
+        filename = f'softwares_{suffix}_{stamp}.xlsx'
+        response = HttpResponse(
+            output.getvalue(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+        response['Content-Disposition'] = f'attachment; filename=\"{filename}\"'
+        return response
+
     def post(self, request, *args, **kwargs):
         if not is_ti_user(request):
             messages.error(request, 'Apenas usuários do departamento TI podem atualizar inventário de software.')
@@ -1279,14 +1345,27 @@ class SoftwaresView(LoginRequiredMixin, TemplateView):
                 messages.info(request, line)
         return self.get(request, *args, **kwargs)
 
+    def get(self, request, *args, **kwargs):
+        if not is_ti_user(request):
+            return super().get(request, *args, **kwargs)
+        search_raw = (request.GET.get('q') or '').strip()
+        export_flag = (request.GET.get('export') or '').strip().lower()
+        if export_flag in {'1', 'true', 'xlsx'}:
+            return self._export_excel(search_raw)
+        return super().get(request, *args, **kwargs)
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         is_ti = is_ti_user(self.request)
         context['is_ti_group'] = is_ti
         context['modules'] = build_modules('softwares') if is_ti else []
-        context['software_items'] = SoftwareInventory.objects.select_related('equipment').order_by(
-            '-collected_at', '-updated_at', 'hostname', 'software_name'
-        )
+        search_raw = (self.request.GET.get('q') or '').strip()
+        base_qs = self._base_queryset()
+        filtered_qs = self._apply_search(base_qs, search_raw)
+        context['software_items'] = filtered_qs
+        context['software_search'] = search_raw
+        context['software_total_count'] = base_qs.count()
+        context['software_filtered_count'] = filtered_qs.count()
         context['inventory_default_hosts'] = _inventory_default_hosts()
         context['inventory_timeout_seconds'] = int(getattr(settings, 'INVENTORY_POWERSHELL_TIMEOUT', 120) or 120)
         return context

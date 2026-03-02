@@ -22,13 +22,23 @@
     {% if is_ti_group %}
         {% include "core/_tabs.html" %}
         <div class="topbar" style="margin-top: 16px; margin-bottom: 10px;">
-            <h3>Softwares encontrados</h3>
-            <input
-                type="text"
-                class="table-search"
-                placeholder="Pesquisar por host, software, versão, fornecedor..."
-                data-table-search="softwares"
-            />
+            <div>
+                <h3>Softwares encontrados</h3>
+                <div class="muted" style="font-size: 0.86rem;">
+                    Mostrando <strong>{{ software_filtered_count|default:0 }}</strong> de <strong>{{ software_total_count|default:0 }}</strong>
+                </div>
+            </div>
+            <div style="display: flex; gap: 8px; align-items: center;">
+                <input
+                    type="text"
+                    class="table-search"
+                    placeholder="Pesquisar por host, software, versão, fornecedor..."
+                    data-table-search="softwares"
+                    data-softwares-search
+                    value="{{ software_search|default:'' }}"
+                />
+                <button type="button" data-softwares-export>Exportar Excel</button>
+            </div>
         </div>
 
         <div style="overflow-x: auto;">
@@ -69,5 +79,23 @@
         <p>Solicite ao administrador a inclusão no departamento <strong>TI</strong>.</p>
     {% endif %}
 </div>
+{% if is_ti_group %}
+<script>
+    (function () {
+        const input = document.querySelector('[data-softwares-search]');
+        const exportBtn = document.querySelector('[data-softwares-export]');
+        if (!input || !exportBtn) return;
+
+        exportBtn.addEventListener('click', () => {
+            const base = "{% url 'softwares' %}";
+            const q = (input.value || '').trim();
+            const params = new URLSearchParams();
+            params.set('export', '1');
+            if (q) params.set('q', q);
+            window.location.href = `${base}?${params.toString()}`;
+        });
+    })();
+</script>
+{% endif %}
 {% endblock %}
 
