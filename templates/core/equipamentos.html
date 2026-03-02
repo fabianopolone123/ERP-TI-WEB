@@ -125,6 +125,7 @@
                             <tr>
                                 <th>Etiqueta</th>
                                 <th>Host (GPO)</th>
+                                <th>Usuário logado</th>
                                 <th>Serie/BIOS</th>
                                 <th>UUID</th>
                                 <th>MAC</th>
@@ -137,6 +138,19 @@
                                 <tr>
                                     <td>{{ p.tag_code|default:"-" }}</td>
                                     <td>{{ p.hostname|default:"-" }}</td>
+                                    <td>
+                                        {% if p.logged_user_name %}
+                                            <strong>{{ p.logged_user_name }}</strong>
+                                            <div class="muted" style="font-size:0.82rem;">
+                                                {% if p.logged_user_login %}{{ p.logged_user_login }}{% else %}-{% endif %}
+                                                {% if p.logged_user_department %} | {{ p.logged_user_department }}{% endif %}
+                                            </div>
+                                        {% elif p.user %}
+                                            {{ p.user }}
+                                        {% else %}
+                                            -
+                                        {% endif %}
+                                    </td>
                                     <td>{{ p.bios_serial|default:p.serial|default:"-" }}</td>
                                     <td title="{{ p.bios_uuid }}">{{ p.bios_uuid|default:"-" }}</td>
                                     <td title="{{ p.mac_addresses }}">{% if p.mac_addresses %}{{ p.mac_addresses|linebreaksbr }}{% else %}-{% endif %}</td>

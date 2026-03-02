@@ -1240,10 +1240,28 @@ class EquipamentosView(LoginRequiredMixin, TemplateView):
         context['inventory_default_hosts'] = _inventory_default_hosts()
         context['inventory_timeout_seconds'] = int(getattr(settings, 'INVENTORY_POWERSHELL_TIMEOUT', 120) or 120)
         context['next_equipment_tag_preview'] = next_equipment_tag_code() if is_ti else ''
-        context['equipment_reconciliation_pending'] = (
-            Equipment.objects.filter(needs_reconciliation=True).order_by('-last_inventory_at', '-created_at')
-            if is_ti else Equipment.objects.none()
-        )
+        if is_ti:
+            pending_items = list(Equipment.objects.filter(needs_reconciliation=True).order_by('-last_inventory_at', '-created_at'))
+            erp_map: dict[str, ERPUser] = {}
+            for erp_user in ERPUser.objects.exclude(username__isnull=True).exclude(username='').only(
+                'username',
+                'full_name',
+                'department',
+            ):
+                key = (erp_user.username or '').strip().lower()
+                if key and key not in erp_map:
+                    erp_map[key] = erp_user
+
+            for pending in pending_items:
+                login = (pending.user or '').strip()
+                erp_user = erp_map.get(login.lower()) if login else None
+                pending.logged_user_login = login
+                pending.logged_user_name = (erp_user.full_name or '').strip() if erp_user else ''
+                pending.logged_user_department = (erp_user.department or '').strip() if erp_user else ''
+
+            context['equipment_reconciliation_pending'] = pending_items
+        else:
+            context['equipment_reconciliation_pending'] = Equipment.objects.none()
         return context
 
 
