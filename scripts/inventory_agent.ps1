@@ -48,6 +48,58 @@ function Get-InstalledSoftware {
         $officeSerialText = ([string]$officeLicenses[0].PartialProductKey).Trim().ToUpper()
     }
 
+    function Resolve-SerialValue {
+        param(
+            [string]$DisplayName,
+            [string]$OfficeSerial,
+            [object]$Entry
+        )
+
+        $name = ([string]$DisplayName).Trim().ToLower()
+        if ($name -match 'office|microsoft\s*365') {
+            if (-not [string]::IsNullOrWhiteSpace($OfficeSerial)) {
+                return ([string]$OfficeSerial).Trim().ToUpper()
+            }
+        }
+
+        $candidates = @(
+            [string]$Entry.SerialNumber,
+            [string]$Entry.ProductID,
+            [string]$Entry.ProductKey,
+            [string]$Entry.IdentifyingNumber,
+            [string]$Entry.PackageCode,
+            [string]$Entry.PSChildName
+        )
+
+        foreach ($candidateRaw in $candidates) {
+            $candidate = ([string]$candidateRaw).Trim()
+            if ([string]::IsNullOrWhiteSpace($candidate)) {
+                continue
+            }
+
+            $keyMatch = [regex]::Match($candidate, '([A-Za-z0-9]{5}(?:-[A-Za-z0-9]{5}){1,4})')
+            if ($keyMatch.Success) {
+                return $keyMatch.Groups[1].Value.ToUpper()
+            }
+
+            $guidBraces = [regex]::Match($candidate, '(\{[0-9A-Fa-f-]{36}\})')
+            if ($guidBraces.Success) {
+                return $guidBraces.Groups[1].Value.ToUpper()
+            }
+
+            $guidHex = [regex]::Match($candidate, '\b([0-9A-Fa-f]{32})\b')
+            if ($guidHex.Success) {
+                return $guidHex.Groups[1].Value.ToUpper()
+            }
+
+            if ($candidate -match '^[A-Za-z0-9]{5}$') {
+                return $candidate.ToUpper()
+            }
+        }
+
+        return ''
+    }
+
     $items = foreach ($path in $paths) {
         try {
             Get-ItemProperty -Path $path -ErrorAction SilentlyContinue |
@@ -62,11 +114,7 @@ function Get-InstalledSoftware {
                     Name = 'InstallDate'; Expression = { $_.InstallDate }
                 }, @{
                     Name = 'Serial'; Expression = {
-                        $name = ([string]$_.DisplayName).Trim().ToLower()
-                        if ($name -match 'office|microsoft\s*365') {
-                            return $officeSerialText
-                        }
-                        return ''
+                        Resolve-SerialValue -DisplayName $_.DisplayName -OfficeSerial $officeSerialText -Entry $_
                     }
                 }
         } catch {
@@ -75,7 +123,7 @@ function Get-InstalledSoftware {
     }
 
     $items |
-        Sort-Object Name -Unique
+        Sort-Object Name, Version, Vendor, Serial -Unique
 }
 
 $cs = Get-CimInstance -ClassName Win32_ComputerSystem

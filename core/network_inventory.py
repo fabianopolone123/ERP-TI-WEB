@@ -374,12 +374,20 @@ if ($retailOfficeLicenses.Count -gt 0) {{
 try {{
     $softwareItems = Get-CimInstance -ClassName Win32_Product -ComputerName $computer |
         Where-Object {{ $_.Name -and $_.Name.Trim().Length -gt 0 }} |
-        Select-Object Name, Version, Vendor, InstallDate, @{{
+        Select-Object Name, Version, Vendor, InstallDate, IdentifyingNumber, PackageCode, @{{
             Name = 'Serial'
             Expression = {{
                 $name = ([string]$_.Name).Trim().ToLower()
                 if ($name -match 'office|microsoft\s*365') {{
                     return $officeSerialText
+                }}
+                $identifyingNumber = ([string]$_.IdentifyingNumber).Trim()
+                if ($identifyingNumber) {{
+                    return $identifyingNumber.ToUpper()
+                }}
+                $packageCode = ([string]$_.PackageCode).Trim()
+                if ($packageCode) {{
+                    return $packageCode.ToUpper()
                 }}
                 return ''
             }}
@@ -545,7 +553,15 @@ def upsert_inventory_from_payload(payload: dict[str, Any], source: str = 'rede')
                 software_name=name,
                 version=(item.get('Version') or '').strip(),
                 vendor=(item.get('Vendor') or '').strip(),
-                software_serial=(item.get('Serial') or item.get('SoftwareSerial') or '').strip(),
+                software_serial=(
+                    item.get('Serial')
+                    or item.get('SoftwareSerial')
+                    or item.get('IdentifyingNumber')
+                    or item.get('PackageCode')
+                    or item.get('ProductID')
+                    or item.get('ProductKey')
+                    or ''
+                ).strip(),
                 install_date=_to_iso_br_date(str(item.get('InstallDate') or '')),
                 source=source,
                 collected_at=now,
