@@ -22,18 +22,31 @@ function Get-InstalledSoftware {
         'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*'
     )
 
-    $officePartialKeys = @()
+    $officeLicenses = @()
+    $officeSerialText = ''
     try {
-        $officePartialKeys = Get-CimInstance -ClassName SoftwareLicensingProduct -ErrorAction SilentlyContinue |
+        $officeLicenses = Get-CimInstance -ClassName SoftwareLicensingProduct -ErrorAction SilentlyContinue |
             Where-Object {
+                $_.ApplicationID -eq '0ff1ce15-a989-479d-af46-f275c6370663' -and
                 $_.PartialProductKey -and
-                $_.ApplicationID -eq '0ff1ce15-a989-479d-af46-f275c6370663'
+                ([string]$_.PartialProductKey).Trim() -match '^[A-Za-z0-9]{5}$' -and
+                ([string]$_.Name) -match 'Office'
             } |
-            Select-Object -ExpandProperty PartialProductKey -Unique
+            Select-Object Name, Description, LicenseStatus, PartialProductKey
     } catch {
-        $officePartialKeys = @()
+        $officeLicenses = @()
     }
-    $officeSerialText = (@($officePartialKeys | Where-Object { $_ -and $_.Trim().Length -gt 0 }) -join ', ').Trim()
+
+    $activeOfficeLicenses = @($officeLicenses | Where-Object { $_.LicenseStatus -eq 1 } | Sort-Object Name)
+    $retailOfficeLicenses = @($activeOfficeLicenses | Where-Object { ([string]$_.Description) -match 'RETAIL' } | Sort-Object Name)
+
+    if ($retailOfficeLicenses.Count -gt 0) {
+        $officeSerialText = ([string]$retailOfficeLicenses[0].PartialProductKey).Trim().ToUpper()
+    } elseif ($activeOfficeLicenses.Count -gt 0) {
+        $officeSerialText = ([string]$activeOfficeLicenses[0].PartialProductKey).Trim().ToUpper()
+    } elseif ($officeLicenses.Count -gt 0) {
+        $officeSerialText = ([string]$officeLicenses[0].PartialProductKey).Trim().ToUpper()
+    }
 
     $items = foreach ($path in $paths) {
         try {
@@ -50,7 +63,7 @@ function Get-InstalledSoftware {
                 }, @{
                     Name = 'Serial'; Expression = {
                         $name = ([string]$_.DisplayName).Trim().ToLower()
-                        if ($name -match 'office') {
+                        if ($name -match 'office|microsoft\s*365') {
                             return $officeSerialText
                         }
                         return ''
