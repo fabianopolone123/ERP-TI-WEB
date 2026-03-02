@@ -6,7 +6,10 @@
     [string]$Token = '',
 
     [Parameter(Mandatory = $false)]
-    [int]$TimeoutSec = 45
+    [int]$TimeoutSec = 45,
+
+    [Parameter(Mandatory = $false)]
+    [int]$RequestId = 0
 )
 
 $ErrorActionPreference = 'Stop'
@@ -218,6 +221,7 @@ $payload = [PSCustomObject]@{
     PhysicalDisksEx = @($physicalDisksEx)
     Windows   = $os.Caption
     Software  = @(Get-InstalledSoftware)
+    RequestId = if ($RequestId -gt 0) { $RequestId } else { $null }
 }
 
 $json = $payload | ConvertTo-Json -Depth 8

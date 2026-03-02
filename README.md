@@ -28,6 +28,28 @@ Opcionalmente, o `scripts/inventory_agent_run.bat` usa o token da variavel de am
 
 As abas `Equipamentos` e `Softwares` serao atualizadas automaticamente quando cada agente enviar os dados.
 
+## Inventario sob demanda (servico)
+Agora o ERP tambem permite solicitar atualizacao de um host especifico (botao `Atualizar` em `Equipamentos`).
+
+Fluxo:
+1. TI clica em `Atualizar` no equipamento.
+2. O ERP cria uma solicitacao pendente para o host.
+3. O servico `inventory_agent_daemon.ps1` na maquina consulta periodicamente `/api/inventory/pull-next/`.
+4. Quando recebe uma solicitacao, executa `inventory_agent.ps1` local e envia para `/api/inventory/push/`.
+
+Instalacao do servico nas maquinas (GPO startup):
+```powershell
+powershell -ExecutionPolicy Bypass -File "\\servidor\deploy\install_inventory_agent_service.ps1" `
+  -ServerBaseUrl "https://erp-ti.local" `
+  -Token "<token-forte>" `
+  -PollIntervalSec 45
+```
+
+Arquivos envolvidos:
+- `scripts/inventory_agent.ps1`
+- `scripts/inventory_agent_daemon.ps1`
+- `scripts/install_inventory_agent_service.ps1`
+
 ## Agente VNC como servico (GPO)
 Para acesso remoto de tela sem depender de protocolo RDP no navegador:
 

@@ -252,6 +252,12 @@
                                         Baixar RDP
                                     </a>
                                     <button type="button" data-connect-vnc data-host="{{ item.connect_host|default:''|escape }}" data-label="{{ item.tag_code|default:item.serial|default:item.user|escape }}">VNC</button>
+                                    <form method="post" class="inline-form" data-preserve-equipment-scroll style="margin:0;">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="action" value="request_inventory_refresh" />
+                                        <input type="hidden" name="equipment_id" value="{{ item.id }}" />
+                                        <button type="submit" title="Solicitar atualização sob demanda ao agente da máquina">Atualizar</button>
+                                    </form>
                                 </div>
                             </td>
                         </tr>
@@ -463,6 +469,7 @@
         const openBtn = document.querySelector('[data-open-equipment]');
         const closeEls = document.querySelectorAll('[data-close-equipment]');
         const forms = Array.from(document.querySelectorAll('form[data-preserve-equipment-scroll]'));
+        const form = document.querySelector('[data-equipment-form]');
         const modalTitle = document.querySelector('[data-equipment-modal-title]');
         const actionInput = document.querySelector('[data-equipment-action]');
         const equipmentIdInput = document.querySelector('[data-equipment-id]');

@@ -162,6 +162,35 @@ class SoftwareInventory(models.Model):
         return f'{self.hostname} - {self.software_name}'
 
 
+class InventoryRefreshRequest(models.Model):
+    class Status(models.TextChoices):
+        PENDING = 'pending', 'Pendente'
+        RUNNING = 'running', 'Em execução'
+        COMPLETED = 'completed', 'Concluído'
+        FAILED = 'failed', 'Falhou'
+
+    hostname = models.CharField(max_length=120)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    requested_by = models.ForeignKey(
+        'auth.User',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='inventory_refresh_requests',
+    )
+    requested_at = models.DateTimeField(auto_now_add=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    attempt_count = models.PositiveIntegerField(default=0)
+    last_message = models.TextField(blank=True, default='')
+
+    class Meta:
+        ordering = ['-requested_at', '-id']
+
+    def __str__(self) -> str:
+        return f'{self.hostname} ({self.status})'
+
+
 class Insumo(models.Model):
     item = models.CharField(max_length=120)
     date = models.DateField()
