@@ -241,6 +241,7 @@
                                         type="button"
                                         data-connect-rdp
                                         data-host="{{ item.hostname|default:''|escape }}"
+                                        data-rdp-url="{% url 'equipamentos_rdp_file' item.id %}?download=1"
                                     >
                                         RDP
                                     </button>
@@ -373,7 +374,7 @@
             link.remove();
         };
 
-        const tryOpenRdpProtocol = (host) => {
+        const tryOpenRdpProtocol = (host, fallbackUrl) => {
             const protocols = [
                 `ms-rd:connect?pc=${encodeURIComponent(host)}`,
                 `rdp://${host}`,
@@ -414,7 +415,9 @@
                 window.setTimeout(() => {
                     cleanup();
                     if (!openedClient) {
-                        alert('Navegador bloqueou a abertura automática do RDP. Use o botão "Baixar RDP".');
+                        if (fallbackUrl) {
+                            window.location.href = fallbackUrl;
+                        }
                     }
                 }, 900);
             }, 900);
@@ -429,7 +432,8 @@
                     alert('Host não informado para conexão RDP.');
                     return;
                 }
-                tryOpenRdpProtocol(host);
+                const fallbackUrl = (btn.getAttribute('data-rdp-url') || '').trim();
+                tryOpenRdpProtocol(host, fallbackUrl);
             });
         });
         document.querySelectorAll('[data-connect-rdp-file]').forEach((el) => {
