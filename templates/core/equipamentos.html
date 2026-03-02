@@ -374,6 +374,59 @@
             ].join('\r\n');
         };
 
+        const downloadRdpFile = (host) => {
+            const content = buildRdpFile(host);
+            const blob = new Blob([content], { type: 'application/x-rdp' });
+            const href = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = href;
+            link.download = `${host}.rdp`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(href);
+        };
+
+        const tryOpenRdpProtocol = (host, onFallback) => {
+            const protocols = [
+                `ms-rd:connect?pc=${encodeURIComponent(host)}`,
+                `rdp://${host}`,
+            ];
+
+            let index = 0;
+            const tryNext = () => {
+                if (index >= protocols.length) {
+                    onFallback();
+                    return;
+                }
+
+                const candidate = protocols[index];
+                index += 1;
+                let appOpened = false;
+
+                const onBlur = () => { appOpened = true; };
+                const onVisibility = () => {
+                    if (document.hidden) appOpened = true;
+                };
+                window.addEventListener('blur', onBlur, { once: true });
+                document.addEventListener('visibilitychange', onVisibility);
+
+                try {
+                    window.location.href = candidate;
+                } catch (_) {
+                    // continua para o próximo protocolo/fallback
+                }
+
+                window.setTimeout(() => {
+                    document.removeEventListener('visibilitychange', onVisibility);
+                    if (appOpened) return;
+                    tryNext();
+                }, 1300);
+            };
+
+            tryNext();
+        };
+
         document.querySelectorAll('[data-connect-rdp]').forEach((btn) => {
             btn.addEventListener('click', (event) => {
                 event.preventDefault();
@@ -383,16 +436,7 @@
                     alert('Host não informado para conexão RDP.');
                     return;
                 }
-                const content = buildRdpFile(host);
-                const blob = new Blob([content], { type: 'application/x-rdp' });
-                const href = URL.createObjectURL(blob);
-                const link = document.createElement('a');
-                link.href = href;
-                link.download = `${host}.rdp`;
-                document.body.appendChild(link);
-                link.click();
-                link.remove();
-                URL.revokeObjectURL(href);
+                tryOpenRdpProtocol(host, () => downloadRdpFile(host));
             });
         });
 
