@@ -3187,6 +3187,7 @@ def _resolve_media_file(relative_path: str) -> tuple[str, Path]:
 def _can_access_media_file(request, relative_path: str) -> bool:
     path_lower = (relative_path or '').lower()
     ti_user = is_ti_user(request)
+    can_ro_requisitions = can_view_requisitions_readonly(request)
 
     if path_lower.startswith('tickets/'):
         ticket = Ticket.objects.filter(attachment=relative_path).first()
@@ -3200,7 +3201,10 @@ def _can_access_media_file(request, relative_path: str) -> bool:
             return ti_user
         return ti_user or message.created_by_id == request.user.id or message.ticket.created_by_id == request.user.id
 
-    if path_lower.startswith('requisitions/') or path_lower.startswith('dicas/'):
+    if path_lower.startswith('requisitions/'):
+        return ti_user or can_ro_requisitions
+
+    if path_lower.startswith('dicas/'):
         return ti_user
 
     return ti_user
