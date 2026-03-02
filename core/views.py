@@ -1235,6 +1235,20 @@ class EquipamentosView(LoginRequiredMixin, TemplateView):
                 e.id,
             ),
         )
+        def _resolve_connect_host(item: Equipment) -> str:
+            primary = (item.hostname or '').strip()
+            if primary:
+                return primary
+            aliases_raw = (item.hostname_aliases or '').replace(';', '\n')
+            for alias in aliases_raw.splitlines():
+                token = (alias or '').strip()
+                if token:
+                    return token
+            return ''
+
+        for equipment_item in equipments_qs:
+            equipment_item.connect_host = _resolve_connect_host(equipment_item)
+
         context['equipments'] = equipments_qs
         context['equipment_total_count'] = len(equipments_qs)
         context['inventory_default_hosts'] = _inventory_default_hosts()

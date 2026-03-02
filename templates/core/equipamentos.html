@@ -240,7 +240,7 @@
                                     <button
                                         type="button"
                                         data-connect-rdp
-                                        data-host="{{ item.hostname|default:''|escape }}"
+                                        data-host="{{ item.connect_host|default:''|escape }}"
                                         data-rdp-url="{% url 'equipamentos_rdp_file' item.id %}?download=1"
                                     >
                                         RDP
@@ -251,7 +251,7 @@
                                     >
                                         Baixar RDP
                                     </a>
-                                    <button type="button" data-connect-vnc data-host="{{ item.hostname|default:''|escape }}">VNC</button>
+                                    <button type="button" data-connect-vnc data-host="{{ item.connect_host|default:''|escape }}" data-label="{{ item.tag_code|default:item.serial|default:item.user|escape }}">VNC</button>
                                 </div>
                             </td>
                         </tr>
@@ -448,7 +448,8 @@
                 event.stopPropagation();
                 const host = (btn.getAttribute('data-host') || '').trim();
                 if (!host) {
-                    alert('Host não informado para conexão VNC.');
+                    const label = (btn.getAttribute('data-label') || '').trim();
+                    alert(`Host não informado para conexão VNC${label ? ` (${label})` : ''}.`);
                     return;
                 }
                 window.location.href = `vnc://${host}:5900`;
