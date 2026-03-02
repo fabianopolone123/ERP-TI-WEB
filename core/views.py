@@ -1287,6 +1287,7 @@ class SoftwaresView(LoginRequiredMixin, TemplateView):
             | Q(version__icontains=term)
             | Q(vendor__icontains=term)
             | Q(install_date__icontains=term)
+            | Q(equipment__serial__icontains=term)
         )
 
     @staticmethod
@@ -1300,7 +1301,7 @@ class SoftwaresView(LoginRequiredMixin, TemplateView):
         wb = Workbook()
         ws = wb.active
         ws.title = 'Softwares'
-        ws.append(['Host', 'Setor', 'Usuario', 'Software', 'Versao', 'Fornecedor', 'Instalacao', 'Coletado em'])
+        ws.append(['Host', 'Setor', 'Usuario', 'Serial', 'Software', 'Versao', 'Fornecedor', 'Instalacao', 'Coletado em'])
 
         for item in items:
             collected_at = timezone.localtime(item.collected_at).strftime('%d/%m/%Y %H:%M') if item.collected_at else '-'
@@ -1309,6 +1310,7 @@ class SoftwaresView(LoginRequiredMixin, TemplateView):
                     self._excel_safe(item.hostname),
                     self._excel_safe(item.sector),
                     self._excel_safe(item.user),
+                    self._excel_safe(item.equipment.serial if item.equipment else ''),
                     self._excel_safe(item.software_name),
                     self._excel_safe(item.version),
                     self._excel_safe(item.vendor),

@@ -48,6 +48,7 @@
                         <th>Host</th>
                         <th>Setor</th>
                         <th>Usuário</th>
+                        <th>Serial</th>
                         <th>Software</th>
                         <th>Versão</th>
                         <th>Fornecedor</th>
@@ -61,6 +62,7 @@
                             <td>{{ item.hostname|default:"-" }}</td>
                             <td>{{ item.sector|default:"-" }}</td>
                             <td>{{ item.user|default:"-" }}</td>
+                            <td>{% if item.equipment and item.equipment.serial %}{{ item.equipment.serial }}{% else %}-{% endif %}</td>
                             <td>{{ item.software_name }}</td>
                             <td>{{ item.version|default:"-" }}</td>
                             <td>{{ item.vendor|default:"-" }}</td>
@@ -69,7 +71,7 @@
                         </tr>
                     {% empty %}
                         <tr>
-                            <td colspan="8" class="muted">Nenhum software inventariado ainda.</td>
+                            <td colspan="9" class="muted">Nenhum software inventariado ainda.</td>
                         </tr>
                     {% endfor %}
                 </tbody>
