@@ -1802,6 +1802,7 @@
                         unit: "R$ {{ quote.value|br_money|escapejs }}",
                         total: "R$ {{ quote.package_total|br_money|escapejs }}",
                         link: "{{ quote.link|default:''|escapejs }}",
+                        photo_url: "{% if quote.photo %}{{ quote.photo.url|escapejs }}{% endif %}",
                         selected: {% if quote.is_display_selected %}true{% else %}false{% endif %},
                         subs: [
                             {% for sub in quote.sub_items %}
@@ -1810,7 +1811,8 @@
                                 quantity: "{{ sub.quantity|default:1|escapejs }}",
                                 unit: "R$ {{ sub.value|br_money|escapejs }}",
                                 freight: "R$ {{ sub.freight|br_money|escapejs }}",
-                                link: "{{ sub.link|default:''|escapejs }}"
+                                link: "{{ sub.link|default:''|escapejs }}",
+                                photo_url: "{% if sub.photo %}{{ sub.photo.url|escapejs }}{% endif %}"
                             }{% if not forloop.last %},{% endif %}
                             {% endfor %}
                         ]
@@ -1845,6 +1847,11 @@
             if (!link) return '';
             return ` <a href="${escapeHtml(link)}" target="_blank" rel="noopener noreferrer" style="margin-left:8px;">Abrir link</a>`;
         };
+        const buildPhotoPreview = (value, label = 'Foto do orçamento') => {
+            const src = (value || '').trim();
+            if (!src) return '';
+            return `<div style="margin-top:8px;"><img src="${escapeHtml(src)}" alt="${escapeHtml(label)}" style="max-width:260px; max-height:150px; border:1px solid #1f2a44; border-radius:6px;"></div>`;
+        };
 
         const open = (id) => {
             const data = requisitionData[String(id)];
@@ -1872,10 +1879,11 @@
                     quotesEl.innerHTML = data.quotes.map((quote) => {
                         const selectedBadge = quote.selected ? '<span class="status-pill status-approved" style="margin-left: 6px;">Aprovado</span>' : '';
                         const quoteLinkBtn = buildOpenLinkButton(quote.link);
+                        const quotePhoto = buildPhotoPreview(quote.photo_url, quote.name || 'Foto do orçamento');
                         const subsHtml = Array.isArray(quote.subs) && quote.subs.length
-                            ? `<div class="muted" style="margin-top: 6px;">Suborçamentos:<ul style="margin:6px 0 0 18px;">${quote.subs.map((sub) => `<li>${escapeHtml(sub.name)} (Qtd: ${escapeHtml(String(sub.quantity || '1'))} | Unitário: ${escapeHtml(sub.unit)} | Frete: ${escapeHtml(sub.freight)})${buildOpenLinkButton(sub.link)}</li>`).join('')}</ul></div>`
+                            ? `<div class="muted" style="margin-top: 6px;">Suborçamentos:<ul style="margin:6px 0 0 18px;">${quote.subs.map((sub) => `<li>${escapeHtml(sub.name)} (Qtd: ${escapeHtml(String(sub.quantity || '1'))} | Unitário: ${escapeHtml(sub.unit)} | Frete: ${escapeHtml(sub.freight)})${buildOpenLinkButton(sub.link)}${buildPhotoPreview(sub.photo_url, sub.name || 'Foto do suborçamento')}</li>`).join('')}</ul></div>`
                             : '';
-                        return `<div style="border:1px solid #1f2a44; border-radius:10px; padding:10px;"><strong>${escapeHtml(quote.name || '-')}</strong>${selectedBadge}${quoteLinkBtn}<div class="muted" style="margin-top:4px;">Qtd: ${escapeHtml(String(quote.quantity || '1'))} | Unitário: ${escapeHtml(quote.unit)} | Total pacote: ${escapeHtml(quote.total)}</div>${subsHtml}</div>`;
+                        return `<div style="border:1px solid #1f2a44; border-radius:10px; padding:10px;"><strong>${escapeHtml(quote.name || '-')}</strong>${selectedBadge}${quoteLinkBtn}<div class="muted" style="margin-top:4px;">Qtd: ${escapeHtml(String(quote.quantity || '1'))} | Unitário: ${escapeHtml(quote.unit)} | Total pacote: ${escapeHtml(quote.total)}</div>${quotePhoto}${subsHtml}</div>`;
                     }).join('');
                 }
             }
