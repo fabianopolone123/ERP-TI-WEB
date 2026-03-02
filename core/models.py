@@ -151,6 +151,7 @@ class SoftwareInventory(models.Model):
     software_name = models.CharField(max_length=250)
     version = models.CharField(max_length=120, blank=True, default='')
     vendor = models.CharField(max_length=200, blank=True, default='')
+    software_serial = models.CharField(max_length=200, blank=True, default='')
     install_date = models.CharField(max_length=40, blank=True, default='')
     source = models.CharField(max_length=40, blank=True, default='')
     collected_at = models.DateTimeField(null=True, blank=True)

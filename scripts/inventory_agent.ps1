@@ -22,6 +22,19 @@ function Get-InstalledSoftware {
         'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*'
     )
 
+    $officePartialKeys = @()
+    try {
+        $officePartialKeys = Get-CimInstance -ClassName SoftwareLicensingProduct -ErrorAction SilentlyContinue |
+            Where-Object {
+                $_.PartialProductKey -and
+                $_.ApplicationID -eq '0ff1ce15-a989-479d-af46-f275c6370663'
+            } |
+            Select-Object -ExpandProperty PartialProductKey -Unique
+    } catch {
+        $officePartialKeys = @()
+    }
+    $officeSerialText = (@($officePartialKeys | Where-Object { $_ -and $_.Trim().Length -gt 0 }) -join ', ').Trim()
+
     $items = foreach ($path in $paths) {
         try {
             Get-ItemProperty -Path $path -ErrorAction SilentlyContinue |
@@ -34,6 +47,14 @@ function Get-InstalledSoftware {
                     Name = 'Vendor'; Expression = { $_.Publisher }
                 }, @{
                     Name = 'InstallDate'; Expression = { $_.InstallDate }
+                }, @{
+                    Name = 'Serial'; Expression = {
+                        $name = ([string]$_.DisplayName).Trim().ToLower()
+                        if ($name -match 'office') {
+                            return $officeSerialText
+                        }
+                        return ''
+                    }
                 }
         } catch {
             @()

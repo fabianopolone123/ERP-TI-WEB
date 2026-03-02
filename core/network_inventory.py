@@ -345,10 +345,32 @@ if ($joinedAll -match 'nvme') {{
 }}
 
 $softwareItems = @()
+$officePartialKeys = @()
+try {{
+    $officePartialKeys = Get-CimInstance -ClassName SoftwareLicensingProduct -ComputerName $computer |
+        Where-Object {{
+            $_.PartialProductKey -and
+            $_.ApplicationID -eq '0ff1ce15-a989-479d-af46-f275c6370663'
+        }} |
+        Select-Object -ExpandProperty PartialProductKey -Unique
+}} catch {{
+    $officePartialKeys = @()
+}}
+$officeSerialText = (@($officePartialKeys | Where-Object {{ $_ -and $_.Trim().Length -gt 0 }}) -join ', ').Trim()
+
 try {{
     $softwareItems = Get-CimInstance -ClassName Win32_Product -ComputerName $computer |
         Where-Object {{ $_.Name -and $_.Name.Trim().Length -gt 0 }} |
-        Select-Object Name, Version, Vendor, InstallDate
+        Select-Object Name, Version, Vendor, InstallDate, @{{
+            Name = 'Serial'
+            Expression = {{
+                $name = ([string]$_.Name).Trim().ToLower()
+                if ($name -match 'office') {{
+                    return $officeSerialText
+                }}
+                return ''
+            }}
+        }}
 }} catch {{
     $softwareItems = @()
 }}
@@ -510,6 +532,7 @@ def upsert_inventory_from_payload(payload: dict[str, Any], source: str = 'rede')
                 software_name=name,
                 version=(item.get('Version') or '').strip(),
                 vendor=(item.get('Vendor') or '').strip(),
+                software_serial=(item.get('Serial') or item.get('SoftwareSerial') or '').strip(),
                 install_date=_to_iso_br_date(str(item.get('InstallDate') or '')),
                 source=source,
                 collected_at=now,

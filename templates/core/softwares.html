@@ -32,7 +32,7 @@
                 <input
                     type="text"
                     class="table-search"
-                    placeholder="Pesquisar por host, software, versão, fornecedor..."
+                    placeholder="Pesquisar por host, software, versão, fornecedor, serial..."
                     data-table-search="softwares"
                     data-softwares-search
                     value="{{ software_search|default:'' }}"
@@ -48,7 +48,8 @@
                         <th>Host</th>
                         <th>Setor</th>
                         <th>Usuário</th>
-                        <th>Serial</th>
+                        <th>Serial Equip.</th>
+                        <th>Serial Software</th>
                         <th>Software</th>
                         <th>Versão</th>
                         <th>Fornecedor</th>
@@ -63,6 +64,7 @@
                             <td>{{ item.sector|default:"-" }}</td>
                             <td>{{ item.user|default:"-" }}</td>
                             <td>{% if item.equipment and item.equipment.serial %}{{ item.equipment.serial }}{% else %}-{% endif %}</td>
+                            <td>{{ item.software_serial|default:"-" }}</td>
                             <td>{{ item.software_name }}</td>
                             <td>{{ item.version|default:"-" }}</td>
                             <td>{{ item.vendor|default:"-" }}</td>
@@ -71,7 +73,7 @@
                         </tr>
                     {% empty %}
                         <tr>
-                            <td colspan="9" class="muted">Nenhum software inventariado ainda.</td>
+                            <td colspan="10" class="muted">Nenhum software inventariado ainda.</td>
                         </tr>
                     {% endfor %}
                 </tbody>
