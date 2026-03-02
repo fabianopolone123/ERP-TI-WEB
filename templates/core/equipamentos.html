@@ -113,11 +113,14 @@
                     <h3 style="margin: 0 0 4px; font-size: 1rem;">Conciliacao de inventario (pendentes)</h3>
                     <div class="muted" style="font-size: 0.85rem;">Vincule maquinas da GPO a etiqueta correta sem perder historico e softwares.</div>
                 </div>
-                <div class="muted" style="font-size: 0.86rem;">Pendentes: <strong>{{ equipment_reconciliation_pending|length }}</strong></div>
+                <div class="muted" style="font-size: 0.86rem;">
+                    Pendentes: <strong data-equipment-pending-count-visible>{{ equipment_reconciliation_pending|length }}</strong>
+                    de <strong data-equipment-pending-count-total>{{ equipment_reconciliation_pending|length }}</strong>
+                </div>
             </div>
             {% if equipment_reconciliation_pending %}
                 <div style="overflow:auto; border:1px solid #2a364f; border-radius:8px;">
-                    <table class="data-table" style="min-width: 980px; margin:0; border:0; border-radius:0; overflow:visible;">
+                    <table class="data-table" data-equipment-pending-table style="min-width: 980px; margin:0; border:0; border-radius:0; overflow:visible;">
                         <thead>
                             <tr>
                                 <th>Etiqueta</th>
@@ -515,6 +518,38 @@
             if ((target.getAttribute('data-table-search') || '') !== 'equipamentos') return;
             window.setTimeout(countVisible, 0);
         });
+    })();
+</script>
+<script>
+    (function () {
+        const searchInput = document.querySelector('input[data-table-search="equipamentos"]');
+        const pendingTable = document.querySelector('table[data-equipment-pending-table]');
+        const pendingVisibleEl = document.querySelector('[data-equipment-pending-count-visible]');
+        const pendingTotalEl = document.querySelector('[data-equipment-pending-count-total]');
+        if (!searchInput || !pendingTable) return;
+
+        const tbody = pendingTable.querySelector('tbody');
+        if (!tbody) return;
+
+        const countPending = () => {
+            const rows = Array.from(tbody.querySelectorAll('tr')).filter((row) => !row.querySelector('td[colspan]'));
+            const visible = rows.filter((row) => row.style.display !== 'none').length;
+            if (pendingVisibleEl) pendingVisibleEl.textContent = String(visible);
+            if (pendingTotalEl) pendingTotalEl.textContent = String(rows.length);
+        };
+
+        const filterPendingRows = () => {
+            const query = (searchInput.value || '').trim().toLowerCase();
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            rows.forEach((row) => {
+                const text = (row.textContent || '').toLowerCase();
+                row.style.display = !query || text.includes(query) ? '' : 'none';
+            });
+            countPending();
+        };
+
+        filterPendingRows();
+        searchInput.addEventListener('input', filterPendingRows);
     })();
 </script>
 {% endblock %}
