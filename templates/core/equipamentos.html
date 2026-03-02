@@ -237,8 +237,20 @@
                             <td>{% if item.last_inventory_at %}{{ item.last_inventory_at|date:"d/m/Y H:i" }}{% else %}-{% endif %}</td>
                             <td>
                                 <div style="display:flex; gap:6px; flex-wrap:wrap;">
-                                    <button type="button" data-connect-rdp data-host="{{ item.hostname|default:''|escape }}">RDP</button>
-                                    <button type="button" data-connect-rdp-file data-host="{{ item.hostname|default:''|escape }}">Baixar RDP</button>
+                                    <button
+                                        type="button"
+                                        data-connect-rdp
+                                        data-host="{{ item.hostname|default:''|escape }}"
+                                        data-rdp-url="{% url 'equipamentos_rdp_file' item.id %}?download=1"
+                                    >
+                                        RDP
+                                    </button>
+                                    <a
+                                        href="{% url 'equipamentos_rdp_file' item.id %}?download=1"
+                                        data-connect-rdp-file
+                                    >
+                                        Baixar RDP
+                                    </a>
                                     <button type="button" data-connect-vnc data-host="{{ item.hostname|default:''|escape }}">VNC</button>
                                 </div>
                             </td>
@@ -353,51 +365,39 @@
 
 <script>
     (function () {
-        const buildRdpFile = (host) => {
-            const safeHost = (host || '').trim();
-            if (!safeHost) return '';
-            return [
-                `full address:s:${safeHost}`,
-                'prompt for credentials:i:1',
-                'administrative session:i:0',
-                'screen mode id:i:2',
-                'desktopwidth:i:1366',
-                'desktopheight:i:768',
-                'session bpp:i:32',
-                'compression:i:1',
-                'keyboardhook:i:2',
-                'audiomode:i:0',
-                'redirectclipboard:i:1',
-                'redirectprinters:i:0',
-                'redirectcomports:i:0',
-                'redirectsmartcards:i:1',
-                'drivestoredirect:s:',
-            ].join('\r\n');
-        };
-
-        const downloadRdpFile = (host) => {
-            const content = buildRdpFile(host);
-            const blob = new Blob([content], { type: 'application/x-rdp' });
-            const href = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = href;
-            link.download = `${host}.rdp`;
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-            URL.revokeObjectURL(href);
-        };
-
-        const tryOpenRdpProtocol = (host) => {
+        const tryOpenRdpProtocol = (host, fallbackUrl) => {
             const protocols = [
                 `ms-rd:connect?pc=${encodeURIComponent(host)}`,
                 `rdp://${host}`,
             ];
 
             let index = 0;
+            let openedClient = false;
+            const markOpened = () => {
+                openedClient = true;
+            };
+            const handleVisibility = () => {
+                if (document.visibilityState === 'hidden') {
+                    markOpened();
+                }
+            };
+            window.addEventListener('blur', markOpened);
+            document.addEventListener('visibilitychange', handleVisibility);
+
+            const cleanup = () => {
+                window.removeEventListener('blur', markOpened);
+                document.removeEventListener('visibilitychange', handleVisibility);
+            };
+
             const tryNext = () => {
                 if (index >= protocols.length) {
-                    alert('Não foi possível abrir o cliente RDP automaticamente. Use o botão "Baixar RDP".');
+                    cleanup();
+                    if (openedClient) {
+                        return;
+                    }
+                    if (fallbackUrl && confirm('Não foi possível abrir o cliente RDP automaticamente. Deseja baixar o arquivo RDP?')) {
+                        window.location.href = fallbackUrl;
+                    }
                     return;
                 }
 
@@ -427,20 +427,13 @@
                     alert('Host não informado para conexão RDP.');
                     return;
                 }
-                tryOpenRdpProtocol(host);
+                const rdpUrl = (btn.getAttribute('data-rdp-url') || '').trim();
+                tryOpenRdpProtocol(host, rdpUrl);
             });
         });
-
-        document.querySelectorAll('[data-connect-rdp-file]').forEach((btn) => {
-            btn.addEventListener('click', (event) => {
-                event.preventDefault();
+        document.querySelectorAll('[data-connect-rdp-file]').forEach((el) => {
+            el.addEventListener('click', (event) => {
                 event.stopPropagation();
-                const host = (btn.getAttribute('data-host') || '').trim();
-                if (!host) {
-                    alert('Host não informado para gerar arquivo RDP.');
-                    return;
-                }
-                downloadRdpFile(host);
             });
         });
 

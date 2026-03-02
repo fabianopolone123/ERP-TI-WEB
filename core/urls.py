@@ -27,6 +27,7 @@ from .views import (
     ticket_reopen,
     ticket_timer_action,
     ws_tickets_ping,
+    equipment_rdp_file,
     inventory_push_api,
     chamados_fill_spreadsheet,
 )
@@ -37,6 +38,7 @@ urlpatterns = [
     path('usuarios/', UsersListView.as_view(), name='usuarios'),
     path('acessos/', AcessosView.as_view(), name='acessos'),
     path('equipamentos/', EquipamentosView.as_view(), name='equipamentos'),
+    path('equipamentos/<int:equipment_id>/rdp/', equipment_rdp_file, name='equipamentos_rdp_file'),
     path('softwares/', SoftwaresView.as_view(), name='softwares'),
     path('insumos/', InsumosView.as_view(), name='insumos'),
     path('requisicoes/', RequisicoesView.as_view(), name='requisicoes'),
