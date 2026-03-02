@@ -1,5 +1,6 @@
 import logging
 import os
+import time
 import unicodedata
 
 import requests
@@ -11,6 +12,10 @@ WAPI_INSTANCE = os.getenv("WAPI_INSTANCE", "").strip()
 WAPI_BASE = os.getenv("WAPI_BASE_URL", "https://api.w-api.app/v1").rstrip("/")
 WAPI_SEND_URL = f"{WAPI_BASE}/message/send-text?instanceId={WAPI_INSTANCE}"
 SUCCESS_STATUSES = {"success", "sent", "ok", "queued"}
+WAPI_SEND_CONNECT_TIMEOUT = float(os.getenv("WAPI_SEND_CONNECT_TIMEOUT", "6.0") or 6.0)
+WAPI_SEND_READ_TIMEOUT = float(os.getenv("WAPI_SEND_READ_TIMEOUT", "20.0") or 20.0)
+WAPI_SEND_MAX_RETRIES = int(os.getenv("WAPI_SEND_MAX_RETRIES", "2") or 2)
+WAPI_SEND_RETRY_BACKOFF_SECONDS = float(os.getenv("WAPI_SEND_RETRY_BACKOFF_SECONDS", "1.5") or 1.5)
 
 
 def _require_config() -> None:
@@ -163,7 +168,7 @@ def find_whatsapp_groups_by_name(group_name: str) -> list[dict[str, str]]:
     return exact + partial
 
 
-def send_whatsapp_message(destination: str, message: str, timeout: float = 10.0) -> dict:
+def send_whatsapp_message(destination: str, message: str, timeout: float | tuple[float, float] | None = None) -> dict:
     _require_config()
     to, _dest_type = _normalize_destination(destination)
     payload = _build_payload(to, message)
@@ -171,17 +176,46 @@ def send_whatsapp_message(destination: str, message: str, timeout: float = 10.0)
         "Authorization": f"Bearer {WAPI_TOKEN}",
         "Content-Type": "application/json",
     }
-    response = requests.post(WAPI_SEND_URL, headers=headers, json=payload, timeout=timeout)
-    try:
-        response.raise_for_status()
-    except requests.RequestException:
-        logger.exception("Erro ao enviar mensagem para %s via WAPI", to)
-        raise
+    request_timeout = timeout if timeout is not None else (WAPI_SEND_CONNECT_TIMEOUT, WAPI_SEND_READ_TIMEOUT)
+    max_attempts = 1 + max(0, int(WAPI_SEND_MAX_RETRIES))
 
-    result = response.json()
-    status, message_id = _normalize_response(result)
-    ok_result = status in SUCCESS_STATUSES or bool(message_id)
-    if not ok_result:
-        logger.warning("Resposta inesperada do WAPI (%s): %s", to, result)
-        raise requests.RequestException(f"WAPI retornou status {status} para {to}")
-    return result
+    last_error = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            response = requests.post(WAPI_SEND_URL, headers=headers, json=payload, timeout=request_timeout)
+            response.raise_for_status()
+            result = response.json()
+            status, message_id = _normalize_response(result)
+            ok_result = status in SUCCESS_STATUSES or bool(message_id)
+            if not ok_result:
+                logger.warning("Resposta inesperada do WAPI (%s): %s", to, result)
+                raise requests.RequestException(f"WAPI retornou status {status} para {to}")
+            return result
+        except (requests.Timeout, requests.ConnectionError) as exc:
+            last_error = exc
+            if attempt >= max_attempts:
+                logger.warning(
+                    "Falha de rede ao enviar WhatsApp para %s apos %s tentativa(s): %s",
+                    to,
+                    max_attempts,
+                    exc,
+                )
+                raise
+            backoff = max(0.0, WAPI_SEND_RETRY_BACKOFF_SECONDS * attempt)
+            logger.warning(
+                "Falha de rede ao enviar WhatsApp para %s (tentativa %s/%s): %s. Nova tentativa em %.1fs",
+                to,
+                attempt,
+                max_attempts,
+                exc,
+                backoff,
+            )
+            if backoff:
+                time.sleep(backoff)
+        except requests.RequestException:
+            logger.exception("Erro ao enviar mensagem para %s via WAPI", to)
+            raise
+
+    if last_error:
+        raise last_error
+    raise requests.RequestException(f"Falha desconhecida ao enviar WhatsApp para {to}")

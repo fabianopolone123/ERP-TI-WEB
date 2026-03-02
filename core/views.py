@@ -8,6 +8,7 @@ from uuid import uuid4
 from textwrap import shorten
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
+import requests
 from django.conf import settings
 from django.contrib import messages
 from django.core.mail import send_mail
@@ -457,6 +458,10 @@ def _notify_whatsapp(ticket, event_type="new_ticket", event_label="Novo chamado"
     if send_group and group_jid:
         try:
             send_whatsapp_message(group_jid, summary)
+        except requests.Timeout as exc:
+            logger.warning("Timeout ao notificar grupo WhatsApp %s: %s", group_jid, exc)
+        except requests.RequestException as exc:
+            logger.warning("Falha HTTP ao notificar grupo WhatsApp %s: %s", group_jid, exc)
         except Exception:
             logger.exception("Nao foi possivel notificar o grupo WhatsApp %s", group_jid)
 
@@ -464,6 +469,10 @@ def _notify_whatsapp(ticket, event_type="new_ticket", event_label="Novo chamado"
         for phone in _get_attendant_numbers(ticket):
             try:
                 send_whatsapp_message(phone, summary)
+            except requests.Timeout as exc:
+                logger.warning("Timeout ao notificar atendente %s: %s", phone, exc)
+            except requests.RequestException as exc:
+                logger.warning("Falha HTTP ao notificar atendente %s: %s", phone, exc)
             except Exception:
                 logger.exception("Nao foi possivel notificar o atendente %s", phone)
 
