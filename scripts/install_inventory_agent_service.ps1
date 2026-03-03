@@ -15,7 +15,10 @@ param(
     [string]$Token,
 
     [Parameter(Mandatory = $false)]
-    [int]$PollIntervalSec = 45
+    [int]$PollIntervalSec = 45,
+
+    [Parameter(Mandatory = $false)]
+    [bool]$EnableLogonPush = $true
 )
 
 $ErrorActionPreference = 'Stop'
@@ -47,6 +50,12 @@ New-Item -ItemType Directory -Path (Join-Path $TargetDir 'logs') -Force | Out-Nu
 $targetAgent = Join-Path $TargetDir 'inventory_agent.ps1'
 $targetDaemon = Join-Path $TargetDir 'inventory_agent_daemon.ps1'
 $logPath = Join-Path $TargetDir 'logs\inventory_agent_daemon.log'
+$taskNameLogonPush = "$TaskName - Logon Push"
+$serverBaseNormalized = ([string]$ServerBaseUrl).Trim().TrimEnd('/')
+if ([string]::IsNullOrWhiteSpace($serverBaseNormalized)) {
+    throw 'ServerBaseUrl nao informado.'
+}
+$pushUrl = "$serverBaseNormalized/api/inventory/push/"
 
 Copy-Item -Path $sourceAgent -Destination $targetAgent -Force
 Copy-Item -Path $sourceDaemon -Destination $targetDaemon -Force
@@ -57,7 +66,7 @@ if ($legacy) {
     & sc.exe delete $LegacyServiceName | Out-Null
 }
 
-$args = "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$targetDaemon`" -ServerBaseUrl `"$ServerBaseUrl`" -Token `"$Token`" -AgentScriptPath `"$targetAgent`" -PollIntervalSec $PollIntervalSec -LogPath `"$logPath`""
+$args = "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$targetDaemon`" -ServerBaseUrl `"$serverBaseNormalized`" -Token `"$Token`" -AgentScriptPath `"$targetAgent`" -PollIntervalSec $PollIntervalSec -LogPath `"$logPath`""
 $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $args
 $trigger = New-ScheduledTaskTrigger -AtStartup
 $principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -RunLevel Highest
@@ -78,6 +87,29 @@ Register-ScheduledTask `
     -Principal $principal `
     -Settings $settings `
     -Force | Out-Null
+
+if ($EnableLogonPush) {
+    $logonArgs = "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$targetAgent`" -ServerUrl `"$pushUrl`" -Token `"$Token`" -TimeoutSec 60"
+    $logonAction = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $logonArgs
+    $logonTrigger = New-ScheduledTaskTrigger -AtLogOn
+    $logonSettings = New-ScheduledTaskSettingsSet `
+        -StartWhenAvailable `
+        -RunOnlyIfNetworkAvailable `
+        -DontStopIfGoingOnBatteries `
+        -AllowStartIfOnBatteries `
+        -ExecutionTimeLimit (New-TimeSpan -Minutes 15) `
+        -MultipleInstances IgnoreNew
+
+    Register-ScheduledTask `
+        -TaskName $taskNameLogonPush `
+        -Action $logonAction `
+        -Trigger $logonTrigger `
+        -Principal $principal `
+        -Settings $logonSettings `
+        -Force | Out-Null
+} else {
+    Unregister-ScheduledTask -TaskName $taskNameLogonPush -Confirm:$false -ErrorAction SilentlyContinue
+}
 
 try {
     Start-ScheduledTask -TaskName $TaskName -ErrorAction Stop
