@@ -201,14 +201,6 @@ def _inventory_agent_token() -> str:
     return (getattr(settings, 'INVENTORY_AGENT_TOKEN', '') or '').strip()
 
 
-def _inventory_refresh_all_max_hosts() -> int:
-    try:
-        value = int(getattr(settings, 'INVENTORY_REFRESH_ALL_MAX_HOSTS', 500) or 500)
-    except (TypeError, ValueError):
-        value = 500
-    return max(1, min(value, 5000))
-
-
 def _inventory_refresh_max_concurrent_running() -> int:
     try:
         value = int(getattr(settings, 'INVENTORY_AGENT_MAX_CONCURRENT_RUNNING', 8) or 8)
@@ -328,31 +320,6 @@ def _enqueue_inventory_refresh_for_host(host: str, request_user=None) -> tuple[s
     return 'created', f'Solicitação de atualização enviada para {normalized_host}.'
 
 
-def _inventory_known_hosts_for_refresh() -> list[str]:
-    hosts: list[str] = []
-    seen: set[str] = set()
-
-    def _add_host(raw_value: str) -> None:
-        candidate = (raw_value or '').strip()
-        if not candidate:
-            return
-        key = candidate.lower()
-        if key in seen:
-            return
-        seen.add(key)
-        hosts.append(candidate)
-
-    for host in parse_hosts_text(_inventory_default_hosts()):
-        _add_host(host)
-
-    for equipment in Equipment.objects.only('hostname', 'hostname_aliases'):
-        _add_host(equipment.hostname)
-        for alias in parse_hosts_text(equipment.hostname_aliases or ''):
-            _add_host(alias)
-
-    return hosts
-
-
 def _enqueue_inventory_refresh_for_hosts(
     hosts: list[str],
     request_user=None,
@@ -435,172 +402,6 @@ def _enqueue_inventory_refresh_for_hosts(
         'created_count': len(created_messages),
         'duplicate_count': len(duplicate_messages),
         'invalid_count': len(invalid_messages),
-    }
-
-
-def _inventory_refresh_batch_from_session(request) -> dict | None:
-    raw = request.session.get('inventory_refresh_batch')
-    if not isinstance(raw, dict):
-        return None
-
-    batch_id = str(raw.get('id') or '').strip()
-    started_at_raw = str(raw.get('started_at') or '').strip()
-    created_hosts_raw = raw.get('created_hosts') or []
-    if not batch_id or not started_at_raw or not isinstance(created_hosts_raw, list):
-        return None
-
-    created_hosts: list[str] = []
-    seen: set[str] = set()
-    for item in created_hosts_raw:
-        host = str(item or '').strip()
-        if not host:
-            continue
-        key = host.lower()
-        if key in seen:
-            continue
-        seen.add(key)
-        created_hosts.append(host)
-
-    if not created_hosts:
-        return None
-
-    try:
-        started_at = datetime.fromisoformat(started_at_raw)
-    except Exception:
-        return None
-    if timezone.is_naive(started_at):
-        started_at = timezone.make_aware(started_at, timezone.get_current_timezone())
-    if started_at < (timezone.now() - timedelta(days=2)):
-        return None
-
-    return {
-        'id': batch_id,
-        'started_at': started_at,
-        'created_hosts': created_hosts,
-        'requested_hosts': int(raw.get('requested_hosts') or 0),
-        'dropped_count': int(raw.get('dropped_count') or 0),
-    }
-
-
-def _inventory_refresh_batch_snapshot(batch: dict) -> dict:
-    hosts = list(batch.get('created_hosts') or [])
-    total = len(hosts)
-    if not total:
-        return {
-            'total': 0,
-            'pending': 0,
-            'running': 0,
-            'completed': 0,
-            'failed': 0,
-            'processed': 0,
-            'progress_percent': 0.0,
-            'is_finished': True,
-            'timeline': [],
-        }
-
-    host_keys = [host.lower() for host in hosts]
-    started_at = batch['started_at']
-    query_start = started_at - timedelta(minutes=5)
-    rows = list(
-        InventoryRefreshRequest.objects.annotate(host_key=Lower('hostname'))
-        .filter(host_key__in=host_keys, requested_at__gte=query_start)
-        .values(
-            'id',
-            'hostname',
-            'host_key',
-            'status',
-            'requested_at',
-            'started_at',
-            'completed_at',
-            'attempt_count',
-            'last_message',
-        )
-        .order_by('-id')
-    )
-
-    latest_by_host_key: dict[str, dict] = {}
-    for row in rows:
-        key = str(row.get('host_key') or '').strip()
-        if key and key not in latest_by_host_key:
-            latest_by_host_key[key] = row
-
-    status_counts = {
-        InventoryRefreshRequest.Status.PENDING: 0,
-        InventoryRefreshRequest.Status.RUNNING: 0,
-        InventoryRefreshRequest.Status.COMPLETED: 0,
-        InventoryRefreshRequest.Status.FAILED: 0,
-    }
-    timeline: list[dict] = []
-    status_label = {
-        InventoryRefreshRequest.Status.PENDING: 'Pendente',
-        InventoryRefreshRequest.Status.RUNNING: 'Em execução',
-        InventoryRefreshRequest.Status.COMPLETED: 'Concluído',
-        InventoryRefreshRequest.Status.FAILED: 'Falhou',
-    }
-    timeline_time_field = {
-        InventoryRefreshRequest.Status.PENDING: 'requested_at',
-        InventoryRefreshRequest.Status.RUNNING: 'started_at',
-        InventoryRefreshRequest.Status.COMPLETED: 'completed_at',
-        InventoryRefreshRequest.Status.FAILED: 'completed_at',
-    }
-
-    for host in hosts:
-        row = latest_by_host_key.get(host.lower())
-        if not row:
-            default_time = timezone.localtime(started_at)
-            status_counts[InventoryRefreshRequest.Status.PENDING] += 1
-            timeline.append(
-                {
-                    'host': host,
-                    'status': InventoryRefreshRequest.Status.PENDING,
-                    'status_label': status_label[InventoryRefreshRequest.Status.PENDING],
-                    'time': default_time.strftime('%d/%m/%Y %H:%M:%S'),
-                    'message': 'Solicitação criada e aguardando o agente da máquina.',
-                    '_sort_ts': default_time.timestamp(),
-                }
-            )
-            continue
-
-        current_status = (row.get('status') or '').strip().lower()
-        if current_status not in status_counts:
-            current_status = InventoryRefreshRequest.Status.PENDING
-        status_counts[current_status] += 1
-
-        time_field = timeline_time_field.get(current_status, 'requested_at')
-        event_dt = row.get(time_field) or row.get('started_at') or row.get('requested_at') or started_at
-        local_dt = timezone.localtime(event_dt)
-        timeline.append(
-            {
-                'host': row.get('hostname') or host,
-                'status': current_status,
-                'status_label': status_label.get(current_status, current_status),
-                'time': local_dt.strftime('%d/%m/%Y %H:%M:%S'),
-                'message': (row.get('last_message') or '').strip() or 'Sem detalhes.',
-                '_sort_ts': local_dt.timestamp(),
-            }
-        )
-
-    timeline.sort(key=lambda item: item.get('_sort_ts', 0), reverse=True)
-    timeline = timeline[:120]
-    for item in timeline:
-        item.pop('_sort_ts', None)
-
-    completed = status_counts[InventoryRefreshRequest.Status.COMPLETED]
-    failed = status_counts[InventoryRefreshRequest.Status.FAILED]
-    processed = completed + failed
-    progress_percent = (processed / total * 100.0) if total else 0.0
-    is_finished = processed >= total and total > 0
-
-    return {
-        'total': total,
-        'pending': status_counts[InventoryRefreshRequest.Status.PENDING],
-        'running': status_counts[InventoryRefreshRequest.Status.RUNNING],
-        'completed': completed,
-        'failed': failed,
-        'processed': processed,
-        'progress_percent': round(progress_percent, 2),
-        'is_finished': is_finished,
-        'timeline': timeline,
     }
 
 
@@ -1631,67 +1432,6 @@ class EquipamentosView(LoginRequiredMixin, TemplateView):
                     messages.error(request, line)
             return self.get(request, *args, **kwargs)
 
-        if action == 'request_inventory_refresh_all':
-            all_known_hosts = _inventory_known_hosts_for_refresh()
-            if not all_known_hosts:
-                messages.error(request, 'Nenhum host conhecido para atualização em massa.')
-                return self.get(request, *args, **kwargs)
-
-            max_hosts = _inventory_refresh_all_max_hosts()
-            selected_hosts = all_known_hosts[:max_hosts]
-            dropped_count = max(0, len(all_known_hosts) - len(selected_hosts))
-            batch_started_at = timezone.now()
-            batch_id = uuid4().hex
-
-            result = _enqueue_inventory_refresh_for_hosts(
-                selected_hosts,
-                request.user,
-                strict_open_duplicates=True,
-            )
-            created_hosts = result.get('created_hosts') or []
-            if created_hosts:
-                request.session['inventory_refresh_batch'] = {
-                    'id': batch_id,
-                    'started_at': batch_started_at.isoformat(),
-                    'created_hosts': created_hosts,
-                    'requested_hosts': len(selected_hosts),
-                    'dropped_count': dropped_count,
-                }
-                request.session.modified = True
-            else:
-                request.session.pop('inventory_refresh_batch', None)
-                request.session.modified = True
-            if result['created_count']:
-                messages.success(
-                    request,
-                    f'Atualização em massa enfileirada: {result["created_count"]} host(s) de {len(selected_hosts)}.',
-                )
-            else:
-                messages.info(request, 'Nenhuma nova solicitação criada na atualização em massa.')
-
-            if result['duplicate_count']:
-                messages.info(
-                    request,
-                    f'{result["duplicate_count"]} host(s) já tinham solicitação em aberto e foram ignorados.',
-                )
-            if result['invalid_count']:
-                messages.warning(
-                    request,
-                    f'{result["invalid_count"]} host(s) inválidos foram ignorados.',
-                )
-            if dropped_count:
-                messages.warning(
-                    request,
-                    f'Foram considerados os primeiros {max_hosts} hosts para evitar sobrecarga (limite configurado).',
-                )
-
-            max_running = _inventory_refresh_max_concurrent_running()
-            messages.info(
-                request,
-                f'Processamento em fila com até {max_running} host(s) simultâneos para reduzir impacto na rede.',
-            )
-            return self.get(request, *args, **kwargs)
-
         hostname = request.POST.get('hostname', '').strip()
 
         equipment_payload = {
@@ -1753,12 +1493,6 @@ class EquipamentosView(LoginRequiredMixin, TemplateView):
         context['equipment_total_count'] = len(equipments_qs)
         context['inventory_default_hosts'] = _inventory_default_hosts()
         context['inventory_timeout_seconds'] = int(getattr(settings, 'INVENTORY_POWERSHELL_TIMEOUT', 120) or 120)
-        context['inventory_known_hosts_count'] = len(_inventory_known_hosts_for_refresh()) if is_ti else 0
-        context['inventory_refresh_max_concurrent_running'] = _inventory_refresh_max_concurrent_running()
-        context['inventory_refresh_all_max_hosts'] = _inventory_refresh_all_max_hosts()
-        batch = _inventory_refresh_batch_from_session(self.request) if is_ti else None
-        context['inventory_refresh_batch_active'] = bool(batch)
-        context['inventory_refresh_batch_id'] = batch['id'] if batch else ''
         context['next_equipment_tag_preview'] = next_equipment_tag_code() if is_ti else ''
         if is_ti:
             pending_items = list(Equipment.objects.filter(needs_reconciliation=True).order_by('-last_inventory_at', '-created_at'))
@@ -3904,31 +3638,6 @@ def protected_media(request, path: str):
     response = FileResponse(open(file_path, 'rb'), content_type=content_type or 'application/octet-stream')
     response['X-Content-Type-Options'] = 'nosniff'
     return response
-
-
-@login_required
-@require_GET
-def inventory_refresh_batch_status_api(request):
-    if not is_ti_user(request):
-        return JsonResponse({'ok': False, 'error': 'forbidden'}, status=403)
-
-    batch = _inventory_refresh_batch_from_session(request)
-    if not batch:
-        return JsonResponse({'ok': True, 'active': False})
-
-    snapshot = _inventory_refresh_batch_snapshot(batch)
-
-    return JsonResponse(
-        {
-            'ok': True,
-            'active': True,
-            'batch_id': batch['id'],
-            'started_at': timezone.localtime(batch['started_at']).strftime('%d/%m/%Y %H:%M:%S'),
-            'requested_hosts': int(batch.get('requested_hosts') or 0),
-            'dropped_count': int(batch.get('dropped_count') or 0),
-            **snapshot,
-        }
-    )
 
 
 @csrf_exempt

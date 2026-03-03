@@ -38,14 +38,6 @@ Fluxo:
 4. Quando recebe uma solicitacao, executa `inventory_agent.ps1` local e envia para `/api/inventory/push/`.
 5. Ao logon de usuario no Windows, a tarefa `ERP TI Inventory Agent - Logon Push` envia uma coleta imediata para atualizar usuario logado/softwares.
 
-Atualizacao em massa (sem sobrecarregar a rede):
-- Na tela `Equipamentos`, use o botao `Atualizar todos os PCs`.
-- O ERP enfileira os hosts conhecidos e o processamento ocorre em lotes.
-- Limites configuraveis no `.env`:
-  - `INVENTORY_AGENT_MAX_CONCURRENT_RUNNING` (padrao `8`)
-  - `INVENTORY_REFRESH_RUNNING_TIMEOUT_MINUTES` (padrao `30`)
-  - `INVENTORY_REFRESH_ALL_MAX_HOSTS` (padrao `500`)
-
 Instalacao da tarefa nas maquinas (GPO startup):
 
 Opcao recomendada (evita bloqueios de script via UNC):
