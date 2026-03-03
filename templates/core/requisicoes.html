@@ -137,6 +137,22 @@
     .delivery-progress {
         font-size: 0.78rem;
     }
+
+    .req-total-highlight {
+        display: inline-block;
+        padding: 1px 8px;
+        border-radius: 999px;
+        border: 1px solid #f59e0b;
+        color: #fde68a;
+        background: rgba(245, 158, 11, 0.18);
+        font-weight: 800;
+    }
+
+    .req-total-column {
+        color: #fde68a;
+        font-weight: 800;
+        font-size: 0.96rem;
+    }
 </style>
 <div class="card">
     <div class="topbar">
@@ -219,7 +235,7 @@
                                     <div class="muted" style="margin-top: 4px;">
                                         {% for quote in item.main_quotes %}
                                             <div style="margin-bottom: 6px;">
-                                                {{ quote.name }} (Qtd: {{ quote.quantity|default:1 }} | Unitário: R$ {{ quote.value|br_money }} | Total: R$ {{ quote.package_total|br_money }}{% if item.kind == 'digital' and quote.payment_method %} | Pagamento: {{ quote.payment_method }}{% endif %}{% if item.kind == 'digital' and quote.payment_installments > 1 %} | Parcelas: {{ quote.payment_installments }}x{% endif %}{% if item.kind == 'digital' and quote.price_history_count > 0 %} | Histórico de preço: {{ quote.price_history_count }} atualização(ões){% endif %})
+                                                {{ quote.name }} (Qtd: {{ quote.quantity|default:1 }} | Unitário: R$ {{ quote.value|br_money }} | <span class="req-total-highlight">Total: R$ {{ quote.package_total|br_money }}</span>{% if item.kind == 'digital' and quote.payment_method %} | Pagamento: {{ quote.payment_method }}{% endif %}{% if item.kind == 'digital' and quote.payment_installments > 1 %} | Parcelas: {{ quote.payment_installments }}x{% endif %}{% if item.kind == 'digital' and quote.price_history_count > 0 %} | Histórico de preço: {{ quote.price_history_count }} atualização(ões){% endif %})
                                                 {% if quote.is_display_selected %}
                                                     <span class="status-pill status-approved" style="margin-left: 6px;">Aprovado</span>
                                                 {% endif %}
@@ -236,7 +252,7 @@
                             </td>
                             <td data-sort-value="{% if item.quotes_total is not None %}{{ item.quotes_total|floatformat:2 }}{% else %}-1{% endif %}">
                                 {% if item.quotes_total is not None %}
-                                    R$ {{ item.quotes_total|br_money }}
+                                    <span class="req-total-column">R$ {{ item.quotes_total|br_money }}</span>
                                 {% else %}
                                     <span class="muted">Aguardando aprovação</span>
                                 {% endif %}
