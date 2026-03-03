@@ -193,6 +193,7 @@
                     <tr>
                         <th>Etiqueta</th>
                         <th>Host</th>
+                        <th>Tipo</th>
                         <th>Usuário</th>
                         <th>Setor</th>
                         <th>Modelo</th>
@@ -222,6 +223,7 @@
                             data-last-inventory="{% if item.last_inventory_at %}{{ item.last_inventory_at|date:'d/m/Y H:i' }}{% else %}-{% endif %}">
                             <td data-sort-value="{{ item.tag_code|default:'' }}">{{ item.tag_code|default:"-" }}</td>
                             <td>{{ item.hostname|default:"-" }}</td>
+                            <td>{{ item.equipment|default:"-" }}</td>
                             <td>{{ item.user }}</td>
                             <td>{{ item.sector }}</td>
                             <td>{{ item.model }}</td>
@@ -229,7 +231,7 @@
                         </tr>
                     {% empty %}
                         <tr>
-                            <td colspan="6" class="muted">Nenhum equipamento cadastrado.</td>
+                            <td colspan="7" class="muted">Nenhum equipamento cadastrado.</td>
                         </tr>
                     {% endfor %}
                 </tbody>
