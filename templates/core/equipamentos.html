@@ -69,6 +69,57 @@
         width: 90px;
         max-width: 90px;
     }
+    .inventory-refresh-progress {
+        margin-bottom: 12px;
+        border: 1px solid #2f3d57;
+        background: #101a2d;
+        border-radius: 10px;
+        padding: 12px;
+    }
+    .inventory-refresh-progress .bar-wrap {
+        height: 12px;
+        border-radius: 999px;
+        overflow: hidden;
+        background: #1e293b;
+        border: 1px solid rgba(148, 163, 184, 0.3);
+    }
+    .inventory-refresh-progress .bar-fill {
+        height: 100%;
+        width: 0%;
+        background: linear-gradient(90deg, #0ea5e9 0%, #22c55e 100%);
+        transition: width 0.35s ease;
+    }
+    .inventory-refresh-progress .timeline {
+        margin-top: 10px;
+        max-height: 220px;
+        overflow: auto;
+        border: 1px solid #334155;
+        border-radius: 8px;
+        background: #0b1324;
+    }
+    .inventory-refresh-progress .timeline-row {
+        display: grid;
+        grid-template-columns: 150px 150px 1fr;
+        gap: 8px;
+        padding: 8px 10px;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+        font-size: 0.82rem;
+    }
+    .inventory-refresh-progress .timeline-row:last-child {
+        border-bottom: 0;
+    }
+    .inventory-refresh-progress .timeline-row .status {
+        font-weight: 700;
+    }
+    .inventory-refresh-progress .timeline-row .status.pending { color: #fbbf24; }
+    .inventory-refresh-progress .timeline-row .status.running { color: #38bdf8; }
+    .inventory-refresh-progress .timeline-row .status.completed { color: #22c55e; }
+    .inventory-refresh-progress .timeline-row .status.failed { color: #f87171; }
+    @media (max-width: 900px) {
+        .inventory-refresh-progress .timeline-row {
+            grid-template-columns: 1fr;
+        }
+    }
 </style>
 <div class="card">
     <div class="topbar">
@@ -134,6 +185,29 @@
             Hosts conhecidos: <strong>{{ inventory_known_hosts_count }}</strong> |
             concorrência máxima da fila: <strong>{{ inventory_refresh_max_concurrent_running }}</strong> |
             limite por disparo em massa: <strong>{{ inventory_refresh_all_max_hosts }}</strong>.
+        </div>
+        <div
+            class="inventory-refresh-progress"
+            data-inventory-refresh-progress
+            data-api-url="{% url 'inventory_refresh_batch_status_api' %}"
+            data-active="{% if inventory_refresh_batch_active %}1{% else %}0{% endif %}"
+            data-batch-id="{{ inventory_refresh_batch_id }}"
+            {% if not inventory_refresh_batch_active %}hidden{% endif %}
+        >
+            <div class="topbar" style="margin-bottom: 8px;">
+                <div>
+                    <h3 style="margin: 0 0 4px; font-size: 1rem;">Atualização em massa - andamento</h3>
+                    <div class="muted" data-progress-summary>Preparando...</div>
+                </div>
+                <div style="font-weight:700;" data-progress-percent>0%</div>
+            </div>
+            <div class="bar-wrap">
+                <div class="bar-fill" data-progress-fill></div>
+            </div>
+            <div class="muted" style="margin-top:8px; font-size: 0.82rem;" data-progress-counts>-</div>
+            <div class="timeline" data-progress-timeline>
+                <div class="timeline-row"><div>-</div><div>-</div><div>Aguardando atualizações...</div></div>
+            </div>
         </div>
 
         <div class="card" style="padding: 14px; margin-bottom: 12px; border: 1px solid #43331a; background: #121826;">
@@ -714,6 +788,128 @@
 
         filterPendingRows();
         searchInput.addEventListener('input', filterPendingRows);
+    })();
+</script>
+<script>
+    (function () {
+        const panel = document.querySelector('[data-inventory-refresh-progress]');
+        if (!panel) return;
+
+        const apiUrl = (panel.getAttribute('data-api-url') || '').trim();
+        const summaryEl = panel.querySelector('[data-progress-summary]');
+        const percentEl = panel.querySelector('[data-progress-percent]');
+        const fillEl = panel.querySelector('[data-progress-fill]');
+        const countsEl = panel.querySelector('[data-progress-counts]');
+        const timelineEl = panel.querySelector('[data-progress-timeline]');
+        if (!apiUrl || !summaryEl || !percentEl || !fillEl || !countsEl || !timelineEl) return;
+
+        const escapeHtml = (value) => String(value || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+
+        let timerId = null;
+        let silentPollCount = 0;
+
+        const renderTimeline = (timeline) => {
+            if (!Array.isArray(timeline) || timeline.length === 0) {
+                timelineEl.innerHTML = '<div class="timeline-row"><div>-</div><div>-</div><div>Sem eventos ainda.</div></div>';
+                return;
+            }
+            timelineEl.innerHTML = timeline.slice(0, 120).map((item) => {
+                const status = String(item.status || '').toLowerCase();
+                const statusClass = ['pending', 'running', 'completed', 'failed'].includes(status) ? status : 'pending';
+                return (
+                    `<div class="timeline-row">` +
+                    `<div>${escapeHtml(item.time || '-')}</div>` +
+                    `<div><strong>${escapeHtml(item.host || '-')}</strong><br><span class="status ${statusClass}">${escapeHtml(item.status_label || status || '-')}</span></div>` +
+                    `<div>${escapeHtml(item.message || '-')}</div>` +
+                    `</div>`
+                );
+            }).join('');
+        };
+
+        const render = (data) => {
+            if (!data || data.active !== true) {
+                panel.hidden = true;
+                return;
+            }
+
+            panel.hidden = false;
+            const percentValue = Number(data.progress_percent || 0);
+            const clamped = Math.max(0, Math.min(100, percentValue));
+            fillEl.style.width = `${clamped}%`;
+            percentEl.textContent = `${clamped.toFixed(1)}%`;
+
+            const total = Number(data.total || 0);
+            const processed = Number(data.processed || 0);
+            const completed = Number(data.completed || 0);
+            const failed = Number(data.failed || 0);
+            const running = Number(data.running || 0);
+            const pending = Number(data.pending || 0);
+            const startedAt = String(data.started_at || '-');
+            const requestedHosts = Number(data.requested_hosts || 0);
+            const droppedCount = Number(data.dropped_count || 0);
+
+            summaryEl.textContent = data.is_finished
+                ? `Concluído. Início: ${startedAt}`
+                : `Em execução. Início: ${startedAt}`;
+            countsEl.textContent = `Total monitorado: ${total} | Solicitados no disparo: ${requestedHosts} | Fora do limite: ${droppedCount} | Processados: ${processed} | Concluídos: ${completed} | Falhas: ${failed} | Em execução: ${running} | Pendentes: ${pending}`;
+            renderTimeline(data.timeline || []);
+        };
+
+        const poll = async () => {
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'GET',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                    credentials: 'same-origin',
+                    cache: 'no-store',
+                });
+                if (!response.ok) return;
+                const data = await response.json();
+                render(data);
+                if (data && data.active === true && data.is_finished) {
+                    silentPollCount += 1;
+                    if (silentPollCount >= 3 && timerId) {
+                        window.clearInterval(timerId);
+                        timerId = null;
+                    }
+                } else {
+                    silentPollCount = 0;
+                }
+            } catch (err) {
+                // mantém UI estável em falhas temporárias de rede
+            }
+        };
+
+        const startPolling = () => {
+            if (timerId) return;
+            poll();
+            timerId = window.setInterval(poll, 4000);
+        };
+
+        const activeOnLoad = panel.getAttribute('data-active') === '1';
+        if (activeOnLoad) {
+            startPolling();
+        }
+
+        const massFormAction = panel
+            .closest('.card')
+            ?.querySelector('form input[name="action"][value="request_inventory_refresh_all"]');
+        if (massFormAction) {
+            const form = massFormAction.closest('form');
+            if (form) {
+                form.addEventListener('submit', () => {
+                    panel.hidden = false;
+                    summaryEl.textContent = 'Enfileirando atualização em massa...';
+                    countsEl.textContent = 'Aguardando confirmação do servidor...';
+                    startPolling();
+                });
+            }
+        }
     })();
 </script>
 {% endblock %}
