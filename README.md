@@ -38,6 +38,17 @@ Fluxo:
 4. Quando recebe uma solicitacao, executa `inventory_agent.ps1` local e envia para `/api/inventory/push/`.
 
 Instalacao da tarefa nas maquinas (GPO startup):
+
+Opcao recomendada (evita bloqueios de script via UNC):
+1. Em `Startup Scripts` da GPO, use o arquivo `bootstrap_inventory_agent_gpo.cmd`.
+2. Passe parametros:
+```bat
+http://ti-fabiano:8000 inv-4303e90894724852b3f2ea858209b010-5f506a1ec1b5 45
+```
+3. O bootstrap copia os arquivos para `C:\ProgramData\ERP-TI\bootstrap`, faz `Unblock-File`, instala/atualiza a tarefa SYSTEM e grava log em:
+- `C:\ProgramData\ERP-TI\logs\gpo_bootstrap.log`
+
+Opcao direta (PowerShell):
 ```powershell
 powershell -ExecutionPolicy Bypass -File "\\servidor\deploy\install_inventory_agent_service.ps1" `
   -ServerBaseUrl "https://erp-ti.local" `
@@ -46,6 +57,7 @@ powershell -ExecutionPolicy Bypass -File "\\servidor\deploy\install_inventory_ag
 ```
 
 Arquivos envolvidos:
+- `scripts/bootstrap_inventory_agent_gpo.cmd`
 - `scripts/inventory_agent.ps1`
 - `scripts/inventory_agent_daemon.ps1`
 - `scripts/install_inventory_agent_service.ps1`
