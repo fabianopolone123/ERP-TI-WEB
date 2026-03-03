@@ -18,7 +18,10 @@ param(
     [int]$PollIntervalSec = 45,
 
     [Parameter(Mandatory = $false)]
-    [bool]$EnableLogonPush = $true
+    [bool]$EnableLogonPush = $true,
+
+    [Parameter(Mandatory = $false)]
+    [bool]$EnableStartupPush = $true
 )
 
 $ErrorActionPreference = 'Stop'
@@ -51,6 +54,7 @@ $targetAgent = Join-Path $TargetDir 'inventory_agent.ps1'
 $targetDaemon = Join-Path $TargetDir 'inventory_agent_daemon.ps1'
 $logPath = Join-Path $TargetDir 'logs\inventory_agent_daemon.log'
 $taskNameLogonPush = "$TaskName - Logon Push"
+$taskNameStartupPush = "$TaskName - Startup Push"
 $serverBaseNormalized = ([string]$ServerBaseUrl).Trim().TrimEnd('/')
 if ([string]::IsNullOrWhiteSpace($serverBaseNormalized)) {
     throw 'ServerBaseUrl nao informado.'
@@ -111,10 +115,42 @@ if ($EnableLogonPush) {
     Unregister-ScheduledTask -TaskName $taskNameLogonPush -Confirm:$false -ErrorAction SilentlyContinue
 }
 
+if ($EnableStartupPush) {
+    $startupPushArgs = "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$targetAgent`" -ServerUrl `"$pushUrl`" -Token `"$Token`" -TimeoutSec 60"
+    $startupPushAction = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $startupPushArgs
+    $startupPushTrigger = New-ScheduledTaskTrigger -AtStartup
+    $startupPushSettings = New-ScheduledTaskSettingsSet `
+        -StartWhenAvailable `
+        -RunOnlyIfNetworkAvailable `
+        -DontStopIfGoingOnBatteries `
+        -AllowStartIfOnBatteries `
+        -ExecutionTimeLimit (New-TimeSpan -Minutes 15) `
+        -MultipleInstances IgnoreNew
+
+    Register-ScheduledTask `
+        -TaskName $taskNameStartupPush `
+        -Action $startupPushAction `
+        -Trigger $startupPushTrigger `
+        -Principal $principal `
+        -Settings $startupPushSettings `
+        -Force | Out-Null
+} else {
+    Unregister-ScheduledTask -TaskName $taskNameStartupPush -Confirm:$false -ErrorAction SilentlyContinue
+}
+
 try {
     Start-ScheduledTask -TaskName $TaskName -ErrorAction Stop
 } catch {
-    # Pode falhar se a tarefa já estiver executando.
+    # Pode falhar se a tarefa ja estiver executando.
 }
 
-Write-Output "Tarefa '$TaskName' configurada e iniciada com sucesso."
+if ($EnableStartupPush) {
+    try {
+        Start-ScheduledTask -TaskName $taskNameStartupPush -ErrorAction Stop
+    } catch {
+        # Ignorar falha no disparo imediato; no proximo boot a tarefa roda automaticamente.
+    }
+}
+
+Write-Output "Tarefas de inventario configuradas e iniciadas com sucesso."
+

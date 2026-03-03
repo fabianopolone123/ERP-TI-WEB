@@ -36,7 +36,8 @@ Fluxo:
 2. O ERP cria uma solicitacao pendente para o host.
 3. A tarefa agendada SYSTEM executa `inventory_agent_daemon.ps1`, que consulta periodicamente `/api/inventory/pull-next/`.
 4. Quando recebe uma solicitacao, executa `inventory_agent.ps1` local e envia para `/api/inventory/push/`.
-5. Ao logon de usuario no Windows, a tarefa `ERP TI Inventory Agent - Logon Push` envia uma coleta imediata para atualizar usuario logado/softwares.
+5. Ao reiniciar o Windows, a tarefa `ERP TI Inventory Agent - Startup Push` envia uma coleta imediata de equipamento e softwares.
+6. Ao logon de usuario no Windows, a tarefa `ERP TI Inventory Agent - Logon Push` envia uma coleta imediata para atualizar usuario logado/softwares.
 
 Instalacao da tarefa nas maquinas (GPO startup):
 
@@ -65,6 +66,7 @@ Arquivos envolvidos:
 
 Observacao:
 - Se quiser desativar envio automatico no logon, use `-EnableLogonPush $false` no instalador.
+- Se quiser desativar envio automatico no reinicio, use `-EnableStartupPush $false` no instalador.
 
 ## Agente VNC como servico (GPO)
 Para acesso remoto de tela sem depender de protocolo RDP no navegador:
