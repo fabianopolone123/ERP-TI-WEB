@@ -210,6 +210,7 @@ class Protocolo(models.Model):
     nome = models.CharField(max_length=200)
     protocolo = models.CharField(max_length=120)
     os = models.CharField(max_length=120)
+    observacao = models.TextField(blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

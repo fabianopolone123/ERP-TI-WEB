@@ -1764,6 +1764,7 @@ class ProtocolosView(LoginRequiredMixin, TemplateView):
         nome = (request.POST.get('nome') or '').strip()
         protocolo = (request.POST.get('protocolo') or '').strip()
         os_value = (request.POST.get('os') or '').strip()
+        observacao = (request.POST.get('observacao') or '').strip()
 
         if not nome:
             messages.error(request, 'Informe o nome.')
@@ -1783,7 +1784,8 @@ class ProtocolosView(LoginRequiredMixin, TemplateView):
             protocolo_obj.nome = nome
             protocolo_obj.protocolo = protocolo
             protocolo_obj.os = os_value
-            protocolo_obj.save(update_fields=['nome', 'protocolo', 'os', 'updated_at'])
+            protocolo_obj.observacao = observacao
+            protocolo_obj.save(update_fields=['nome', 'protocolo', 'os', 'observacao', 'updated_at'])
             messages.success(request, 'Protocolo atualizado com sucesso.')
             return redirect('protocolos')
 
@@ -1791,6 +1793,7 @@ class ProtocolosView(LoginRequiredMixin, TemplateView):
             nome=nome,
             protocolo=protocolo,
             os=os_value,
+            observacao=observacao,
         )
         messages.success(request, 'Protocolo cadastrado com sucesso.')
         return redirect('protocolos')

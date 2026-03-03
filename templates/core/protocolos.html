@@ -43,6 +43,7 @@
                         <th>Nome</th>
                         <th>Protocolo</th>
                         <th>OS</th>
+                        <th>Observacao</th>
                         <th>Data/Hora</th>
                         <th>Acoes</th>
                     </tr>
@@ -54,6 +55,7 @@
                             <td>{{ item.nome }}</td>
                             <td>{{ item.protocolo }}</td>
                             <td>{{ item.os }}</td>
+                            <td title="{{ item.observacao|default:'' }}">{{ item.observacao|default:'-' }}</td>
                             <td data-sort-value="{{ item.created_at|date:'YmdHis' }}">{{ item.created_at|date:'d/m/Y H:i' }}</td>
                             <td>
                                 <button
@@ -63,6 +65,7 @@
                                     data-protocolo-nome="{{ item.nome|escape }}"
                                     data-protocolo-codigo="{{ item.protocolo|escape }}"
                                     data-protocolo-os="{{ item.os|escape }}"
+                                    data-protocolo-observacao="{{ item.observacao|default:''|escape }}"
                                     data-protocolo-created-at="{{ item.created_at|date:'d/m/Y H:i' }}"
                                 >
                                     Editar
@@ -71,7 +74,7 @@
                         </tr>
                     {% empty %}
                         <tr>
-                            <td colspan="6" class="muted">Nenhum protocolo cadastrado.</td>
+                            <td colspan="7" class="muted">Nenhum protocolo cadastrado.</td>
                         </tr>
                     {% endfor %}
                 </tbody>
@@ -103,6 +106,10 @@
                             <input id="id_protocolo_os" name="os" type="text" required data-protocolo-os-input />
                         </div>
                         <div>
+                            <label for="id_protocolo_observacao">Observacao</label>
+                            <input id="id_protocolo_observacao" name="observacao" type="text" data-protocolo-observacao-input />
+                        </div>
+                        <div>
                             <label for="id_protocolo_data_hora">Data/Hora</label>
                             <input id="id_protocolo_data_hora" type="text" readonly data-protocolo-data-hora-input />
                         </div>
@@ -123,9 +130,10 @@
                 const nomeInput = document.querySelector('[data-protocolo-nome-input]');
                 const codigoInput = document.querySelector('[data-protocolo-codigo-input]');
                 const osInput = document.querySelector('[data-protocolo-os-input]');
+                const observacaoInput = document.querySelector('[data-protocolo-observacao-input]');
                 const dataHoraInput = document.querySelector('[data-protocolo-data-hora-input]');
 
-                if (!modal || !openBtn || !modeInput || !idInput || !nomeInput || !codigoInput || !osInput || !dataHoraInput) return;
+                if (!modal || !openBtn || !modeInput || !idInput || !nomeInput || !codigoInput || !osInput || !observacaoInput || !dataHoraInput) return;
 
                 const formatNow = () => {
                     const now = new Date();
@@ -140,6 +148,7 @@
                     nomeInput.value = '';
                     codigoInput.value = '';
                     osInput.value = '';
+                    observacaoInput.value = '';
                     dataHoraInput.value = formatNow();
                     modal.hidden = false;
                 };
@@ -151,6 +160,7 @@
                     nomeInput.value = btn.getAttribute('data-protocolo-nome') || '';
                     codigoInput.value = btn.getAttribute('data-protocolo-codigo') || '';
                     osInput.value = btn.getAttribute('data-protocolo-os') || '';
+                    observacaoInput.value = btn.getAttribute('data-protocolo-observacao') || '';
                     dataHoraInput.value = btn.getAttribute('data-protocolo-created-at') || '-';
                     modal.hidden = false;
                 };
