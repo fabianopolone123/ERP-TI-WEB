@@ -45,6 +45,7 @@ from .models import (
     SoftwareInventory,
     InventoryRefreshRequest,
     Insumo,
+    Protocolo,
     next_equipment_tag_code,
     _extract_equipment_tag_number,
     Requisition,
@@ -99,6 +100,7 @@ ERP_MODULES = [
     {'slug': 'ramais', 'label': 'Ramais', 'url_name': None},
     {'slug': 'softwares', 'label': 'Softwares', 'url_name': 'softwares'},
     {'slug': 'insumos', 'label': 'Insumos', 'url_name': 'insumos'},
+    {'slug': 'protocolos', 'label': 'Protocolos', 'url_name': 'protocolos'},
     {'slug': 'requisicoes', 'label': 'Requisições', 'url_name': 'requisicoes'},
     {'slug': 'dicas', 'label': 'Dicas', 'url_name': 'dicas'},
     {'slug': 'emprestimos', 'label': 'Empréstimos', 'url_name': None},
@@ -1746,6 +1748,59 @@ class InsumosView(LoginRequiredMixin, TemplateView):
         context['modules'] = build_modules('insumos') if is_ti else []
         context['insumos'] = Insumo.objects.all().order_by('-date', '-id') if is_ti else []
         context['insumo_default_date'] = timezone.localdate().isoformat()
+        return context
+
+
+class ProtocolosView(LoginRequiredMixin, TemplateView):
+    template_name = 'core/protocolos.html'
+
+    def post(self, request, *args, **kwargs):
+        if not is_ti_user(request):
+            messages.error(request, 'Apenas usuários do departamento TI podem cadastrar protocolos.')
+            return self.get(request, *args, **kwargs)
+
+        mode = (request.POST.get('mode') or 'create').strip().lower()
+        protocolo_id = (request.POST.get('protocolo_id') or '').strip()
+        nome = (request.POST.get('nome') or '').strip()
+        protocolo = (request.POST.get('protocolo') or '').strip()
+        os_value = (request.POST.get('os') or '').strip()
+
+        if not nome:
+            messages.error(request, 'Informe o nome.')
+            return self.get(request, *args, **kwargs)
+        if not protocolo:
+            messages.error(request, 'Informe o protocolo.')
+            return self.get(request, *args, **kwargs)
+        if not os_value:
+            messages.error(request, 'Informe a OS.')
+            return self.get(request, *args, **kwargs)
+
+        if mode == 'update':
+            protocolo_obj = Protocolo.objects.filter(id=protocolo_id).first()
+            if not protocolo_obj:
+                messages.error(request, 'Registro de protocolo não encontrado para edição.')
+                return redirect('protocolos')
+            protocolo_obj.nome = nome
+            protocolo_obj.protocolo = protocolo
+            protocolo_obj.os = os_value
+            protocolo_obj.save(update_fields=['nome', 'protocolo', 'os', 'updated_at'])
+            messages.success(request, 'Protocolo atualizado com sucesso.')
+            return redirect('protocolos')
+
+        Protocolo.objects.create(
+            nome=nome,
+            protocolo=protocolo,
+            os=os_value,
+        )
+        messages.success(request, 'Protocolo cadastrado com sucesso.')
+        return redirect('protocolos')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        is_ti = is_ti_user(self.request)
+        context['is_ti_group'] = is_ti
+        context['modules'] = build_modules('protocolos') if is_ti else []
+        context['protocolos'] = Protocolo.objects.all().order_by('-id') if is_ti else []
         return context
 
 

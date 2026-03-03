@@ -206,6 +206,20 @@ class Insumo(models.Model):
         return f'{self.item} - {self.name} ({self.date:%d/%m/%Y})'
 
 
+class Protocolo(models.Model):
+    nome = models.CharField(max_length=200)
+    protocolo = models.CharField(max_length=120)
+    os = models.CharField(max_length=120)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-id']
+
+    def __str__(self) -> str:
+        return f'{self.nome} - {self.protocolo}'
+
+
 class Requisition(models.Model):
     class Kind(models.TextChoices):
         PHYSICAL = 'physical', 'Requisicao fisica'
