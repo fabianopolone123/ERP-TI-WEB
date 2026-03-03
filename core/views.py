@@ -2,6 +2,7 @@
 import json
 import secrets
 import mimetypes
+import re
 import unicodedata
 import threading
 from io import BytesIO
@@ -260,6 +261,40 @@ def _update_inventory_refresh_request(
         changed_fields.append('completed_at')
     if changed_fields:
         req.save(update_fields=changed_fields)
+
+
+def _enqueue_inventory_refresh_for_host(host: str, request_user=None) -> tuple[str, str]:
+    normalized_host = (host or '').strip()
+    if not normalized_host:
+        return 'invalid', 'Host não informado para solicitar atualização.'
+    if len(normalized_host) > 120:
+        return 'invalid', f'Host inválido (muito longo): {normalized_host[:60]}...'
+    if not re.match(r'^[A-Za-z0-9._-]+$', normalized_host):
+        return 'invalid', f'Host inválido: {normalized_host}'
+
+    recent_request = (
+        InventoryRefreshRequest.objects.filter(
+            hostname__iexact=normalized_host,
+            status__in=[
+                InventoryRefreshRequest.Status.PENDING,
+                InventoryRefreshRequest.Status.RUNNING,
+            ],
+        )
+        .order_by('-requested_at')
+        .first()
+    )
+    now = timezone.now()
+    if recent_request and (now - recent_request.requested_at) <= timedelta(minutes=10):
+        status_label = dict(InventoryRefreshRequest.Status.choices).get(recent_request.status, recent_request.status)
+        return 'duplicate', f'Já existe solicitação em andamento para {normalized_host} ({status_label}).'
+
+    InventoryRefreshRequest.objects.create(
+        hostname=normalized_host,
+        status=InventoryRefreshRequest.Status.PENDING,
+        requested_by=request_user if getattr(request_user, 'is_authenticated', False) else None,
+        last_message='Solicitação criada no ERP e aguardando o agente da máquina.',
+    )
+    return 'created', f'Solicitação de atualização enviada para {normalized_host}.'
 
 
 class _SafeDict(dict):
@@ -1256,33 +1291,44 @@ class EquipamentosView(LoginRequiredMixin, TemplateView):
                 messages.error(request, 'Host não informado para solicitar atualização de inventário.')
                 return self.get(request, *args, **kwargs)
 
-            recent_request = (
-                InventoryRefreshRequest.objects.filter(
-                    hostname__iexact=host,
-                    status__in=[
-                        InventoryRefreshRequest.Status.PENDING,
-                        InventoryRefreshRequest.Status.RUNNING,
-                    ],
-                )
-                .order_by('-requested_at')
-                .first()
-            )
-            now = timezone.now()
-            if recent_request and (now - recent_request.requested_at) <= timedelta(minutes=10):
-                status_label = dict(InventoryRefreshRequest.Status.choices).get(recent_request.status, recent_request.status)
-                messages.info(
-                    request,
-                    f'Já existe solicitação em andamento para {host} ({status_label}). Aguarde alguns minutos.',
-                )
+            outcome, text = _enqueue_inventory_refresh_for_host(host, request.user)
+            if outcome == 'created':
+                messages.success(request, text)
+            elif outcome == 'duplicate':
+                messages.info(request, text)
+            else:
+                messages.error(request, text)
+            return self.get(request, *args, **kwargs)
+
+        if action == 'request_inventory_refresh_host':
+            hosts_text = (request.POST.get('refresh_hosts') or '').strip()
+            hosts = parse_hosts_text(hosts_text)
+            if not hosts:
+                messages.error(request, 'Informe pelo menos um hostname para atualização (ex.: CPU-022).')
                 return self.get(request, *args, **kwargs)
 
-            InventoryRefreshRequest.objects.create(
-                hostname=host,
-                status=InventoryRefreshRequest.Status.PENDING,
-                requested_by=request.user if getattr(request, 'user', None) and request.user.is_authenticated else None,
-                last_message='Solicitação criada no ERP e aguardando o agente da máquina.',
-            )
-            messages.success(request, f'Solicitação de atualização enviada para {host}.')
+            created_messages: list[str] = []
+            duplicate_messages: list[str] = []
+            invalid_messages: list[str] = []
+            for host in hosts:
+                outcome, text = _enqueue_inventory_refresh_for_host(host, request.user)
+                if outcome == 'created':
+                    created_messages.append(text)
+                elif outcome == 'duplicate':
+                    duplicate_messages.append(text)
+                else:
+                    invalid_messages.append(text)
+
+            if created_messages:
+                messages.success(request, f'Solicitações criadas: {len(created_messages)}.')
+                for line in created_messages[:5]:
+                    messages.info(request, line)
+            if duplicate_messages:
+                for line in duplicate_messages[:5]:
+                    messages.info(request, line)
+            if invalid_messages:
+                for line in invalid_messages[:5]:
+                    messages.error(request, line)
             return self.get(request, *args, **kwargs)
 
         hostname = request.POST.get('hostname', '').strip()
