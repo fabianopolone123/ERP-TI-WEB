@@ -238,106 +238,109 @@
             </table>
         </div>
 
-        <div class="card" data-equipment-detail-panel hidden style="margin-top: 12px; border: 1px solid #1f2a44;">
-            <div class="topbar" style="align-items: flex-start; margin-bottom: 8px;">
-                <div>
-                    <h3 style="margin: 0;">Detalhes do equipamento</h3>
-                    <div class="muted" data-equipment-detail-title style="margin-top: 4px;">Selecione um equipamento na lista.</div>
+        <div class="modal" data-equipment-detail-panel hidden>
+            <div class="modal-backdrop" data-close-equipment-detail></div>
+            <div class="modal-content" style="width: min(1200px, 96vw);">
+                <div class="topbar" style="align-items: flex-start; margin-bottom: 8px;">
+                    <div>
+                        <h3 style="margin: 0;">Detalhes do equipamento</h3>
+                        <div class="muted" data-equipment-detail-title style="margin-top: 4px;">Selecione um equipamento na lista.</div>
+                    </div>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <button type="button" data-equipment-detail-edit>Editar</button>
+                        <button type="button" data-equipment-detail-cancel hidden>Cancelar edição</button>
+                        <button type="button" data-equipment-detail-close data-close-equipment-detail>Fechar</button>
+                    </div>
                 </div>
-                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                    <button type="button" data-equipment-detail-edit>Editar</button>
-                    <button type="button" data-equipment-detail-cancel hidden>Cancelar edição</button>
-                    <button type="button" data-equipment-detail-close>Fechar</button>
-                </div>
-            </div>
 
-            <div class="equipment-actions">
-                <button type="button" data-connect-rdp data-host="" data-rdp-url="">RDP</button>
-                <a href="#" data-connect-rdp-file>Baixar RDP</a>
-                <button type="button" data-connect-vnc data-host="" data-label="">VNC</button>
-                <form method="post" class="inline-form" data-preserve-equipment-scroll style="margin: 0;">
+                <div class="equipment-actions">
+                    <button type="button" data-connect-rdp data-host="" data-rdp-url="">RDP</button>
+                    <a href="#" data-connect-rdp-file>Baixar RDP</a>
+                    <button type="button" data-connect-vnc data-host="" data-label="">VNC</button>
+                    <form method="post" class="inline-form" data-preserve-equipment-scroll style="margin: 0;">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="request_inventory_refresh" />
+                        <input type="hidden" name="equipment_id" value="" data-equipment-detail-refresh-id />
+                        <button type="submit" title="Solicitar atualização sob demanda ao agente da máquina">Atualizar</button>
+                    </form>
+                </div>
+
+                <form method="post" data-equipment-detail-form data-preserve-equipment-scroll>
                     {% csrf_token %}
-                    <input type="hidden" name="action" value="request_inventory_refresh" />
-                    <input type="hidden" name="equipment_id" value="" data-equipment-detail-refresh-id />
-                    <button type="submit" title="Solicitar atualização sob demanda ao agente da máquina">Atualizar</button>
+                    <input type="hidden" name="action" value="update" />
+                    <input type="hidden" name="equipment_id" value="" data-equipment-detail-id />
+                    <input type="hidden" name="tag_code" value="" data-equipment-detail-tag />
+                    <div class="equipment-detail-fields">
+                        <div>
+                            <label>Etiqueta</label>
+                            <div class="muted" data-equipment-detail-tag-label style="margin-top: 8px; font-weight: 700;">-</div>
+                        </div>
+                        <div>
+                            <label for="id_detail_hostname">Host</label>
+                            <input id="id_detail_hostname" name="hostname" type="text" data-detail-field disabled />
+                        </div>
+                        <div>
+                            <label for="id_detail_sector">Setor</label>
+                            <input id="id_detail_sector" name="sector" type="text" data-detail-field disabled />
+                        </div>
+                        <div>
+                            <label for="id_detail_user">Usuário</label>
+                            <input id="id_detail_user" name="user" type="text" data-detail-field disabled />
+                        </div>
+                        <div>
+                            <label for="id_detail_equipment">Equipamento</label>
+                            <input id="id_detail_equipment" name="equipment" type="text" data-detail-field disabled />
+                        </div>
+                        <div>
+                            <label for="id_detail_model">Modelo</label>
+                            <input id="id_detail_model" name="model" type="text" data-detail-field disabled />
+                        </div>
+                        <div>
+                            <label for="id_detail_brand">Marca</label>
+                            <input id="id_detail_brand" name="brand" type="text" data-detail-field disabled />
+                        </div>
+                        <div>
+                            <label for="id_detail_serial">Série</label>
+                            <input id="id_detail_serial" name="serial" type="text" data-detail-field disabled />
+                        </div>
+                        <div>
+                            <label for="id_detail_memory">Memória</label>
+                            <input id="id_detail_memory" name="memory" type="text" data-detail-field disabled />
+                        </div>
+                        <div>
+                            <label for="id_detail_processor">Processador</label>
+                            <input id="id_detail_processor" name="processor" type="text" data-detail-field disabled />
+                        </div>
+                        <div>
+                            <label for="id_detail_generation">Geração</label>
+                            <input id="id_detail_generation" name="generation" type="text" data-detail-field disabled />
+                        </div>
+                        <div>
+                            <label for="id_detail_hd">HD</label>
+                            <input id="id_detail_hd" name="hd" type="text" data-detail-field disabled />
+                        </div>
+                        <div>
+                            <label for="id_detail_mod_hd">MOD HD</label>
+                            <input id="id_detail_mod_hd" name="mod_hd" type="text" data-detail-field disabled />
+                        </div>
+                        <div>
+                            <label for="id_detail_windows">Windows</label>
+                            <input id="id_detail_windows" name="windows" type="text" data-detail-field disabled />
+                        </div>
+                        <div>
+                            <label for="id_detail_alimentacao">Alimentacao</label>
+                            <input id="id_detail_alimentacao" name="alimentacao" type="text" data-detail-field disabled />
+                        </div>
+                        <div style="grid-column: 1 / -1;">
+                            <label for="id_detail_observacao">Observacao</label>
+                            <textarea id="id_detail_observacao" name="observacao" rows="3" data-detail-field disabled></textarea>
+                        </div>
+                    </div>
+                    <div style="display: flex; justify-content: flex-end; margin-top: 12px;">
+                        <button type="submit" data-equipment-detail-save hidden>Salvar alterações</button>
+                    </div>
                 </form>
             </div>
-
-            <form method="post" data-equipment-detail-form data-preserve-equipment-scroll>
-                {% csrf_token %}
-                <input type="hidden" name="action" value="update" />
-                <input type="hidden" name="equipment_id" value="" data-equipment-detail-id />
-                <input type="hidden" name="tag_code" value="" data-equipment-detail-tag />
-                <div class="equipment-detail-fields">
-                    <div>
-                        <label>Etiqueta</label>
-                        <div class="muted" data-equipment-detail-tag-label style="margin-top: 8px; font-weight: 700;">-</div>
-                    </div>
-                    <div>
-                        <label for="id_detail_hostname">Host</label>
-                        <input id="id_detail_hostname" name="hostname" type="text" data-detail-field disabled />
-                    </div>
-                    <div>
-                        <label for="id_detail_sector">Setor</label>
-                        <input id="id_detail_sector" name="sector" type="text" data-detail-field disabled />
-                    </div>
-                    <div>
-                        <label for="id_detail_user">Usuário</label>
-                        <input id="id_detail_user" name="user" type="text" data-detail-field disabled />
-                    </div>
-                    <div>
-                        <label for="id_detail_equipment">Equipamento</label>
-                        <input id="id_detail_equipment" name="equipment" type="text" data-detail-field disabled />
-                    </div>
-                    <div>
-                        <label for="id_detail_model">Modelo</label>
-                        <input id="id_detail_model" name="model" type="text" data-detail-field disabled />
-                    </div>
-                    <div>
-                        <label for="id_detail_brand">Marca</label>
-                        <input id="id_detail_brand" name="brand" type="text" data-detail-field disabled />
-                    </div>
-                    <div>
-                        <label for="id_detail_serial">Série</label>
-                        <input id="id_detail_serial" name="serial" type="text" data-detail-field disabled />
-                    </div>
-                    <div>
-                        <label for="id_detail_memory">Memória</label>
-                        <input id="id_detail_memory" name="memory" type="text" data-detail-field disabled />
-                    </div>
-                    <div>
-                        <label for="id_detail_processor">Processador</label>
-                        <input id="id_detail_processor" name="processor" type="text" data-detail-field disabled />
-                    </div>
-                    <div>
-                        <label for="id_detail_generation">Geração</label>
-                        <input id="id_detail_generation" name="generation" type="text" data-detail-field disabled />
-                    </div>
-                    <div>
-                        <label for="id_detail_hd">HD</label>
-                        <input id="id_detail_hd" name="hd" type="text" data-detail-field disabled />
-                    </div>
-                    <div>
-                        <label for="id_detail_mod_hd">MOD HD</label>
-                        <input id="id_detail_mod_hd" name="mod_hd" type="text" data-detail-field disabled />
-                    </div>
-                    <div>
-                        <label for="id_detail_windows">Windows</label>
-                        <input id="id_detail_windows" name="windows" type="text" data-detail-field disabled />
-                    </div>
-                    <div>
-                        <label for="id_detail_alimentacao">Alimentacao</label>
-                        <input id="id_detail_alimentacao" name="alimentacao" type="text" data-detail-field disabled />
-                    </div>
-                    <div style="grid-column: 1 / -1;">
-                        <label for="id_detail_observacao">Observacao</label>
-                        <textarea id="id_detail_observacao" name="observacao" rows="3" data-detail-field disabled></textarea>
-                    </div>
-                </div>
-                <div style="display: flex; justify-content: flex-end; margin-top: 12px;">
-                    <button type="submit" data-equipment-detail-save hidden>Salvar alterações</button>
-                </div>
-            </form>
         </div>
     {% else %}
         <p>Solicite ao administrador a inclusão no departamento <strong>TI</strong>.</p>
@@ -595,7 +598,7 @@
         if (!panel || !rows.length) return;
 
         const titleEl = panel.querySelector('[data-equipment-detail-title]');
-        const closeBtn = panel.querySelector('[data-equipment-detail-close]');
+        const closeEls = panel.querySelectorAll('[data-close-equipment-detail], [data-equipment-detail-close]');
         const editBtn = panel.querySelector('[data-equipment-detail-edit]');
         const cancelBtn = panel.querySelector('[data-equipment-detail-cancel]');
         const saveBtn = panel.querySelector('[data-equipment-detail-save]');
@@ -729,9 +732,7 @@
                 applyRowData(selectedRow);
             });
         }
-        if (closeBtn) {
-            closeBtn.addEventListener('click', closePanel);
-        }
+        closeEls.forEach((el) => el.addEventListener('click', closePanel));
 
         detailForm.addEventListener('submit', (event) => {
             if (!selectedRow) {
