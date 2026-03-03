@@ -51,6 +51,7 @@ from .models import (
     Requisition,
     RequisitionQuote,
     RequisitionQuoteAttachment,
+    RequisitionQuoteDiscount,
     AccessFolder,
     AccessMember,
     AuditLog,
@@ -1847,6 +1848,10 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
             quantity_raw = (request.POST.get(f'budget_quantity_{idx}') or '').strip()
             value_raw = (request.POST.get(f'budget_value_{idx}') or '').strip()
             freight_raw = (request.POST.get(f'budget_freight_{idx}') or '').strip()
+            payment_method_raw = (request.POST.get(f'budget_payment_method_{idx}') or '').strip()
+            payment_installments_raw = (request.POST.get(f'budget_payment_installments_{idx}') or '').strip()
+            discount_add_raw = (request.POST.get(f'budget_discount_add_{idx}') or '').strip()
+            discount_note = (request.POST.get(f'budget_discount_note_{idx}') or '').strip()
             link = (request.POST.get(f'budget_link_{idx}') or '').strip()
             photo = request.FILES.get(f'budget_photo_{idx}')
             uploaded_files = request.FILES.getlist(f'budget_files_{idx}')
@@ -1879,12 +1884,34 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
             except (InvalidOperation, ValueError):
                 return 0, f'Orçamento #{idx}: frete inválido.'
 
+            payment_method = ''
+            payment_installments = 1
+            if is_digital:
+                payment_method = payment_method_raw
+                try:
+                    payment_installments = int(payment_installments_raw or '1')
+                except ValueError:
+                    return 0, f'Orçamento #{idx}: parcelas inválidas.'
+                if payment_installments <= 0:
+                    return 0, f'Orçamento #{idx}: parcelas devem ser maiores que zero.'
+
+            discount_add = Decimal('0')
+            if is_digital and discount_add_raw:
+                try:
+                    discount_add = self._parse_decimal_br(discount_add_raw)
+                except (InvalidOperation, ValueError):
+                    return 0, f'Orçamento #{idx}: desconto inválido.'
+                if discount_add <= 0:
+                    return 0, f'Orçamento #{idx}: desconto deve ser maior que zero.'
+
             if update_mode and quote_id and quote_id in existing_quotes:
                 quote = existing_quotes[quote_id]
                 quote.name = name
                 quote.quantity = quantity
                 quote.value = value
                 quote.freight = freight
+                quote.payment_method = payment_method if is_digital else ''
+                quote.payment_installments = payment_installments if is_digital else 1
                 quote.link = link
                 quote.parent = None
                 quote.is_selected = False
@@ -1892,7 +1919,25 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
                     quote.photo = photo
                     quote.save()
                 else:
-                    quote.save(update_fields=['name', 'quantity', 'value', 'freight', 'link', 'parent', 'is_selected'])
+                    quote.save(
+                        update_fields=[
+                            'name',
+                            'quantity',
+                            'value',
+                            'freight',
+                            'payment_method',
+                            'payment_installments',
+                            'link',
+                            'parent',
+                            'is_selected',
+                        ]
+                    )
+                if is_digital and discount_add > 0:
+                    RequisitionQuoteDiscount.objects.create(
+                        quote=quote,
+                        amount=discount_add,
+                        note=discount_note,
+                    )
                 if is_digital:
                     for file_obj in uploaded_files:
                         if file_obj:
@@ -1911,12 +1956,16 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
                 quantity=quantity,
                 value=value,
                 freight=freight,
+                payment_method=payment_method if is_digital else '',
+                payment_installments=payment_installments if is_digital else 1,
                 is_selected=False,
                 link=link,
                 photo=photo,
             )
-            if not photo and source_quote_id:
+            source_quote = None
+            if source_quote_id:
                 source_quote = RequisitionQuote.objects.filter(id=source_quote_id).first()
+            if not photo and source_quote_id:
                 if source_quote and source_quote.photo:
                     created.photo = source_quote.photo.name
                     created.save(update_fields=['photo'])
@@ -1924,6 +1973,28 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
                     for src_attachment in source_quote.attachments.all():
                         if src_attachment.file:
                             RequisitionQuoteAttachment.objects.create(quote=created, file=src_attachment.file.name)
+                    if not created.payment_method and source_quote.payment_method:
+                        created.payment_method = source_quote.payment_method
+                        created.save(update_fields=['payment_method'])
+                    if (
+                        int(created.payment_installments or 1) <= 1
+                        and int(source_quote.payment_installments or 1) > 1
+                        and not payment_installments_raw
+                    ):
+                        created.payment_installments = int(source_quote.payment_installments or 1)
+                        created.save(update_fields=['payment_installments'])
+                    for src_discount in source_quote.discount_entries.all():
+                        RequisitionQuoteDiscount.objects.create(
+                            quote=created,
+                            amount=src_discount.amount,
+                            note=src_discount.note,
+                        )
+            if is_digital and discount_add > 0:
+                RequisitionQuoteDiscount.objects.create(
+                    quote=created,
+                    amount=discount_add,
+                    note=discount_note,
+                )
             if is_digital:
                 for file_obj in uploaded_files:
                     if file_obj:
@@ -2238,7 +2309,7 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
 
         requisitions = (
             Requisition.objects
-            .prefetch_related('quotes__subquotes', 'quotes__attachments')
+            .prefetch_related('quotes__subquotes', 'quotes__attachments', 'quotes__discount_entries')
             .order_by('-created_at', '-id')
         )
         for req in requisitions:
@@ -2260,10 +2331,24 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
             for quote in main_quotes:
                 quote.sub_items = subs_by_parent.get(quote.id, [])
                 quote.sub_items_count = len(quote.sub_items)
+                quote_discount_items = list(quote.discount_entries.all())
+                quote.discount_items = quote_discount_items
+                quote.discount_total = sum((entry.amount or Decimal('0')) for entry in quote_discount_items)
+                quote.payment_installments = max(int(quote.payment_installments or 1), 1)
+                quote.payment_method = (quote.payment_method or '').strip()
                 package_total = (Decimal(quote.quantity or 1) * (quote.value or Decimal('0'))) + (quote.freight or Decimal('0'))
+                package_discount_total = quote.discount_total
                 for sub_item in quote.sub_items:
+                    sub_discount_items = list(sub_item.discount_entries.all())
+                    sub_item.discount_items = sub_discount_items
+                    sub_item.discount_total = sum((entry.amount or Decimal('0')) for entry in sub_discount_items)
+                    sub_item.payment_installments = max(int(sub_item.payment_installments or 1), 1)
+                    sub_item.payment_method = (sub_item.payment_method or '').strip()
                     package_total += (Decimal(sub_item.quantity or 1) * (sub_item.value or Decimal('0'))) + (sub_item.freight or Decimal('0'))
+                    package_discount_total += sub_item.discount_total
                 quote.package_total = package_total
+                quote.package_discount_total = package_discount_total
+                quote.package_total_net = max(package_total - package_discount_total, Decimal('0'))
                 quote.is_display_selected = quote.id in approved_quote_ids
                 quote.attachment_items = list(quote.attachments.all())
 
@@ -2292,9 +2377,11 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
                 total = Decimal('0')
                 for selected_item in selected_mains:
                     selected_total = (Decimal(selected_item.quantity or 1) * (selected_item.value or Decimal('0'))) + (selected_item.freight or Decimal('0'))
+                    selected_discount_total = selected_item.discount_total if hasattr(selected_item, 'discount_total') else Decimal('0')
                     for sub_item in getattr(selected_item, 'sub_items', []):
                         selected_total += (Decimal(sub_item.quantity or 1) * (sub_item.value or Decimal('0'))) + (sub_item.freight or Decimal('0'))
-                    total += selected_total
+                        selected_discount_total += sub_item.discount_total if hasattr(sub_item, 'discount_total') else Decimal('0')
+                    total += max(selected_total - selected_discount_total, Decimal('0'))
                 req.quotes_total = total
             else:
                 req.quotes_total = None

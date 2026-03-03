@@ -280,6 +280,8 @@ class RequisitionQuote(models.Model):
     quantity = models.PositiveIntegerField(default=1)
     value = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     freight = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    payment_method = models.CharField(max_length=120, blank=True, default='')
+    payment_installments = models.PositiveIntegerField(default=1)
     is_selected = models.BooleanField(default=False)
     photo = models.ImageField(upload_to='requisitions/quotes/', null=True, blank=True)
     link = models.URLField(blank=True, default='')
@@ -298,6 +300,19 @@ class RequisitionQuoteAttachment(models.Model):
 
     def __str__(self) -> str:
         return f'Anexo orcamento {self.quote_id} - {self.id}'
+
+
+class RequisitionQuoteDiscount(models.Model):
+    quote = models.ForeignKey(RequisitionQuote, on_delete=models.CASCADE, related_name='discount_entries')
+    amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    note = models.CharField(max_length=300, blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+    def __str__(self) -> str:
+        return f'Desconto orcamento {self.quote_id} - {self.amount}'
 
 
 class AccessFolder(models.Model):
