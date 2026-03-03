@@ -1828,6 +1828,95 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
             raise InvalidOperation
         return value
 
+    def _parse_price_history_payload(self, raw_json: str, idx: str) -> tuple[list[dict], str | None]:
+        raw = (raw_json or '').strip()
+        if not raw:
+            return [], None
+        try:
+            parsed = json.loads(raw)
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return [], f'Orçamento #{idx}: histórico de preço inválido.'
+        if not isinstance(parsed, list):
+            return [], f'Orçamento #{idx}: histórico de preço inválido.'
+
+        normalized_items: list[dict] = []
+        for entry in parsed:
+            if not isinstance(entry, dict):
+                continue
+            previous_raw = entry.get('previous_value')
+            updated_raw = entry.get('updated_value')
+            if previous_raw in (None, '') or updated_raw in (None, ''):
+                continue
+            try:
+                previous_value = self._parse_decimal_br(str(previous_raw))
+                updated_value = self._parse_decimal_br(str(updated_raw))
+            except (InvalidOperation, ValueError):
+                return [], f'Orçamento #{idx}: histórico de preço inválido.'
+
+            changed_at = None
+            changed_at_raw = str(entry.get('changed_at') or '').strip()
+            if changed_at_raw:
+                candidate = changed_at_raw
+                if candidate.endswith('Z'):
+                    candidate = f'{candidate[:-1]}+00:00'
+                try:
+                    dt_value = datetime.fromisoformat(candidate)
+                    if timezone.is_naive(dt_value):
+                        dt_value = timezone.make_aware(dt_value, timezone.get_current_timezone())
+                    changed_at = timezone.localtime(dt_value)
+                except ValueError:
+                    changed_at = None
+
+            entry_id = None
+            entry_id_raw = str(entry.get('id') or '').strip()
+            if entry_id_raw.isdigit():
+                entry_id = int(entry_id_raw)
+
+            normalized_items.append(
+                {
+                    'id': entry_id,
+                    'previous_value': previous_value,
+                    'updated_value': updated_value,
+                    'note': str(entry.get('note') or '').strip()[:300],
+                    'changed_at': changed_at,
+                }
+            )
+        return normalized_items, None
+
+    @staticmethod
+    def _sync_quote_price_history(quote: RequisitionQuote, history_items: list[dict]) -> None:
+        existing_by_id = {item.id: item for item in quote.discount_entries.all()}
+        keep_ids: set[int] = set()
+
+        for item in history_items:
+            previous_value = item.get('previous_value')
+            updated_value = item.get('updated_value')
+            delta_amount = (previous_value - updated_value) if previous_value is not None and updated_value is not None else Decimal('0')
+            payload = {
+                'amount': delta_amount,
+                'previous_value': previous_value,
+                'updated_value': updated_value,
+                'changed_at': item.get('changed_at'),
+                'note': item.get('note') or '',
+            }
+
+            entry_id = item.get('id')
+            if entry_id and entry_id in existing_by_id:
+                entry = existing_by_id[entry_id]
+                entry.amount = payload['amount']
+                entry.previous_value = payload['previous_value']
+                entry.updated_value = payload['updated_value']
+                entry.changed_at = payload['changed_at']
+                entry.note = payload['note']
+                entry.save(update_fields=['amount', 'previous_value', 'updated_value', 'changed_at', 'note'])
+                keep_ids.add(entry.id)
+                continue
+
+            created = RequisitionQuoteDiscount.objects.create(quote=quote, **payload)
+            keep_ids.add(created.id)
+
+        quote.discount_entries.exclude(id__in=keep_ids).delete()
+
     def _save_quotes(self, request, requisition: Requisition, update_mode: bool = False) -> tuple[int, str | None]:
         existing_quotes = {}
         if update_mode:
@@ -1850,8 +1939,7 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
             freight_raw = (request.POST.get(f'budget_freight_{idx}') or '').strip()
             payment_method_raw = (request.POST.get(f'budget_payment_method_{idx}') or '').strip()
             payment_installments_raw = (request.POST.get(f'budget_payment_installments_{idx}') or '').strip()
-            discount_add_raw = (request.POST.get(f'budget_discount_add_{idx}') or '').strip()
-            discount_note = (request.POST.get(f'budget_discount_note_{idx}') or '').strip()
+            price_history_raw = (request.POST.get(f'budget_price_history_json_{idx}') or '').strip()
             link = (request.POST.get(f'budget_link_{idx}') or '').strip()
             photo = request.FILES.get(f'budget_photo_{idx}')
             uploaded_files = request.FILES.getlist(f'budget_files_{idx}')
@@ -1894,15 +1982,11 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
                     return 0, f'Orçamento #{idx}: parcelas inválidas.'
                 if payment_installments <= 0:
                     return 0, f'Orçamento #{idx}: parcelas devem ser maiores que zero.'
-
-            discount_add = Decimal('0')
-            if is_digital and discount_add_raw:
-                try:
-                    discount_add = self._parse_decimal_br(discount_add_raw)
-                except (InvalidOperation, ValueError):
-                    return 0, f'Orçamento #{idx}: desconto inválido.'
-                if discount_add <= 0:
-                    return 0, f'Orçamento #{idx}: desconto deve ser maior que zero.'
+            price_history_items: list[dict] = []
+            if is_digital:
+                price_history_items, history_error = self._parse_price_history_payload(price_history_raw, idx)
+                if history_error:
+                    return 0, history_error
 
             if update_mode and quote_id and quote_id in existing_quotes:
                 quote = existing_quotes[quote_id]
@@ -1932,17 +2016,13 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
                             'is_selected',
                         ]
                     )
-                if is_digital and discount_add > 0:
-                    RequisitionQuoteDiscount.objects.create(
-                        quote=quote,
-                        amount=discount_add,
-                        note=discount_note,
-                    )
                 if is_digital:
+                    self._sync_quote_price_history(quote, price_history_items)
                     for file_obj in uploaded_files:
                         if file_obj:
                             RequisitionQuoteAttachment.objects.create(quote=quote, file=file_obj)
                 else:
+                    quote.discount_entries.all().delete()
                     quote.attachments.all().delete()
                 kept_ids.add(quote.id)
                 idx_to_quote[idx] = quote
@@ -1983,19 +2063,21 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
                     ):
                         created.payment_installments = int(source_quote.payment_installments or 1)
                         created.save(update_fields=['payment_installments'])
-                    for src_discount in source_quote.discount_entries.all():
-                        RequisitionQuoteDiscount.objects.create(
-                            quote=created,
-                            amount=src_discount.amount,
-                            note=src_discount.note,
-                        )
-            if is_digital and discount_add > 0:
-                RequisitionQuoteDiscount.objects.create(
-                    quote=created,
-                    amount=discount_add,
-                    note=discount_note,
-                )
+                    if not price_history_items:
+                        for src_entry in source_quote.discount_entries.all():
+                            if src_entry.previous_value is None or src_entry.updated_value is None:
+                                continue
+                            price_history_items.append(
+                                {
+                                    'id': None,
+                                    'previous_value': src_entry.previous_value,
+                                    'updated_value': src_entry.updated_value,
+                                    'note': src_entry.note or '',
+                                    'changed_at': src_entry.changed_at or src_entry.created_at,
+                                }
+                            )
             if is_digital:
+                self._sync_quote_price_history(created, price_history_items)
                 for file_obj in uploaded_files:
                     if file_obj:
                         RequisitionQuoteAttachment.objects.create(quote=created, file=file_obj)
@@ -2331,24 +2413,22 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
             for quote in main_quotes:
                 quote.sub_items = subs_by_parent.get(quote.id, [])
                 quote.sub_items_count = len(quote.sub_items)
-                quote_discount_items = list(quote.discount_entries.all())
-                quote.discount_items = quote_discount_items
-                quote.discount_total = sum((entry.amount or Decimal('0')) for entry in quote_discount_items)
+                quote.discount_items = list(
+                    quote.discount_entries.exclude(previous_value__isnull=True).exclude(updated_value__isnull=True)
+                )
+                quote.price_history_count = len(quote.discount_items)
                 quote.payment_installments = max(int(quote.payment_installments or 1), 1)
                 quote.payment_method = (quote.payment_method or '').strip()
                 package_total = (Decimal(quote.quantity or 1) * (quote.value or Decimal('0'))) + (quote.freight or Decimal('0'))
-                package_discount_total = quote.discount_total
                 for sub_item in quote.sub_items:
-                    sub_discount_items = list(sub_item.discount_entries.all())
-                    sub_item.discount_items = sub_discount_items
-                    sub_item.discount_total = sum((entry.amount or Decimal('0')) for entry in sub_discount_items)
+                    sub_item.discount_items = list(
+                        sub_item.discount_entries.exclude(previous_value__isnull=True).exclude(updated_value__isnull=True)
+                    )
+                    sub_item.price_history_count = len(sub_item.discount_items)
                     sub_item.payment_installments = max(int(sub_item.payment_installments or 1), 1)
                     sub_item.payment_method = (sub_item.payment_method or '').strip()
                     package_total += (Decimal(sub_item.quantity or 1) * (sub_item.value or Decimal('0'))) + (sub_item.freight or Decimal('0'))
-                    package_discount_total += sub_item.discount_total
                 quote.package_total = package_total
-                quote.package_discount_total = package_discount_total
-                quote.package_total_net = max(package_total - package_discount_total, Decimal('0'))
                 quote.is_display_selected = quote.id in approved_quote_ids
                 quote.attachment_items = list(quote.attachments.all())
 
@@ -2377,11 +2457,9 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
                 total = Decimal('0')
                 for selected_item in selected_mains:
                     selected_total = (Decimal(selected_item.quantity or 1) * (selected_item.value or Decimal('0'))) + (selected_item.freight or Decimal('0'))
-                    selected_discount_total = selected_item.discount_total if hasattr(selected_item, 'discount_total') else Decimal('0')
                     for sub_item in getattr(selected_item, 'sub_items', []):
                         selected_total += (Decimal(sub_item.quantity or 1) * (sub_item.value or Decimal('0'))) + (sub_item.freight or Decimal('0'))
-                        selected_discount_total += sub_item.discount_total if hasattr(sub_item, 'discount_total') else Decimal('0')
-                    total += max(selected_total - selected_discount_total, Decimal('0'))
+                    total += selected_total
                 req.quotes_total = total
             else:
                 req.quotes_total = None

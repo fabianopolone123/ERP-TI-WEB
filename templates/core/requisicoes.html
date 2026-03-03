@@ -219,7 +219,7 @@
                                     <div class="muted" style="margin-top: 4px;">
                                         {% for quote in item.main_quotes %}
                                             <div style="margin-bottom: 6px;">
-                                                {{ quote.name }} (Qtd: {{ quote.quantity|default:1 }} | Unitário: R$ {{ quote.value|br_money }} | Total bruto: R$ {{ quote.package_total|br_money }}{% if quote.package_discount_total > 0 %} | Desconto: R$ {{ quote.package_discount_total|br_money }} | Total líquido: R$ {{ quote.package_total_net|br_money }}{% endif %}{% if item.kind == 'digital' and quote.payment_method %} | Pagamento: {{ quote.payment_method }}{% endif %}{% if item.kind == 'digital' and quote.payment_installments > 1 %} | Parcelas: {{ quote.payment_installments }}x{% endif %})
+                                                {{ quote.name }} (Qtd: {{ quote.quantity|default:1 }} | Unitário: R$ {{ quote.value|br_money }} | Total: R$ {{ quote.package_total|br_money }}{% if item.kind == 'digital' and quote.payment_method %} | Pagamento: {{ quote.payment_method }}{% endif %}{% if item.kind == 'digital' and quote.payment_installments > 1 %} | Parcelas: {{ quote.payment_installments }}x{% endif %}{% if item.kind == 'digital' and quote.price_history_count > 0 %} | Histórico de preço: {{ quote.price_history_count }} atualização(ões){% endif %})
                                                 {% if quote.is_display_selected %}
                                                     <span class="status-pill status-approved" style="margin-left: 6px;">Aprovado</span>
                                                 {% endif %}
@@ -503,20 +503,21 @@
                 <input type="number" min="1" step="1" value="1" data-field="payment-installments" />
             </div>
             <div>
-                <label>Adicionar desconto</label>
-                <input type="text" data-field="discount-add" placeholder="Ex.: 150,00" />
+                <label>Valor atualizado</label>
+                <input type="text" data-field="value-update" placeholder="Ex.: 1.550,00" />
             </div>
             <div style="flex: 2;">
-                <label>Observação do desconto</label>
-                <input type="text" data-field="discount-note" placeholder="Ex.: Negociação comercial - fornecedor X" />
+                <label>Observação da atualização</label>
+                <input type="text" data-field="value-update-note" placeholder="Ex.: Negociação comercial - fornecedor X" />
+            </div>
+            <div>
+                <label>&nbsp;</label>
+                <button type="button" data-apply-price-update>Adicionar</button>
             </div>
         </div>
-        <input type="hidden" data-field="discount-history-json" value="[]" />
-        <div class="muted" data-discount-total style="margin-top: 4px; font-size: 0.82rem; display: none;">
-            Descontos registrados: R$ 0,00
-        </div>
-        <div class="muted" data-discount-history-list style="margin-top: 4px; font-size: 0.82rem; display: none;">
-            Histórico de descontos: nenhum
+        <input type="hidden" data-field="price-history-json" value="[]" />
+        <div class="muted" data-price-history-list style="margin-top: 4px; font-size: 0.82rem; display: none;">
+            Histórico de preço: nenhum
         </div>
         <div class="muted" data-budget-created-at style="margin-top: 6px; font-size: 0.82rem;">
             Cadastrado em: novo (data/hora atual ao salvar)
@@ -554,12 +555,14 @@
                         link: "{{ quote.link|escapejs }}",
                         created_at: "{{ quote.created_at|date:'d/m/Y H:i'|escapejs }}",
                         photo_url: "{% if quote.photo %}{{ quote.photo.url|escapejs }}{% endif %}",
-                        discount_history: [
+                        price_history: [
                             {% for discount_item in quote.discount_entries.all %}
                             {
-                                amount: "{{ discount_item.amount|floatformat:2|escapejs }}",
+                                id: {{ discount_item.id }},
+                                previous_value: "{% if discount_item.previous_value is not None %}{{ discount_item.previous_value|floatformat:2|escapejs }}{% else %}{% endif %}",
+                                updated_value: "{% if discount_item.updated_value is not None %}{{ discount_item.updated_value|floatformat:2|escapejs }}{% else %}{% endif %}",
                                 note: "{{ discount_item.note|escapejs }}",
-                                created_at: "{{ discount_item.created_at|date:'d/m/Y H:i'|escapejs }}",
+                                changed_at: "{% if discount_item.changed_at %}{{ discount_item.changed_at|date:'c'|escapejs }}{% else %}{{ discount_item.created_at|date:'c'|escapejs }}{% endif %}",
                             }{% if not forloop.last %},{% endif %}
                             {% endfor %}
                         ],
@@ -651,8 +654,7 @@
             const photoBlock = item.querySelector('[data-photo-block]');
             const filesBlock = item.querySelector('[data-files-block]');
             const paymentBlock = item.querySelector('[data-payment-block]');
-            const discountTotalEl = item.querySelector('[data-discount-total]');
-            const discountHistoryEl = item.querySelector('[data-discount-history-list]');
+            const priceHistoryEl = item.querySelector('[data-price-history-list]');
             const photoInput = item.querySelector('[data-field="photo"]');
             const captureBtn = item.querySelector('[data-capture-budget]');
             const singleWrap = item.querySelector('[data-approve-single-wrap]');
@@ -661,15 +663,14 @@
             const multiInput = item.querySelector('[data-field="approved-multi"]');
             const paymentMethodInput = item.querySelector('[data-field="payment-method"]');
             const paymentInstallmentsInput = item.querySelector('[data-field="payment-installments"]');
-            const discountAddInput = item.querySelector('[data-field="discount-add"]');
-            const discountNoteInput = item.querySelector('[data-field="discount-note"]');
+            const valueUpdateInput = item.querySelector('[data-field="value-update"]');
+            const valueUpdateNoteInput = item.querySelector('[data-field="value-update-note"]');
             const isSub = !!itemParentIdx(item);
 
             if (photoBlock) photoBlock.style.display = isDigital ? 'none' : '';
             if (filesBlock) filesBlock.style.display = isDigital ? '' : 'none';
             if (paymentBlock) paymentBlock.style.display = isDigital ? '' : 'none';
-            if (discountTotalEl) discountTotalEl.style.display = isDigital ? '' : 'none';
-            if (discountHistoryEl) discountHistoryEl.style.display = isDigital ? '' : 'none';
+            if (priceHistoryEl) priceHistoryEl.style.display = isDigital ? '' : 'none';
             if (photoInput) photoInput.disabled = isDigital;
             if (captureBtn) captureBtn.style.display = isDigital ? 'none' : '';
             if (singleWrap) singleWrap.style.display = isDigital ? 'none' : '';
@@ -684,8 +685,8 @@
             }
             if (paymentMethodInput) paymentMethodInput.disabled = !isDigital;
             if (paymentInstallmentsInput) paymentInstallmentsInput.disabled = !isDigital;
-            if (discountAddInput) discountAddInput.disabled = !isDigital;
-            if (discountNoteInput) discountNoteInput.disabled = !isDigital;
+            if (valueUpdateInput) valueUpdateInput.disabled = !isDigital;
+            if (valueUpdateNoteInput) valueUpdateNoteInput.disabled = !isDigital;
         };
         const applyRequisitionKindMode = () => {
             allBudgetItems().forEach((item) => applyBudgetItemMode(item));
@@ -780,7 +781,7 @@
             const n = Number.parseInt((value || '').toString().trim(), 10);
             return Number.isFinite(n) && n > 0 ? n : 1;
         };
-        const parseDiscountHistoryJson = (rawValue) => {
+        const parsePriceHistoryJson = (rawValue) => {
             const raw = (rawValue || '').toString().trim();
             if (!raw) return [];
             try {
@@ -788,16 +789,24 @@
                 if (!Array.isArray(parsed)) return [];
                 return parsed
                     .map((entry) => ({
-                        amount: Number(parseBrNumber(entry?.amount || 0)),
+                        id: entry?.id ? Number(entry.id) : null,
+                        previous_value: Number(parseBrNumber(entry?.previous_value || 0)),
+                        updated_value: Number(parseBrNumber(entry?.updated_value || 0)),
                         note: String(entry?.note || '').trim(),
-                        created_at: String(entry?.created_at || '').trim(),
+                        changed_at: String(entry?.changed_at || '').trim(),
                     }))
-                    .filter((entry) => entry.amount > 0);
+                    .filter((entry) => entry.previous_value > 0 && entry.updated_value > 0);
             } catch (_) {
                 return [];
             }
         };
-        const sumDiscountHistory = (entries) => (Array.isArray(entries) ? entries.reduce((acc, item) => acc + Number(item.amount || 0), 0) : 0);
+        const formatHistoryDate = (rawValue) => {
+            const raw = (rawValue || '').toString().trim();
+            if (!raw) return '-';
+            const dateObj = new Date(raw);
+            if (Number.isNaN(dateObj.getTime())) return raw;
+            return dateObj.toLocaleString('pt-BR');
+        };
         const paymentInstallmentsLabel = (value) => {
             const count = parsePositiveInt(value);
             return count > 1 ? `${count}x` : 'a vista';
@@ -933,28 +942,18 @@
                 if (!packageEl) return;
 
                 let total = 0;
-                let discountTotal = 0;
                 const mainQty = parsePositiveInt(mainItem.querySelector('[data-field="quantity"]')?.value || '1');
                 const mainValue = parseBrNumber(mainItem.querySelector('[data-field="value"]')?.value || '');
                 const mainFreight = parseBrNumber(mainItem.querySelector('[data-field="freight"]')?.value || '');
                 total += (mainQty * mainValue) + mainFreight;
-                const mainDiscountHistory = parseDiscountHistoryJson(mainItem.querySelector('[data-field="discount-history-json"]')?.value || '[]');
-                discountTotal += sumDiscountHistory(mainDiscountHistory);
-                discountTotal += Math.max(parseBrNumber(mainItem.querySelector('[data-field="discount-add"]')?.value || ''), 0);
 
                 const subItems = subsByParent.get(mainIdx) || [];
                 subItems.forEach((subItem) => {
                     const subQty = parsePositiveInt(subItem.querySelector('[data-field="quantity"]')?.value || '1');
                     total += subQty * parseBrNumber(subItem.querySelector('[data-field="value"]')?.value || '');
                     total += parseBrNumber(subItem.querySelector('[data-field="freight"]')?.value || '');
-                    const subDiscountHistory = parseDiscountHistoryJson(subItem.querySelector('[data-field="discount-history-json"]')?.value || '[]');
-                    discountTotal += sumDiscountHistory(subDiscountHistory);
-                    discountTotal += Math.max(parseBrNumber(subItem.querySelector('[data-field="discount-add"]')?.value || ''), 0);
                 });
-                const totalNet = Math.max(total - discountTotal, 0);
-                packageEl.textContent = discountTotal > 0
-                    ? `Total bruto: R$ ${toBrMoney(total)} | Descontos: R$ ${toBrMoney(discountTotal)} | Total líquido: R$ ${toBrMoney(totalNet)}`
-                    : `Total deste orçamento: R$ ${toBrMoney(total)}`;
+                packageEl.textContent = `Total deste orçamento: R$ ${toBrMoney(total)}`;
             });
         };
 
@@ -1080,9 +1079,9 @@
             const srcLink = sourceItem.querySelector('[data-field="link"]');
             const srcPaymentMethod = sourceItem.querySelector('[data-field="payment-method"]');
             const srcPaymentInstallments = sourceItem.querySelector('[data-field="payment-installments"]');
-            const srcDiscountAdd = sourceItem.querySelector('[data-field="discount-add"]');
-            const srcDiscountNote = sourceItem.querySelector('[data-field="discount-note"]');
-            const srcDiscountHistoryJson = sourceItem.querySelector('[data-field="discount-history-json"]');
+            const srcValueUpdate = sourceItem.querySelector('[data-field="value-update"]');
+            const srcValueUpdateNote = sourceItem.querySelector('[data-field="value-update-note"]');
+            const srcPriceHistoryJson = sourceItem.querySelector('[data-field="price-history-json"]');
             const srcPreview = sourceItem.querySelector('[data-photo-preview]');
             const srcPhoto = sourceItem.querySelector('[data-field="photo"]');
 
@@ -1093,9 +1092,9 @@
             const dstLink = created.item.querySelector('[data-field="link"]');
             const dstPaymentMethod = created.item.querySelector('[data-field="payment-method"]');
             const dstPaymentInstallments = created.item.querySelector('[data-field="payment-installments"]');
-            const dstDiscountAdd = created.item.querySelector('[data-field="discount-add"]');
-            const dstDiscountNote = created.item.querySelector('[data-field="discount-note"]');
-            const dstDiscountHistoryJson = created.item.querySelector('[data-field="discount-history-json"]');
+            const dstValueUpdate = created.item.querySelector('[data-field="value-update"]');
+            const dstValueUpdateNote = created.item.querySelector('[data-field="value-update-note"]');
+            const dstPriceHistoryJson = created.item.querySelector('[data-field="price-history-json"]');
             const dstPreview = created.item.querySelector('[data-photo-preview]');
             const dstPhoto = created.item.querySelector('[data-field="photo"]');
 
@@ -1106,9 +1105,9 @@
             if (dstLink && srcLink) dstLink.value = srcLink.value || '';
             if (dstPaymentMethod && srcPaymentMethod) dstPaymentMethod.value = srcPaymentMethod.value || '';
             if (dstPaymentInstallments && srcPaymentInstallments) dstPaymentInstallments.value = srcPaymentInstallments.value || '1';
-            if (dstDiscountAdd && srcDiscountAdd) dstDiscountAdd.value = srcDiscountAdd.value || '';
-            if (dstDiscountNote && srcDiscountNote) dstDiscountNote.value = srcDiscountNote.value || '';
-            if (dstDiscountHistoryJson && srcDiscountHistoryJson) dstDiscountHistoryJson.value = srcDiscountHistoryJson.value || '[]';
+            if (dstValueUpdate && srcValueUpdate) dstValueUpdate.value = srcValueUpdate.value || '';
+            if (dstValueUpdateNote && srcValueUpdateNote) dstValueUpdateNote.value = srcValueUpdateNote.value || '';
+            if (dstPriceHistoryJson && srcPriceHistoryJson) dstPriceHistoryJson.value = srcPriceHistoryJson.value || '[]';
 
             // Best-effort clone for local files (unsaved captures/uploads).
             const srcFile = srcPhoto?.files?.[0];
@@ -1123,9 +1122,7 @@
                     dstPreview.style.display = srcPreview.style.display || 'block';
                 }
             }
-            if (dstDiscountAdd) {
-                dstDiscountAdd.dispatchEvent(new Event('input', { bubbles: true }));
-            }
+            if (dstValueUpdate) dstValueUpdate.dispatchEvent(new Event('input', { bubbles: true }));
 
             return created.item;
         };
@@ -1142,11 +1139,8 @@
                 const linkRaw = (item.querySelector('[data-field="link"]')?.value || '').trim();
                 const paymentMethod = (item.querySelector('[data-field="payment-method"]')?.value || '').trim();
                 const paymentInstallments = parsePositiveInt(item.querySelector('[data-field="payment-installments"]')?.value || '1');
-                const discountHistoryJson = (item.querySelector('[data-field="discount-history-json"]')?.value || '[]').trim();
-                const discountHistoryItems = parseDiscountHistoryJson(discountHistoryJson);
-                const discountHistoryTotal = sumDiscountHistory(discountHistoryItems);
-                const discountAddValueRaw = (item.querySelector('[data-field="discount-add"]')?.value || '').trim();
-                const discountAddValue = parseBrNumber(discountAddValueRaw);
+                const priceHistoryJson = (item.querySelector('[data-field="price-history-json"]')?.value || '[]').trim();
+                const priceHistoryItems = parsePriceHistoryJson(priceHistoryJson);
                 const link = normalizeExternalLink(linkRaw);
                 const linkLabel = shortLinkLabel(linkRaw);
                 const createdAt = (item.querySelector('[data-budget-created-at]')?.textContent || '').trim();
@@ -1165,9 +1159,7 @@
                     previewSrc,
                     paymentMethod,
                     paymentInstallments,
-                    discountHistoryTotal,
-                    discountAddValue,
-                    discountTotal: Math.max(discountHistoryTotal + Math.max(discountAddValue, 0), 0),
+                    priceHistoryCount: Array.isArray(priceHistoryItems) ? priceHistoryItems.length : 0,
                 };
             }).filter(Boolean);
 
@@ -1194,8 +1186,7 @@
             item.querySelector('[data-field="freight"]').name = `budget_freight_${idx}`;
             item.querySelector('[data-field="payment-method"]').name = `budget_payment_method_${idx}`;
             item.querySelector('[data-field="payment-installments"]').name = `budget_payment_installments_${idx}`;
-            item.querySelector('[data-field="discount-add"]').name = `budget_discount_add_${idx}`;
-            item.querySelector('[data-field="discount-note"]').name = `budget_discount_note_${idx}`;
+            item.querySelector('[data-field="price-history-json"]').name = `budget_price_history_json_${idx}`;
             item.querySelector('[data-field="link"]').name = `budget_link_${idx}`;
             item.querySelector('[data-field="photo"]').name = `budget_photo_${idx}`;
             item.querySelector('[data-field="proposal-files"]').name = `budget_files_${idx}`;
@@ -1236,32 +1227,27 @@
             const preview = item.querySelector('[data-photo-preview]');
             const paymentMethodInput = item.querySelector('[data-field="payment-method"]');
             const paymentInstallmentsInput = item.querySelector('[data-field="payment-installments"]');
-            const discountAddInput = item.querySelector('[data-field="discount-add"]');
-            const discountNoteInput = item.querySelector('[data-field="discount-note"]');
-            const discountHistoryJsonInput = item.querySelector('[data-field="discount-history-json"]');
-            const discountTotalEl = item.querySelector('[data-discount-total]');
-            const discountHistoryListEl = item.querySelector('[data-discount-history-list]');
+            const valueUpdateInput = item.querySelector('[data-field="value-update"]');
+            const valueUpdateNoteInput = item.querySelector('[data-field="value-update-note"]');
+            const applyPriceUpdateBtn = item.querySelector('[data-apply-price-update]');
+            const priceHistoryJsonInput = item.querySelector('[data-field="price-history-json"]');
+            const priceHistoryListEl = item.querySelector('[data-price-history-list]');
 
-            const renderDiscountHistory = () => {
-                const historyItems = parseDiscountHistoryJson(discountHistoryJsonInput?.value || '[]');
-                const historyTotal = sumDiscountHistory(historyItems);
-                const pendingDiscount = parseBrNumber(discountAddInput?.value || '');
-                const totalDiscount = Math.max(historyTotal + Math.max(pendingDiscount, 0), 0);
-                if (discountTotalEl) {
-                    discountTotalEl.textContent = `Descontos registrados: R$ ${toBrMoney(totalDiscount)}`;
-                }
-                if (!discountHistoryListEl) return;
+            const renderPriceHistory = () => {
+                const historyItems = parsePriceHistoryJson(priceHistoryJsonInput?.value || '[]');
+                if (!priceHistoryListEl) return;
                 if (!historyItems.length) {
-                    discountHistoryListEl.innerHTML = '<span>Histórico de descontos: nenhum</span>';
+                    priceHistoryListEl.innerHTML = '<span>Histórico de preço: nenhum</span>';
                     return;
                 }
                 const rows = historyItems.map((entry) => {
-                    const amount = Number(entry.amount || 0);
-                    const dateLabel = entry.created_at || '-';
+                    const prevValue = Number(entry.previous_value || 0);
+                    const updatedValue = Number(entry.updated_value || 0);
+                    const dateLabel = formatHistoryDate(entry.changed_at || '');
                     const note = entry.note ? ` (${escapeHtml(entry.note)})` : '';
-                    return `<div>- R$ ${toBrMoney(amount)} em ${escapeHtml(dateLabel)}${note}</div>`;
+                    return `<div>- de R$ ${toBrMoney(prevValue)} para R$ ${toBrMoney(updatedValue)} em ${escapeHtml(dateLabel)}${note}</div>`;
                 }).join('');
-                discountHistoryListEl.innerHTML = `<span>Histórico de descontos:</span>${rows}`;
+                priceHistoryListEl.innerHTML = `<span>Histórico de preço:</span>${rows}`;
             };
 
             const clearAsParent = (removedIdx) => {
@@ -1397,11 +1383,11 @@
                 freightInput.value = toBrValue(initialData.freight || '');
                 if (paymentMethodInput) paymentMethodInput.value = initialData.payment_method || '';
                 if (paymentInstallmentsInput) paymentInstallmentsInput.value = String(parsePositiveInt(initialData.payment_installments || '1'));
-                if (discountHistoryJsonInput) {
-                    discountHistoryJsonInput.value = JSON.stringify(Array.isArray(initialData.discount_history) ? initialData.discount_history : []);
+                if (priceHistoryJsonInput) {
+                    priceHistoryJsonInput.value = JSON.stringify(Array.isArray(initialData.price_history) ? initialData.price_history : []);
                 }
-                if (discountAddInput) discountAddInput.value = '';
-                if (discountNoteInput) discountNoteInput.value = '';
+                if (valueUpdateInput) valueUpdateInput.value = '';
+                if (valueUpdateNoteInput) valueUpdateNoteInput.value = '';
                 linkInput.value = initialData.link || '';
                 if (approvedInput) {
                     approvedInput.checked = !!initialData.is_selected && !initialData.parent_id;
@@ -1423,9 +1409,9 @@
                 renderProposalAttachmentList(proposalFilesList, []);
                 if (paymentMethodInput) paymentMethodInput.value = '';
                 if (paymentInstallmentsInput) paymentInstallmentsInput.value = '1';
-                if (discountAddInput) discountAddInput.value = '';
-                if (discountNoteInput) discountNoteInput.value = '';
-                if (discountHistoryJsonInput) discountHistoryJsonInput.value = '[]';
+                if (valueUpdateInput) valueUpdateInput.value = '';
+                if (valueUpdateNoteInput) valueUpdateNoteInput.value = '';
+                if (priceHistoryJsonInput) priceHistoryJsonInput.value = '[]';
             }
 
             photoInput.addEventListener('change', () => {
@@ -1467,18 +1453,51 @@
                     paymentInstallmentsInput.value = String(parsePositiveInt(paymentInstallmentsInput.value || '1'));
                 });
             }
-            if (discountAddInput) {
-                discountAddInput.addEventListener('input', () => {
-                    const formatted = formatMoneyInputPtBr(discountAddInput.value);
-                    if (discountAddInput.value !== formatted) {
-                        discountAddInput.value = formatted;
+            if (valueUpdateInput) {
+                valueUpdateInput.addEventListener('input', () => {
+                    const formatted = formatMoneyInputPtBr(valueUpdateInput.value);
+                    if (valueUpdateInput.value !== formatted) {
+                        valueUpdateInput.value = formatted;
                     }
-                    renderDiscountHistory();
-                    recalculateBudgetPackages();
                 });
-                discountAddInput.addEventListener('change', () => {
-                    discountAddInput.value = formatMoneyInputPtBr(discountAddInput.value);
-                    renderDiscountHistory();
+                valueUpdateInput.addEventListener('change', () => {
+                    valueUpdateInput.value = formatMoneyInputPtBr(valueUpdateInput.value);
+                });
+            }
+            if (applyPriceUpdateBtn) {
+                applyPriceUpdateBtn.addEventListener('click', () => {
+                    if (!isDigitalRequisition()) return;
+                    const currentValueNum = parseBrNumber(valueInput.value || '');
+                    const updatedRaw = valueUpdateInput ? valueUpdateInput.value : '';
+                    const updatedValueNum = parseBrNumber(updatedRaw || '');
+                    if (updatedValueNum <= 0) {
+                        alert('Informe um valor atualizado válido.');
+                        return;
+                    }
+                    if (currentValueNum <= 0) {
+                        alert('Valor atual inválido para registrar histórico.');
+                        return;
+                    }
+                    const normalizedUpdated = toBrMoney(updatedValueNum);
+                    const normalizedCurrent = toBrMoney(currentValueNum);
+                    if (normalizedUpdated === normalizedCurrent) {
+                        alert('O valor atualizado é igual ao valor atual.');
+                        return;
+                    }
+
+                    const historyItems = parsePriceHistoryJson(priceHistoryJsonInput?.value || '[]');
+                    historyItems.push({
+                        id: null,
+                        previous_value: currentValueNum,
+                        updated_value: updatedValueNum,
+                        note: (valueUpdateNoteInput?.value || '').trim(),
+                        changed_at: new Date().toISOString(),
+                    });
+                    if (priceHistoryJsonInput) priceHistoryJsonInput.value = JSON.stringify(historyItems);
+                    valueInput.value = normalizedUpdated;
+                    if (valueUpdateInput) valueUpdateInput.value = '';
+                    if (valueUpdateNoteInput) valueUpdateNoteInput.value = '';
+                    renderPriceHistory();
                     recalculateBudgetPackages();
                 });
             }
@@ -1535,7 +1554,7 @@
             });
 
             applyBudgetItemMode(item);
-            renderDiscountHistory();
+            renderPriceHistory();
             budgetList.appendChild(item);
             applySubBudgetVisibility();
             return { idx, item };
@@ -1852,18 +1871,16 @@
                     const subQty = parsePositiveInt(sub.quantity || '1');
                     total += (subQty * parseBrNumber(sub.value)) + parseBrNumber(sub.freight);
                 }
-                const mainDiscountTotal = Math.max(Number(main.discountTotal || 0), 0);
-                const mainTotalNet = Math.max(total - mainDiscountTotal, 0);
                 const mainValueFormatted = formatMoneyForCopy(main.value);
                 const mainFreightFormatted = formatMoneyForCopy(main.freight);
 
                 lines.push(`[ORÇAMENTO ${i + 1}] ${main.name || '(sem nome)'}`);
                 lines.push(`   Qtd: ${mainQty} | Valor unit.: R$ ${mainValueFormatted} | Frete: R$ ${mainFreightFormatted} | Total pacote: R$ ${toBrMoney(total)}`);
-                if (mainDiscountTotal > 0) {
-                    lines.push(`   Descontos: R$ ${toBrMoney(mainDiscountTotal)} | Total líquido: R$ ${toBrMoney(mainTotalNet)}`);
-                }
                 if (main.paymentMethod || main.paymentInstallments > 1) {
                     lines.push(`   Pagamento: ${main.paymentMethod || '-'} | Parcelamento: ${paymentInstallmentsLabel(main.paymentInstallments)}`);
+                }
+                if (main.priceHistoryCount > 0) {
+                    lines.push(`   Histórico de preço: ${main.priceHistoryCount} atualização(ões)`);
                 }
                 if (main.link) lines.push(`   Link (${main.linkLabel || 'site'}): ${main.link}`);
                 let mainImageText = '';
@@ -1878,11 +1895,11 @@
                 htmlParts.push(`<li style="margin-bottom:12px;padding:10px;border:1px solid #cbd5e1;border-radius:8px;background:#f8fafc;">`);
                 htmlParts.push(`<div><strong>${escapeHtml(main.name || '(sem nome)')}</strong></div>`);
                 htmlParts.push(`<div>Qtd: <strong>${escapeHtml(String(mainQty))}</strong> | Valor unit.: <strong>R$ ${escapeHtml(mainValueFormatted)}</strong> | Frete: <strong>R$ ${escapeHtml(mainFreightFormatted)}</strong> | Total pacote: <strong>R$ ${escapeHtml(toBrMoney(total))}</strong></div>`);
-                if (mainDiscountTotal > 0) {
-                    htmlParts.push(`<div>Descontos: <strong>R$ ${escapeHtml(toBrMoney(mainDiscountTotal))}</strong> | Total líquido: <strong>R$ ${escapeHtml(toBrMoney(mainTotalNet))}</strong></div>`);
-                }
                 if (main.paymentMethod || main.paymentInstallments > 1) {
                     htmlParts.push(`<div>Pagamento: <strong>${escapeHtml(main.paymentMethod || '-')}</strong> | Parcelamento: <strong>${escapeHtml(paymentInstallmentsLabel(main.paymentInstallments))}</strong></div>`);
+                }
+                if (main.priceHistoryCount > 0) {
+                    htmlParts.push(`<div>Histórico de preço: <strong>${escapeHtml(String(main.priceHistoryCount))} atualização(ões)</strong></div>`);
                 }
                 if (main.link) htmlParts.push(`<div>Link: <a href="${escapeHtml(main.link)}" target="_blank" rel="noopener noreferrer">${escapeHtml(main.linkLabel || 'Abrir orçamento')}</a></div>`);
                 if (mainImg.htmlSrc) {
@@ -1899,16 +1916,13 @@
                         const subQty = parsePositiveInt(sub.quantity || '1');
                         const subValueFormatted = formatMoneyForCopy(sub.value);
                         const subFreightFormatted = formatMoneyForCopy(sub.freight);
-                        const subDiscountTotal = Math.max(Number(sub.discountTotal || 0), 0);
                         lines.push(`   - ${sub.name || '(sem nome)'} | Qtd: ${subQty} | Valor unit.: R$ ${subValueFormatted} | Frete: R$ ${subFreightFormatted}`);
-                        if (subDiscountTotal > 0) lines.push(`     Desconto: R$ ${toBrMoney(subDiscountTotal)}`);
                         if (sub.paymentMethod || sub.paymentInstallments > 1) {
                             lines.push(`     Pagamento: ${sub.paymentMethod || '-'} | Parcelamento: ${paymentInstallmentsLabel(sub.paymentInstallments)}`);
                         }
                         if (sub.link) lines.push(`     Link (${sub.linkLabel || 'site'}): ${sub.link}`);
 
                         htmlParts.push(`<li style="margin-bottom:8px;"><strong>${escapeHtml(sub.name || '(sem nome)')}</strong> - Qtd: ${escapeHtml(String(subQty))} | Valor unit.: R$ ${escapeHtml(subValueFormatted)} | Frete: R$ ${escapeHtml(subFreightFormatted)}`);
-                        if (subDiscountTotal > 0) htmlParts.push(`<br>Desconto: R$ ${escapeHtml(toBrMoney(subDiscountTotal))}`);
                         if (sub.paymentMethod || sub.paymentInstallments > 1) {
                             htmlParts.push(`<br>Pagamento: ${escapeHtml(sub.paymentMethod || '-')} | Parcelamento: ${escapeHtml(paymentInstallmentsLabel(sub.paymentInstallments))}`);
                         }
@@ -1972,19 +1986,17 @@
                     const subQty = parsePositiveInt(sub.quantity || '1');
                     total += (subQty * parseBrNumber(sub.value)) + parseBrNumber(sub.freight);
                 }
-                const mainDiscountTotal = Math.max(Number(main.discountTotal || 0), 0);
-                const mainTotalNet = Math.max(total - mainDiscountTotal, 0);
                 const mainValueFormatted = formatMoneyForCopy(main.value);
                 const mainFreightFormatted = formatMoneyForCopy(main.freight);
 
                 lines.push(`${i + 1}) *${main.name || '(sem nome)'}*`);
                 lines.push(`   Qtd: ${mainQty} | Valor unit.: R$ ${mainValueFormatted} | Frete: R$ ${mainFreightFormatted}`);
                 lines.push(`   Total do pacote: *R$ ${toBrMoney(total)}*`);
-                if (mainDiscountTotal > 0) {
-                    lines.push(`   Descontos: R$ ${toBrMoney(mainDiscountTotal)} | Total líquido: *R$ ${toBrMoney(mainTotalNet)}*`);
-                }
                 if (main.paymentMethod || main.paymentInstallments > 1) {
                     lines.push(`   Pagamento: ${main.paymentMethod || '-'} | Parcelamento: ${paymentInstallmentsLabel(main.paymentInstallments)}`);
+                }
+                if (main.priceHistoryCount > 0) {
+                    lines.push(`   Histórico de preço: ${main.priceHistoryCount} atualização(ões)`);
                 }
                 if (main.link) lines.push(`   Link: ${main.linkLabel || 'site'} - ${main.link}`);
 
@@ -1994,9 +2006,7 @@
                         const subQty = parsePositiveInt(sub.quantity || '1');
                         const subValueFormatted = formatMoneyForCopy(sub.value);
                         const subFreightFormatted = formatMoneyForCopy(sub.freight);
-                        const subDiscountTotal = Math.max(Number(sub.discountTotal || 0), 0);
                         lines.push(`   - ${sub.name || '(sem nome)'} | Qtd: ${subQty} | R$ ${subValueFormatted} + frete R$ ${subFreightFormatted}`);
-                        if (subDiscountTotal > 0) lines.push(`     Desconto: R$ ${toBrMoney(subDiscountTotal)}`);
                         if (sub.paymentMethod || sub.paymentInstallments > 1) {
                             lines.push(`     Pagamento: ${sub.paymentMethod || '-'} | Parcelamento: ${paymentInstallmentsLabel(sub.paymentInstallments)}`);
                         }
@@ -2081,19 +2091,18 @@
                         quantity: "{{ quote.quantity|default:1|escapejs }}",
                         unit: "R$ {{ quote.value|br_money|escapejs }}",
                         total: "R$ {{ quote.package_total|br_money|escapejs }}",
-                        total_net: "R$ {{ quote.package_total_net|br_money|escapejs }}",
-                        discount_total: "R$ {{ quote.package_discount_total|br_money|escapejs }}",
                         payment_method: "{{ quote.payment_method|default:''|escapejs }}",
                         payment_installments: "{{ quote.payment_installments|default:1|escapejs }}",
                         link: "{{ quote.link|default:''|escapejs }}",
                         photo_url: "{% if quote.photo %}{{ quote.photo.url|escapejs }}{% endif %}",
                         selected: {% if quote.is_display_selected %}true{% else %}false{% endif %},
-                        discount_history: [
+                        price_history: [
                             {% for discount_item in quote.discount_items %}
                             {
-                                amount: "R$ {{ discount_item.amount|br_money|escapejs }}",
+                                previous_value: "{% if discount_item.previous_value is not None %}R$ {{ discount_item.previous_value|br_money|escapejs }}{% else %}-{% endif %}",
+                                updated_value: "{% if discount_item.updated_value is not None %}R$ {{ discount_item.updated_value|br_money|escapejs }}{% else %}-{% endif %}",
                                 note: "{{ discount_item.note|escapejs }}",
-                                created_at: "{{ discount_item.created_at|date:'d/m/Y H:i'|escapejs }}",
+                                changed_at: "{% if discount_item.changed_at %}{{ discount_item.changed_at|date:'d/m/Y H:i'|escapejs }}{% else %}{{ discount_item.created_at|date:'d/m/Y H:i'|escapejs }}{% endif %}",
                             }{% if not forloop.last %},{% endif %}
                             {% endfor %}
                         ],
@@ -2106,7 +2115,7 @@
                                 freight: "R$ {{ sub.freight|br_money|escapejs }}",
                                 payment_method: "{{ sub.payment_method|default:''|escapejs }}",
                                 payment_installments: "{{ sub.payment_installments|default:1|escapejs }}",
-                                discount_total: "R$ {{ sub.discount_total|br_money|escapejs }}",
+                                price_history_count: "{{ sub.price_history_count|default:0|escapejs }}",
                                 link: "{{ sub.link|default:''|escapejs }}",
                                 photo_url: "{% if sub.photo %}{{ sub.photo.url|escapejs }}{% endif %}"
                             }{% if not forloop.last %},{% endif %}
@@ -2189,14 +2198,14 @@
                             const parcelsText = installments > 1 ? `${installments}x` : 'à vista';
                             return `<div class="muted" style="margin-top:4px;">Pagamento: ${methodText} | Parcelas: ${escapeHtml(parcelsText)}</div>`;
                         })();
-                        const discountHistoryHtml = Array.isArray(quote.discount_history) && quote.discount_history.length
-                            ? `<ul style="margin:6px 0 0 18px;">${quote.discount_history.map((entry) => `<li>${escapeHtml(entry.amount || 'R$ 0,00')} em ${escapeHtml(entry.created_at || '-')} ${entry.note ? `(${escapeHtml(entry.note)})` : ''}</li>`).join('')}</ul>`
-                            : '<div class="muted">Sem descontos registrados.</div>';
-                        const discountInfo = `<div class="muted" style="margin-top:4px;">Descontos: ${escapeHtml(quote.discount_total || 'R$ 0,00')} | Total líquido: ${escapeHtml(quote.total_net || quote.total || 'R$ 0,00')}</div><div class="muted" style="margin-top:4px;">Histórico de descontos:${discountHistoryHtml}</div>`;
+                        const priceHistoryHtml = Array.isArray(quote.price_history) && quote.price_history.length
+                            ? `<ul style="margin:6px 0 0 18px;">${quote.price_history.map((entry) => `<li>${escapeHtml(entry.previous_value || '-')} -> ${escapeHtml(entry.updated_value || '-')} em ${escapeHtml(entry.changed_at || '-')} ${entry.note ? `(${escapeHtml(entry.note)})` : ''}</li>`).join('')}</ul>`
+                            : '<div class="muted">Sem histórico de atualização de preço.</div>';
+                        const priceHistoryInfo = `<div class="muted" style="margin-top:4px;">Histórico de preço:${priceHistoryHtml}</div>`;
                         const subsHtml = Array.isArray(quote.subs) && quote.subs.length
-                            ? `<div class="muted" style="margin-top: 6px;">Suborçamentos:<ul style="margin:6px 0 0 18px;">${quote.subs.map((sub) => `<li>${escapeHtml(sub.name)} (Qtd: ${escapeHtml(String(sub.quantity || '1'))} | Unitário: ${escapeHtml(sub.unit)} | Frete: ${escapeHtml(sub.freight)} | Desconto: ${escapeHtml(sub.discount_total || 'R$ 0,00')})${sub.payment_method || Number.parseInt(String(sub.payment_installments || '1'), 10) > 1 ? ` | Pagamento: ${escapeHtml(sub.payment_method || '-')}, ${escapeHtml((Number.parseInt(String(sub.payment_installments || '1'), 10) || 1) > 1 ? `${Number.parseInt(String(sub.payment_installments || '1'), 10)}x` : 'à vista')}` : ''}${buildOpenLinkButton(sub.link)}${buildPhotoPreview(sub.photo_url, sub.name || 'Foto do suborçamento')}</li>`).join('')}</ul></div>`
+                            ? `<div class="muted" style="margin-top: 6px;">Suborçamentos:<ul style="margin:6px 0 0 18px;">${quote.subs.map((sub) => `<li>${escapeHtml(sub.name)} (Qtd: ${escapeHtml(String(sub.quantity || '1'))} | Unitário: ${escapeHtml(sub.unit)} | Frete: ${escapeHtml(sub.freight)})${sub.price_history_count && Number.parseInt(String(sub.price_history_count), 10) > 0 ? ` | Histórico de preço: ${escapeHtml(String(sub.price_history_count))}` : ''}${sub.payment_method || Number.parseInt(String(sub.payment_installments || '1'), 10) > 1 ? ` | Pagamento: ${escapeHtml(sub.payment_method || '-')}, ${escapeHtml((Number.parseInt(String(sub.payment_installments || '1'), 10) || 1) > 1 ? `${Number.parseInt(String(sub.payment_installments || '1'), 10)}x` : 'à vista')}` : ''}${buildOpenLinkButton(sub.link)}${buildPhotoPreview(sub.photo_url, sub.name || 'Foto do suborçamento')}</li>`).join('')}</ul></div>`
                             : '';
-                        return `<div style="border:1px solid #1f2a44; border-radius:10px; padding:10px;"><strong>${escapeHtml(quote.name || '-')}</strong>${selectedBadge}${quoteLinkBtn}<div class="muted" style="margin-top:4px;">Qtd: ${escapeHtml(String(quote.quantity || '1'))} | Unitário: ${escapeHtml(quote.unit)} | Total bruto: ${escapeHtml(quote.total)}</div>${paymentInfo}${discountInfo}${quotePhoto}${subsHtml}</div>`;
+                        return `<div style="border:1px solid #1f2a44; border-radius:10px; padding:10px;"><strong>${escapeHtml(quote.name || '-')}</strong>${selectedBadge}${quoteLinkBtn}<div class="muted" style="margin-top:4px;">Qtd: ${escapeHtml(String(quote.quantity || '1'))} | Unitário: ${escapeHtml(quote.unit)} | Total: ${escapeHtml(quote.total)}</div>${paymentInfo}${priceHistoryInfo}${quotePhoto}${subsHtml}</div>`;
                     }).join('');
                 }
             }
