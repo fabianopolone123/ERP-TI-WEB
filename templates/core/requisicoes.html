@@ -161,6 +161,8 @@
             <h2>Requisições</h2>
             {% if can_manage_requisicoes %}
             <p class="muted">Cadastro de requisição com múltiplos orçamentos.</p>
+            {% elif can_decide_requisicoes %}
+            <p class="muted">Consulta em modo leitura com permissão para aprovar/reprovar requisições.</p>
             {% elif can_view_requisicoes %}
             <p class="muted">Consulta de requisições em modo somente leitura.</p>
             {% else %}
@@ -2070,6 +2072,30 @@
             <div class="muted">Pedido: <span data-ro-requested>-</span> | Aprovação: <span data-ro-approved>-</span> | Reprovação: <span data-ro-rejected>-</span> | Parcial: <span data-ro-partial>-</span> | Entrega: <span data-ro-received>-</span></div>
             <div class="muted">Quantidade entregue: <span data-ro-delivery-progress>-</span></div>
             <div><strong>Total aprovado:</strong> <span data-ro-total>-</span></div>
+            {% if can_decide_requisicoes and not can_manage_requisicoes %}
+            <div style="margin-top: 4px; border: 1px solid #2a3b57; border-radius: 8px; padding: 10px;" data-ro-decision-wrap>
+                <div style="font-weight:700; margin-bottom:6px;">Decisão</div>
+                <form method="post" class="inline-form" data-ro-approve-form style="display:grid; gap:8px;">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="mark_approved_quote" />
+                    <input type="hidden" name="requisition_id" value="" data-ro-approve-requisition-id />
+                    <div>
+                        <label for="id_ro_quote_select">Orçamento para aprovar</label>
+                        <select id="id_ro_quote_select" name="quote_id" data-ro-quote-select></select>
+                    </div>
+                    <div>
+                        <button type="submit" data-ro-approve-submit>Aprovar orçamento selecionado</button>
+                    </div>
+                </form>
+                <form method="post" class="inline-form" data-ro-reject-form style="margin-top:8px;">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="mark_rejected" />
+                    <input type="hidden" name="requisition_id" value="" data-ro-reject-requisition-id />
+                    <button type="submit" data-ro-reject-submit>Marcar não aprovado</button>
+                </form>
+                <div class="muted" style="margin-top:8px;" data-ro-decision-note></div>
+            </div>
+            {% endif %}
             <div style="margin-top: 6px;">
                 <strong>Orçamentos</strong>
                 <div data-ro-quotes class="muted" style="margin-top: 6px; display:grid; gap:8px;"></div>
@@ -2104,6 +2130,7 @@
                 quotes: [
                     {% for quote in item.main_quotes %}
                     {
+                        id: {{ quote.id }},
                         name: "{{ quote.name|escapejs }}",
                         quantity: "{{ quote.quantity|default:1|escapejs }}",
                         unit: "R$ {{ quote.value|br_money|escapejs }}",
@@ -2148,6 +2175,12 @@
         const closeEls = document.querySelectorAll('[data-close-requisition-readonly]');
         const rows = document.querySelectorAll('[data-req-row]');
         const statusBadge = modal.querySelector('[data-ro-status-badge]');
+        const approveReqIdInput = modal.querySelector('[data-ro-approve-requisition-id]');
+        const rejectReqIdInput = modal.querySelector('[data-ro-reject-requisition-id]');
+        const quoteSelect = modal.querySelector('[data-ro-quote-select]');
+        const approveSubmitBtn = modal.querySelector('[data-ro-approve-submit]');
+        const rejectSubmitBtn = modal.querySelector('[data-ro-reject-submit]');
+        const decisionNote = modal.querySelector('[data-ro-decision-note]');
         const setText = (selector, value) => {
             const el = modal.querySelector(selector);
             if (el) el.textContent = value || '-';
@@ -2196,6 +2229,37 @@
             if (statusBadge) {
                 statusBadge.textContent = data.status || '-';
                 statusBadge.className = `status-pill status-${data.status_code || ''}`;
+            }
+
+            if (approveReqIdInput) approveReqIdInput.value = String(id || '');
+            if (rejectReqIdInput) rejectReqIdInput.value = String(id || '');
+            if (quoteSelect) {
+                const quotes = Array.isArray(data.quotes) ? data.quotes : [];
+                const currentSelected = quotes.find((quote) => !!quote.selected) || null;
+                quoteSelect.innerHTML = quotes.map((quote) => {
+                    const selectedAttr = currentSelected && Number(quote.id || 0) === Number(currentSelected.id || 0) ? ' selected' : '';
+                    const label = `${quote.name || '-'} | Qtd: ${quote.quantity || '1'} | Total: ${quote.total || '-'}`;
+                    return `<option value="${escapeHtml(String(quote.id || ''))}"${selectedAttr}>${escapeHtml(label)}</option>`;
+                }).join('');
+            }
+            if (approveSubmitBtn) {
+                const disallowApprove = ['received', 'partially_received'].includes(String(data.status_code || '').trim().toLowerCase());
+                const noQuote = !quoteSelect || !quoteSelect.options || quoteSelect.options.length === 0;
+                approveSubmitBtn.disabled = disallowApprove || noQuote;
+            }
+            if (rejectSubmitBtn) {
+                const disallowReject = ['received', 'partially_received'].includes(String(data.status_code || '').trim().toLowerCase());
+                rejectSubmitBtn.disabled = disallowReject;
+            }
+            if (decisionNote) {
+                const code = String(data.status_code || '').trim().toLowerCase();
+                if (code === 'received' || code === 'partially_received') {
+                    decisionNote.textContent = 'Requisições com entrega iniciada não podem ser aprovadas/reprovadas.';
+                } else if (code === 'rejected') {
+                    decisionNote.textContent = 'Requisição já marcada como não aprovada.';
+                } else {
+                    decisionNote.textContent = 'Selecione um orçamento principal para aprovação, ou marque como não aprovado.';
+                }
             }
 
             const quotesEl = modal.querySelector('[data-ro-quotes]');

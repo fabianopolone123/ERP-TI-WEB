@@ -196,6 +196,38 @@ def can_view_requisitions_readonly(request) -> bool:
     return bool(user.can_view_requisitions_readonly)
 
 
+def can_decide_requisitions(request) -> bool:
+    if is_ti_user(request):
+        return True
+
+    allowed_raw = getattr(settings, 'REQUISITIONS_DECISION_USERNAMES', ['isabel'])
+    allowed: set[str] = set()
+    if isinstance(allowed_raw, str):
+        for token in allowed_raw.replace(';', ',').split(','):
+            value = token.strip().lower()
+            if value:
+                allowed.add(value)
+    elif isinstance(allowed_raw, (list, tuple, set)):
+        for item in allowed_raw:
+            value = str(item or '').strip().lower()
+            if value:
+                allowed.add(value)
+    if not allowed:
+        return False
+
+    request_username = getattr(getattr(request, 'user', None), 'username', '')
+    for candidate in _username_candidates(request_username):
+        if candidate.lower() in allowed:
+            return True
+
+    erp_user = _erp_user_from_request(request)
+    if erp_user:
+        for candidate in _username_candidates(erp_user.username):
+            if candidate.lower() in allowed:
+                return True
+    return False
+
+
 def _inventory_default_hosts() -> str:
     return (getattr(settings, 'INVENTORY_DEFAULT_HOSTS', '') or '').strip()
 
@@ -2184,12 +2216,48 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
             requisition.save(update_fields=update_fields)
 
     def post(self, request, *args, **kwargs):
-        if not is_ti_user(request):
+        is_ti = is_ti_user(request)
+        can_decide = can_decide_requisitions(request)
+        if not can_decide:
             messages.error(request, 'Seu acesso em requisições é somente leitura.')
             return redirect('requisicoes')
 
         action = (request.POST.get('action') or '').strip().lower()
+        if action == 'mark_approved_quote':
+            requisition_id = (request.POST.get('requisition_id') or '').strip()
+            quote_id = (request.POST.get('quote_id') or '').strip()
+            requisition = Requisition.objects.filter(id=requisition_id).first()
+            if not requisition:
+                messages.error(request, 'Requisição não encontrada para aprovação.')
+                return redirect('requisicoes')
+
+            if requisition.status in {Requisition.Status.RECEIVED, Requisition.Status.PARTIALLY_RECEIVED}:
+                messages.error(request, 'Requisições com entrega iniciada não podem ser aprovadas novamente.')
+                return redirect('requisicoes')
+
+            selected_quote = requisition.quotes.filter(id=quote_id, parent__isnull=True).first()
+            if not selected_quote:
+                messages.error(request, 'Orçamento principal inválido para aprovação.')
+                return redirect('requisicoes')
+
+            requisition.quotes.update(is_selected=False)
+            selected_quote.is_selected = True
+            selected_quote.save(update_fields=['is_selected'])
+
+            requisition.status = Requisition.Status.APPROVED
+            requisition.delivered_quantity = 0
+            requisition.partially_received_at = None
+            requisition.received_at = None
+            requisition.save(update_fields=['status', 'delivered_quantity', 'partially_received_at', 'received_at', 'updated_at'])
+            self._sync_requisition_timeline_dates(requisition)
+
+            messages.success(request, f'Orçamento "{selected_quote.name}" aprovado para {requisition.code}.')
+            return redirect('requisicoes')
+
         if action == 'mark_received':
+            if not is_ti:
+                messages.error(request, 'Somente TI pode marcar entrega.')
+                return redirect('requisicoes')
             requisition_id = (request.POST.get('requisition_id') or '').strip()
             requisition = Requisition.objects.filter(id=requisition_id).first()
             if not requisition:
@@ -2219,6 +2287,9 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
             messages.success(request, f'Requisição {requisition.code} marcada como entregue ({expected_qty}/{expected_qty}).')
             return redirect('requisicoes')
         if action == 'mark_partial_received':
+            if not is_ti:
+                messages.error(request, 'Somente TI pode registrar entrega parcial.')
+                return redirect('requisicoes')
             requisition_id = (request.POST.get('requisition_id') or '').strip()
             requisition = Requisition.objects.filter(id=requisition_id).first()
             if not requisition:
@@ -2305,6 +2376,10 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
             messages.success(request, f'Requisição {requisition.code} marcada como não aprovada.')
             return redirect('requisicoes')
 
+        if not is_ti:
+            messages.error(request, 'Seu acesso em requisições é somente leitura.')
+            return redirect('requisicoes')
+
         mode = (request.POST.get('mode') or 'create').strip().lower()
         kind_value = (request.POST.get('requisition_kind') or Requisition.Kind.PHYSICAL).strip()
         valid_kinds = {choice[0] for choice in Requisition.Kind.choices}
@@ -2371,13 +2446,15 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         is_ti = is_ti_user(self.request)
         can_readonly = can_view_requisitions_readonly(self.request)
-        can_view = is_ti or can_readonly
+        can_decide = can_decide_requisitions(self.request)
+        can_view = is_ti or can_readonly or can_decide
         context['is_ti_group'] = is_ti
         context['can_manage_requisicoes'] = is_ti
+        context['can_decide_requisicoes'] = can_decide
         context['can_view_requisicoes'] = can_view
         if is_ti:
             context['modules'] = build_modules('requisicoes')
-        elif can_readonly:
+        elif can_readonly or can_decide:
             context['modules'] = build_modules('requisicoes', allowed_slugs={'chamados', 'requisicoes'})
         else:
             context['modules'] = []
@@ -2738,7 +2815,7 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         is_ti = is_ti_user(self.request)
-        can_readonly_requisitions = can_view_requisitions_readonly(self.request)
+        can_readonly_requisitions = can_view_requisitions_readonly(self.request) or can_decide_requisitions(self.request)
         context['is_ti_group'] = is_ti
         if is_ti:
             context['modules'] = build_modules('chamados')
@@ -3895,7 +3972,7 @@ def _resolve_media_file(relative_path: str) -> tuple[str, Path]:
 def _can_access_media_file(request, relative_path: str) -> bool:
     path_lower = (relative_path or '').lower()
     ti_user = is_ti_user(request)
-    can_ro_requisitions = can_view_requisitions_readonly(request)
+    can_ro_requisitions = can_view_requisitions_readonly(request) or can_decide_requisitions(request)
 
     if path_lower.startswith('tickets/'):
         ticket = Ticket.objects.filter(attachment=relative_path).first()
