@@ -3,10 +3,10 @@ param(
     [string]$TargetDir = 'C:\ProgramData\ERP-TI',
 
     [Parameter(Mandatory = $false)]
-    [string]$ServiceName = 'ErpTiInventoryAgent',
+    [string]$TaskName = 'ERP TI Inventory Agent',
 
     [Parameter(Mandatory = $false)]
-    [string]$DisplayName = 'ERP TI Inventory Agent Service',
+    [string]$LegacyServiceName = 'ErpTiInventoryAgent',
 
     [Parameter(Mandatory = $false)]
     [string]$ServerBaseUrl = 'https://erp-ti.local',
@@ -51,14 +51,38 @@ $logPath = Join-Path $TargetDir 'logs\inventory_agent_daemon.log'
 Copy-Item -Path $sourceAgent -Destination $targetAgent -Force
 Copy-Item -Path $sourceDaemon -Destination $targetDaemon -Force
 
-$existing = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
-$binPath = "`"powershell.exe`" -NoProfile -ExecutionPolicy Bypass -File `"$targetDaemon`" -ServerBaseUrl `"$ServerBaseUrl`" -Token `"$Token`" -AgentScriptPath `"$targetAgent`" -PollIntervalSec $PollIntervalSec -LogPath `"$logPath`""
-
-if ($existing) {
-    & sc.exe config $ServiceName binPath= "$binPath" start= auto DisplayName= "$DisplayName" | Out-Null
-} else {
-    & sc.exe create $ServiceName binPath= "$binPath" start= auto DisplayName= "$DisplayName" obj= "LocalSystem" | Out-Null
+$legacy = Get-Service -Name $LegacyServiceName -ErrorAction SilentlyContinue
+if ($legacy) {
+    try { Stop-Service -Name $LegacyServiceName -Force -ErrorAction SilentlyContinue } catch {}
+    & sc.exe delete $LegacyServiceName | Out-Null
 }
 
-Start-Service -Name $ServiceName
-Write-Output "Servico '$ServiceName' configurado e iniciado com sucesso."
+$args = "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$targetDaemon`" -ServerBaseUrl `"$ServerBaseUrl`" -Token `"$Token`" -AgentScriptPath `"$targetAgent`" -PollIntervalSec $PollIntervalSec -LogPath `"$logPath`""
+$action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $args
+$trigger = New-ScheduledTaskTrigger -AtStartup
+$principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -RunLevel Highest
+$settings = New-ScheduledTaskSettingsSet `
+    -StartWhenAvailable `
+    -RunOnlyIfNetworkAvailable `
+    -DontStopIfGoingOnBatteries `
+    -AllowStartIfOnBatteries `
+    -ExecutionTimeLimit (New-TimeSpan -Hours 0) `
+    -RestartCount 5 `
+    -RestartInterval (New-TimeSpan -Minutes 1) `
+    -MultipleInstances IgnoreNew
+
+Register-ScheduledTask `
+    -TaskName $TaskName `
+    -Action $action `
+    -Trigger $trigger `
+    -Principal $principal `
+    -Settings $settings `
+    -Force | Out-Null
+
+try {
+    Start-ScheduledTask -TaskName $TaskName -ErrorAction Stop
+} catch {
+    # Pode falhar se a tarefa já estiver executando.
+}
+
+Write-Output "Tarefa '$TaskName' configurada e iniciada com sucesso."
