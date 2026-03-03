@@ -219,8 +219,6 @@
                             data-windows="{{ item.windows|default:''|escape }}"
                             data-alimentacao="{{ item.alimentacao|default:''|escape }}"
                             data-observacao="{{ item.observacao|default:''|escape }}"
-                            data-connect-host="{{ item.connect_host|default:''|escape }}"
-                            data-rdp-url="{% url 'equipamentos_rdp_file' item.id %}?download=1"
                             data-last-inventory="{% if item.last_inventory_at %}{{ item.last_inventory_at|date:'d/m/Y H:i' }}{% else %}-{% endif %}">
                             <td data-sort-value="{{ item.tag_code|default:'' }}">{{ item.tag_code|default:"-" }}</td>
                             <td>{{ item.hostname|default:"-" }}</td>
@@ -254,9 +252,6 @@
                 </div>
 
                 <div class="equipment-actions">
-                    <button type="button" data-connect-rdp data-host="" data-rdp-url="">RDP</button>
-                    <a href="#" data-connect-rdp-file>Baixar RDP</a>
-                    <button type="button" data-connect-vnc data-host="" data-label="">VNC</button>
                     <form method="post" class="inline-form" data-preserve-equipment-scroll style="margin: 0;">
                         {% csrf_token %}
                         <input type="hidden" name="action" value="request_inventory_refresh" />
@@ -441,153 +436,6 @@
         </div>
     </div>
 {% endif %}
-
-<script>
-    (function () {
-        const triggerProtocol = (url) => {
-            const link = document.createElement('a');
-            link.href = url;
-            link.style.display = 'none';
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-        };
-
-        const tryOpenRdpProtocol = (host, fallbackUrl) => {
-            const protocols = [
-                `ms-rd:connect?pc=${encodeURIComponent(host)}`,
-                `rdp://${host}`,
-            ];
-            let openedClient = false;
-            const markOpened = () => {
-                openedClient = true;
-            };
-            const handleVisibility = () => {
-                if (document.visibilityState === 'hidden') {
-                    markOpened();
-                }
-            };
-            const cleanup = () => {
-                window.removeEventListener('blur', markOpened);
-                document.removeEventListener('visibilitychange', handleVisibility);
-            };
-
-            window.addEventListener('blur', markOpened);
-            document.addEventListener('visibilitychange', handleVisibility);
-
-            try {
-                triggerProtocol(protocols[0]);
-            } catch (_) {
-                // tenta formato alternativo
-            }
-
-            window.setTimeout(() => {
-                if (openedClient) {
-                    cleanup();
-                    return;
-                }
-                try {
-                    triggerProtocol(protocols[1]);
-                } catch (_) {
-                    // navegador pode bloquear protocolo customizado
-                }
-                window.setTimeout(() => {
-                    cleanup();
-                    if (!openedClient) {
-                        if (fallbackUrl) {
-                            window.location.href = fallbackUrl;
-                        }
-                    }
-                }, 900);
-            }, 900);
-        };
-
-        const tryOpenVncProtocol = (host, label) => {
-            const normalizedHost = (host || '').trim();
-            const normalizedLabel = (label || '').trim();
-            if (!normalizedHost) {
-                alert(`Host não informado para conexão VNC${normalizedLabel ? ` (${normalizedLabel})` : ''}.`);
-                return;
-            }
-
-            const protocols = [
-                `vnc://${normalizedHost}:5900`,
-                `vnc://${normalizedHost}`,
-            ];
-            let openedClient = false;
-            const markOpened = () => {
-                openedClient = true;
-            };
-            const handleVisibility = () => {
-                if (document.visibilityState === 'hidden') {
-                    markOpened();
-                }
-            };
-            const cleanup = () => {
-                window.removeEventListener('blur', markOpened);
-                document.removeEventListener('visibilitychange', handleVisibility);
-            };
-
-            window.addEventListener('blur', markOpened);
-            document.addEventListener('visibilitychange', handleVisibility);
-
-            try {
-                triggerProtocol(protocols[0]);
-            } catch (_) {
-                // tenta formato alternativo
-            }
-
-            window.setTimeout(() => {
-                if (openedClient) {
-                    cleanup();
-                    return;
-                }
-                try {
-                    triggerProtocol(protocols[1]);
-                } catch (_) {
-                    // navegador pode bloquear protocolo customizado
-                }
-                window.setTimeout(() => {
-                    cleanup();
-                    if (openedClient) return;
-                    alert(
-                        `Não foi possível abrir o cliente VNC automaticamente para ${normalizedHost}. ` +
-                        `Verifique se o TightVNC Viewer está instalado e associado ao protocolo vnc://.`
-                    );
-                }, 900);
-            }, 900);
-        };
-
-        document.querySelectorAll('[data-connect-rdp]').forEach((btn) => {
-            btn.addEventListener('click', (event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                const host = (btn.getAttribute('data-host') || '').trim();
-                if (!host) {
-                    alert('Host não informado para conexão RDP.');
-                    return;
-                }
-                const fallbackUrl = (btn.getAttribute('data-rdp-url') || '').trim();
-                tryOpenRdpProtocol(host, fallbackUrl);
-            });
-        });
-        document.querySelectorAll('[data-connect-rdp-file]').forEach((el) => {
-            el.addEventListener('click', (event) => {
-                event.stopPropagation();
-            });
-        });
-
-        document.querySelectorAll('[data-connect-vnc]').forEach((btn) => {
-            btn.addEventListener('click', (event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                const host = (btn.getAttribute('data-host') || '').trim();
-                const label = (btn.getAttribute('data-label') || '').trim();
-                tryOpenVncProtocol(host, label);
-            });
-        });
-    })();
-</script>
 <script>
     (function () {
         const modal = document.querySelector('[data-equipment-modal]');
@@ -662,10 +510,6 @@
         const detailFields = Array.from(panel.querySelectorAll('[data-detail-field]'));
         const searchInput = document.querySelector('input[data-table-search="equipamentos"]');
 
-        const rdpBtn = panel.querySelector('[data-connect-rdp]');
-        const rdpFileLink = panel.querySelector('[data-connect-rdp-file]');
-        const vncBtn = panel.querySelector('[data-connect-vnc]');
-
         if (!detailForm || !detailFields.length) return;
 
         const fieldMap = {
@@ -720,27 +564,12 @@
             const host = data.hostname || '-';
             const user = data.user || '-';
             const lastInventory = data.lastInventory || '-';
-            const connectHost = data.connectHost || '';
-            const rdpUrl = data.rdpUrl || '';
-            const vncLabel = data.tagCode || data.serial || data.user || '';
 
             if (tagInput) tagInput.value = data.tagCode || '';
             if (equipmentIdInput) equipmentIdInput.value = data.id || '';
             if (refreshIdInput) refreshIdInput.value = data.id || '';
             if (tagLabel) tagLabel.textContent = tagCode;
             if (titleEl) titleEl.textContent = `${tagCode} | Host: ${host} | Usuário: ${user} | Últ. inventário: ${lastInventory}`;
-
-            if (rdpBtn) {
-                rdpBtn.setAttribute('data-host', connectHost);
-                rdpBtn.setAttribute('data-rdp-url', rdpUrl);
-            }
-            if (rdpFileLink) {
-                rdpFileLink.setAttribute('href', rdpUrl || '#');
-            }
-            if (vncBtn) {
-                vncBtn.setAttribute('data-host', connectHost);
-                vncBtn.setAttribute('data-label', vncLabel);
-            }
 
             if (fieldMap.hostname) fieldMap.hostname.value = data.hostname || '';
             if (fieldMap.sector) fieldMap.sector.value = data.sector || '';

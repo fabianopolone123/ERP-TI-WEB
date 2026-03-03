@@ -1489,9 +1489,6 @@ class EquipamentosView(LoginRequiredMixin, TemplateView):
                 e.id,
             ),
         )
-        for equipment_item in equipments_qs:
-            equipment_item.connect_host = _resolve_equipment_connect_host(equipment_item)
-
         context['equipments'] = equipments_qs
         context['equipment_total_count'] = len(equipments_qs)
         context['inventory_default_hosts'] = _inventory_default_hosts()
@@ -3878,46 +3875,6 @@ def ticket_reopen(request):
 @require_GET
 def ws_tickets_ping(request):
     return JsonResponse({'ok': True, 'transport': 'http-fallback'})
-
-
-@login_required
-@require_GET
-def equipment_rdp_file(request, equipment_id: int):
-    if not is_ti_user(request):
-        return JsonResponse({'ok': False, 'error': 'forbidden'}, status=403)
-
-    equipment = Equipment.objects.filter(id=equipment_id).first()
-    if not equipment:
-        return JsonResponse({'ok': False, 'error': 'not_found'}, status=404)
-
-    host = (equipment.hostname or '').strip()
-    if not host:
-        return JsonResponse({'ok': False, 'error': 'missing_hostname'}, status=400)
-
-    content = '\r\n'.join(
-        [
-            f'full address:s:{host}',
-            'prompt for credentials:i:1',
-            'administrative session:i:0',
-            'screen mode id:i:2',
-            'desktopwidth:i:1366',
-            'desktopheight:i:768',
-            'session bpp:i:32',
-            'compression:i:1',
-            'keyboardhook:i:2',
-            'audiomode:i:0',
-            'redirectclipboard:i:1',
-            'redirectprinters:i:0',
-            'redirectcomports:i:0',
-            'redirectsmartcards:i:1',
-            'drivestoredirect:s:',
-        ]
-    )
-    response = HttpResponse(content, content_type='application/rdp')
-    safe_name = ''.join(ch if ch.isalnum() or ch in {'-', '_', '.'} else '_' for ch in host) or 'conexao'
-    disposition_mode = 'attachment' if (request.GET.get('download') or '').strip() in {'1', 'true', 'yes'} else 'inline'
-    response['Content-Disposition'] = f'{disposition_mode}; filename="{safe_name}.rdp"'
-    return response
 
 
 def _resolve_media_file(relative_path: str) -> tuple[str, Path]:
