@@ -43,6 +43,7 @@
                         <th>Nome</th>
                         <th>Protocolo</th>
                         <th>OS</th>
+                        <th>Data/Hora</th>
                         <th>Acoes</th>
                     </tr>
                 </thead>
@@ -53,6 +54,7 @@
                             <td>{{ item.nome }}</td>
                             <td>{{ item.protocolo }}</td>
                             <td>{{ item.os }}</td>
+                            <td data-sort-value="{{ item.created_at|date:'YmdHis' }}">{{ item.created_at|date:'d/m/Y H:i' }}</td>
                             <td>
                                 <button
                                     type="button"
@@ -61,6 +63,7 @@
                                     data-protocolo-nome="{{ item.nome|escape }}"
                                     data-protocolo-codigo="{{ item.protocolo|escape }}"
                                     data-protocolo-os="{{ item.os|escape }}"
+                                    data-protocolo-created-at="{{ item.created_at|date:'d/m/Y H:i' }}"
                                 >
                                     Editar
                                 </button>
@@ -68,7 +71,7 @@
                         </tr>
                     {% empty %}
                         <tr>
-                            <td colspan="5" class="muted">Nenhum protocolo cadastrado.</td>
+                            <td colspan="6" class="muted">Nenhum protocolo cadastrado.</td>
                         </tr>
                     {% endfor %}
                 </tbody>
@@ -99,6 +102,10 @@
                             <label for="id_protocolo_os">OS</label>
                             <input id="id_protocolo_os" name="os" type="text" required data-protocolo-os-input />
                         </div>
+                        <div>
+                            <label for="id_protocolo_data_hora">Data/Hora</label>
+                            <input id="id_protocolo_data_hora" type="text" readonly data-protocolo-data-hora-input />
+                        </div>
                     </div>
                     <button type="submit">Salvar</button>
                 </form>
@@ -116,8 +123,15 @@
                 const nomeInput = document.querySelector('[data-protocolo-nome-input]');
                 const codigoInput = document.querySelector('[data-protocolo-codigo-input]');
                 const osInput = document.querySelector('[data-protocolo-os-input]');
+                const dataHoraInput = document.querySelector('[data-protocolo-data-hora-input]');
 
-                if (!modal || !openBtn || !modeInput || !idInput || !nomeInput || !codigoInput || !osInput) return;
+                if (!modal || !openBtn || !modeInput || !idInput || !nomeInput || !codigoInput || !osInput || !dataHoraInput) return;
+
+                const formatNow = () => {
+                    const now = new Date();
+                    const pad = (v) => String(v).padStart(2, '0');
+                    return `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+                };
 
                 const openCreate = () => {
                     modeInput.value = 'create';
@@ -126,6 +140,7 @@
                     nomeInput.value = '';
                     codigoInput.value = '';
                     osInput.value = '';
+                    dataHoraInput.value = formatNow();
                     modal.hidden = false;
                 };
 
@@ -136,6 +151,7 @@
                     nomeInput.value = btn.getAttribute('data-protocolo-nome') || '';
                     codigoInput.value = btn.getAttribute('data-protocolo-codigo') || '';
                     osInput.value = btn.getAttribute('data-protocolo-os') || '';
+                    dataHoraInput.value = btn.getAttribute('data-protocolo-created-at') || '-';
                     modal.hidden = false;
                 };
 
