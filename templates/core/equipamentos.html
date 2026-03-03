@@ -105,17 +105,35 @@
                 placeholder="Pesquisar por host, usuário, setor ou modelo..."
                 data-table-search="equipamentos"
             />
-            <form method="post" class="inline-form" data-preserve-equipment-scroll style="display:flex; gap:8px; align-items:center;">
-                {% csrf_token %}
-                <input type="hidden" name="action" value="request_inventory_refresh_host" />
-                <input
-                    type="text"
-                    name="refresh_hosts"
-                    placeholder="Atualizar por host (ex.: CPU-022 ou CPU-022,CPU-050)"
-                    style="min-width: 320px;"
-                />
-                <button type="submit">Atualizar Hostname</button>
-            </form>
+            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:flex-end;">
+                <form method="post" class="inline-form" data-preserve-equipment-scroll style="display:flex; gap:8px; align-items:center;">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="request_inventory_refresh_host" />
+                    <input
+                        type="text"
+                        name="refresh_hosts"
+                        placeholder="Atualizar por host (ex.: CPU-022 ou CPU-022,CPU-050)"
+                        style="min-width: 320px;"
+                    />
+                    <button type="submit">Atualizar Hostname</button>
+                </form>
+                <form method="post" class="inline-form" data-preserve-equipment-scroll>
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="request_inventory_refresh_all" />
+                    <button
+                        type="submit"
+                        title="Enfileira atualização para todos os hosts conhecidos sem executar tudo ao mesmo tempo."
+                        onclick="return confirm('Enviar atualização para todos os hosts conhecidos? A fila será processada em lotes para não sobrecarregar a rede.')"
+                    >
+                        Atualizar todos os PCs
+                    </button>
+                </form>
+            </div>
+        </div>
+        <div class="muted" style="margin: -4px 0 12px; font-size: 0.84rem;">
+            Hosts conhecidos: <strong>{{ inventory_known_hosts_count }}</strong> |
+            concorrência máxima da fila: <strong>{{ inventory_refresh_max_concurrent_running }}</strong> |
+            limite por disparo em massa: <strong>{{ inventory_refresh_all_max_hosts }}</strong>.
         </div>
 
         <div class="card" style="padding: 14px; margin-bottom: 12px; border: 1px solid #43331a; background: #121826;">

@@ -16,7 +16,7 @@ from django.contrib import messages
 from django.core.mail import send_mail
 from django.db import transaction
 from django.db.models import Count, Q, Case, When, Value, IntegerField, Exists, OuterRef
-from django.db.models.functions import TruncDate
+from django.db.models.functions import TruncDate, Lower
 from django.shortcuts import redirect
 from django.utils import timezone
 from datetime import datetime, timedelta
@@ -201,6 +201,30 @@ def _inventory_agent_token() -> str:
     return (getattr(settings, 'INVENTORY_AGENT_TOKEN', '') or '').strip()
 
 
+def _inventory_refresh_all_max_hosts() -> int:
+    try:
+        value = int(getattr(settings, 'INVENTORY_REFRESH_ALL_MAX_HOSTS', 500) or 500)
+    except (TypeError, ValueError):
+        value = 500
+    return max(1, min(value, 5000))
+
+
+def _inventory_refresh_max_concurrent_running() -> int:
+    try:
+        value = int(getattr(settings, 'INVENTORY_AGENT_MAX_CONCURRENT_RUNNING', 8) or 8)
+    except (TypeError, ValueError):
+        value = 8
+    return max(1, min(value, 200))
+
+
+def _inventory_refresh_running_timeout_minutes() -> int:
+    try:
+        value = int(getattr(settings, 'INVENTORY_REFRESH_RUNNING_TIMEOUT_MINUTES', 30) or 30)
+    except (TypeError, ValueError):
+        value = 30
+    return max(5, min(value, 1440))
+
+
 def _extract_inventory_agent_token(request) -> str:
     auth_header = (request.headers.get('Authorization') or '').strip()
     if auth_header.lower().startswith('bearer '):
@@ -237,6 +261,17 @@ def _parse_inventory_request_id(raw_value) -> int | None:
     return value if value > 0 else None
 
 
+def _validate_inventory_refresh_host(host: str) -> tuple[str, str]:
+    normalized_host = (host or '').strip()
+    if not normalized_host:
+        return '', 'Host não informado para solicitar atualização.'
+    if len(normalized_host) > 120:
+        return '', f'Host inválido (muito longo): {normalized_host[:60]}...'
+    if not re.match(r'^[A-Za-z0-9._-]+$', normalized_host):
+        return '', f'Host inválido: {normalized_host}'
+    return normalized_host, ''
+
+
 def _update_inventory_refresh_request(
     request_id: int | None,
     *,
@@ -264,13 +299,9 @@ def _update_inventory_refresh_request(
 
 
 def _enqueue_inventory_refresh_for_host(host: str, request_user=None) -> tuple[str, str]:
-    normalized_host = (host or '').strip()
+    normalized_host, error_message = _validate_inventory_refresh_host(host)
     if not normalized_host:
-        return 'invalid', 'Host não informado para solicitar atualização.'
-    if len(normalized_host) > 120:
-        return 'invalid', f'Host inválido (muito longo): {normalized_host[:60]}...'
-    if not re.match(r'^[A-Za-z0-9._-]+$', normalized_host):
-        return 'invalid', f'Host inválido: {normalized_host}'
+        return 'invalid', error_message
 
     recent_request = (
         InventoryRefreshRequest.objects.filter(
@@ -295,6 +326,105 @@ def _enqueue_inventory_refresh_for_host(host: str, request_user=None) -> tuple[s
         last_message='Solicitação criada no ERP e aguardando o agente da máquina.',
     )
     return 'created', f'Solicitação de atualização enviada para {normalized_host}.'
+
+
+def _inventory_known_hosts_for_refresh() -> list[str]:
+    hosts: list[str] = []
+    seen: set[str] = set()
+
+    def _add_host(raw_value: str) -> None:
+        candidate = (raw_value or '').strip()
+        if not candidate:
+            return
+        key = candidate.lower()
+        if key in seen:
+            return
+        seen.add(key)
+        hosts.append(candidate)
+
+    for host in parse_hosts_text(_inventory_default_hosts()):
+        _add_host(host)
+
+    for equipment in Equipment.objects.only('hostname', 'hostname_aliases'):
+        _add_host(equipment.hostname)
+        for alias in parse_hosts_text(equipment.hostname_aliases or ''):
+            _add_host(alias)
+
+    return hosts
+
+
+def _enqueue_inventory_refresh_for_hosts(
+    hosts: list[str],
+    request_user=None,
+    *,
+    strict_open_duplicates: bool = False,
+) -> dict:
+    valid_hosts: list[str] = []
+    invalid_messages: list[str] = []
+    seen: set[str] = set()
+
+    for raw_host in hosts:
+        normalized_host, error_message = _validate_inventory_refresh_host(raw_host)
+        if not normalized_host:
+            invalid_messages.append(error_message)
+            continue
+        key = normalized_host.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        valid_hosts.append(normalized_host)
+
+    created_messages: list[str] = []
+    duplicate_messages: list[str] = []
+
+    if strict_open_duplicates and valid_hosts:
+        host_keys = [host.lower() for host in valid_hosts]
+        open_keys = set(
+            InventoryRefreshRequest.objects.filter(
+                status__in=[InventoryRefreshRequest.Status.PENDING, InventoryRefreshRequest.Status.RUNNING]
+            )
+            .annotate(host_key=Lower('hostname'))
+            .filter(host_key__in=host_keys)
+            .values_list('host_key', flat=True)
+        )
+        request_owner = request_user if getattr(request_user, 'is_authenticated', False) else None
+        rows_to_create: list[InventoryRefreshRequest] = []
+        for host in valid_hosts:
+            key = host.lower()
+            if key in open_keys:
+                duplicate_messages.append(f'Já existe solicitação em andamento para {host} (Pendente/Em execução).')
+                continue
+            rows_to_create.append(
+                InventoryRefreshRequest(
+                    hostname=host,
+                    status=InventoryRefreshRequest.Status.PENDING,
+                    requested_by=request_owner,
+                    last_message='Solicitação criada no ERP e aguardando o agente da máquina.',
+                )
+            )
+            created_messages.append(f'Solicitação de atualização enviada para {host}.')
+        if rows_to_create:
+            InventoryRefreshRequest.objects.bulk_create(rows_to_create, batch_size=200)
+    else:
+        for host in valid_hosts:
+            outcome, text = _enqueue_inventory_refresh_for_host(host, request_user)
+            if outcome == 'created':
+                created_messages.append(text)
+            elif outcome == 'duplicate':
+                duplicate_messages.append(text)
+            else:
+                invalid_messages.append(text)
+
+    return {
+        'total_requested': len(hosts),
+        'valid_hosts': len(valid_hosts),
+        'created_messages': created_messages,
+        'duplicate_messages': duplicate_messages,
+        'invalid_messages': invalid_messages,
+        'created_count': len(created_messages),
+        'duplicate_count': len(duplicate_messages),
+        'invalid_count': len(invalid_messages),
+    }
 
 
 class _SafeDict(dict):
@@ -1307,17 +1437,10 @@ class EquipamentosView(LoginRequiredMixin, TemplateView):
                 messages.error(request, 'Informe pelo menos um hostname para atualização (ex.: CPU-022).')
                 return self.get(request, *args, **kwargs)
 
-            created_messages: list[str] = []
-            duplicate_messages: list[str] = []
-            invalid_messages: list[str] = []
-            for host in hosts:
-                outcome, text = _enqueue_inventory_refresh_for_host(host, request.user)
-                if outcome == 'created':
-                    created_messages.append(text)
-                elif outcome == 'duplicate':
-                    duplicate_messages.append(text)
-                else:
-                    invalid_messages.append(text)
+            result = _enqueue_inventory_refresh_for_hosts(hosts, request.user)
+            created_messages = result['created_messages']
+            duplicate_messages = result['duplicate_messages']
+            invalid_messages = result['invalid_messages']
 
             if created_messages:
                 messages.success(request, f'Solicitações criadas: {len(created_messages)}.')
@@ -1329,6 +1452,52 @@ class EquipamentosView(LoginRequiredMixin, TemplateView):
             if invalid_messages:
                 for line in invalid_messages[:5]:
                     messages.error(request, line)
+            return self.get(request, *args, **kwargs)
+
+        if action == 'request_inventory_refresh_all':
+            all_known_hosts = _inventory_known_hosts_for_refresh()
+            if not all_known_hosts:
+                messages.error(request, 'Nenhum host conhecido para atualização em massa.')
+                return self.get(request, *args, **kwargs)
+
+            max_hosts = _inventory_refresh_all_max_hosts()
+            selected_hosts = all_known_hosts[:max_hosts]
+            dropped_count = max(0, len(all_known_hosts) - len(selected_hosts))
+
+            result = _enqueue_inventory_refresh_for_hosts(
+                selected_hosts,
+                request.user,
+                strict_open_duplicates=True,
+            )
+            if result['created_count']:
+                messages.success(
+                    request,
+                    f'Atualização em massa enfileirada: {result["created_count"]} host(s) de {len(selected_hosts)}.',
+                )
+            else:
+                messages.info(request, 'Nenhuma nova solicitação criada na atualização em massa.')
+
+            if result['duplicate_count']:
+                messages.info(
+                    request,
+                    f'{result["duplicate_count"]} host(s) já tinham solicitação em aberto e foram ignorados.',
+                )
+            if result['invalid_count']:
+                messages.warning(
+                    request,
+                    f'{result["invalid_count"]} host(s) inválidos foram ignorados.',
+                )
+            if dropped_count:
+                messages.warning(
+                    request,
+                    f'Foram considerados os primeiros {max_hosts} hosts para evitar sobrecarga (limite configurado).',
+                )
+
+            max_running = _inventory_refresh_max_concurrent_running()
+            messages.info(
+                request,
+                f'Processamento em fila com até {max_running} host(s) simultâneos para reduzir impacto na rede.',
+            )
             return self.get(request, *args, **kwargs)
 
         hostname = request.POST.get('hostname', '').strip()
@@ -1392,6 +1561,9 @@ class EquipamentosView(LoginRequiredMixin, TemplateView):
         context['equipment_total_count'] = len(equipments_qs)
         context['inventory_default_hosts'] = _inventory_default_hosts()
         context['inventory_timeout_seconds'] = int(getattr(settings, 'INVENTORY_POWERSHELL_TIMEOUT', 120) or 120)
+        context['inventory_known_hosts_count'] = len(_inventory_known_hosts_for_refresh()) if is_ti else 0
+        context['inventory_refresh_max_concurrent_running'] = _inventory_refresh_max_concurrent_running()
+        context['inventory_refresh_all_max_hosts'] = _inventory_refresh_all_max_hosts()
         context['next_equipment_tag_preview'] = next_equipment_tag_code() if is_ti else ''
         if is_ti:
             pending_items = list(Equipment.objects.filter(needs_reconciliation=True).order_by('-last_inventory_at', '-created_at'))
@@ -3556,7 +3728,37 @@ def inventory_pull_next_api(request):
     if not host:
         return JsonResponse({'ok': False, 'error': 'missing_host'}, status=400)
 
+    now = timezone.now()
+    max_running = _inventory_refresh_max_concurrent_running()
+    stale_timeout_minutes = _inventory_refresh_running_timeout_minutes()
+    stale_before = now - timedelta(minutes=stale_timeout_minutes)
+
     with transaction.atomic():
+        stale_running_qs = InventoryRefreshRequest.objects.filter(
+            status=InventoryRefreshRequest.Status.RUNNING,
+            started_at__lt=stale_before,
+        )
+        if stale_running_qs.exists():
+            stale_running_qs.update(
+                status=InventoryRefreshRequest.Status.FAILED,
+                completed_at=now,
+                last_message=f'Expirou após {stale_timeout_minutes} minuto(s) sem retorno do agente.',
+            )
+
+        running_count = InventoryRefreshRequest.objects.filter(
+            status=InventoryRefreshRequest.Status.RUNNING,
+        ).count()
+        if running_count >= max_running:
+            return JsonResponse(
+                {
+                    'ok': True,
+                    'request': None,
+                    'throttled': True,
+                    'running': running_count,
+                    'max_running': max_running,
+                }
+            )
+
         req = (
             InventoryRefreshRequest.objects.select_for_update()
             .filter(
@@ -3570,7 +3772,7 @@ def inventory_pull_next_api(request):
             return JsonResponse({'ok': True, 'request': None})
 
         req.status = InventoryRefreshRequest.Status.RUNNING
-        req.started_at = timezone.now()
+        req.started_at = now
         req.attempt_count = int(req.attempt_count or 0) + 1
         req.last_message = 'Agente recebeu a solicitação e iniciou a coleta.'
         req.save(update_fields=['status', 'started_at', 'attempt_count', 'last_message'])
