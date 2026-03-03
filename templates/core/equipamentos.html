@@ -13,7 +13,7 @@
     }
     .equipments-table-wrap .data-table {
         border: 0;
-        min-width: 1500px;
+        min-width: 820px;
         margin: 0;
         border-collapse: separate;
         border-spacing: 0;
@@ -49,25 +49,27 @@
         outline: 1px solid rgba(59, 130, 246, 0.35);
         outline-offset: -1px;
     }
-    .equipments-table-wrap .col-serial,
-    .equipments-table-wrap .col-memory {
-        width: 110px;
-        max-width: 110px;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
+
+    .equipments-table-wrap .data-table tbody tr[data-row-edit-equipment].is-selected {
+        background: rgba(37, 99, 235, 0.14);
     }
-    .equipments-table-wrap .col-serial {
-        width: 140px;
-        max-width: 140px;
+
+    .equipment-detail-fields {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 10px 12px;
     }
-    .equipments-table-wrap.is-compact .col-serial {
-        width: 120px;
-        max-width: 120px;
+
+    .equipment-detail-fields textarea {
+        min-height: 92px;
+        resize: vertical;
     }
-    .equipments-table-wrap.is-compact .col-memory {
-        width: 90px;
-        max-width: 90px;
+
+    .equipment-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 12px;
     }
 </style>
 <div class="card">
@@ -191,22 +193,10 @@
                     <tr>
                         <th>Etiqueta</th>
                         <th>Host</th>
-                        <th>Setor</th>
                         <th>Usuário</th>
-                        <th>Equipamento</th>
+                        <th>Setor</th>
                         <th>Modelo</th>
-                        <th>Marca</th>
-                        <th>Série</th>
-                        <th>Memória</th>
-                        <th>Processador</th>
-                        <th>Geração</th>
-                        <th>HD</th>
-                        <th>MOD HD</th>
-                        <th>Windows</th>
-                        <th>Alimentacao</th>
-                        <th>Observacao</th>
                         <th>Últ. inventário</th>
-                        <th>Conectar</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -228,57 +218,126 @@
                             data-mod-hd="{{ item.mod_hd|default:''|escape }}"
                             data-windows="{{ item.windows|default:''|escape }}"
                             data-alimentacao="{{ item.alimentacao|default:''|escape }}"
-                            data-observacao="{{ item.observacao|default:''|escape }}">
+                            data-observacao="{{ item.observacao|default:''|escape }}"
+                            data-connect-host="{{ item.connect_host|default:''|escape }}"
+                            data-rdp-url="{% url 'equipamentos_rdp_file' item.id %}?download=1"
+                            data-last-inventory="{% if item.last_inventory_at %}{{ item.last_inventory_at|date:'d/m/Y H:i' }}{% else %}-{% endif %}">
                             <td data-sort-value="{{ item.tag_code|default:'' }}">{{ item.tag_code|default:"-" }}</td>
                             <td>{{ item.hostname|default:"-" }}</td>
-                            <td>{{ item.sector }}</td>
                             <td>{{ item.user }}</td>
-                            <td>{{ item.equipment }}</td>
+                            <td>{{ item.sector }}</td>
                             <td>{{ item.model }}</td>
-                            <td>{{ item.brand }}</td>
-                            <td class="col-serial" title="{{ item.serial }}">{{ item.serial }}</td>
-                            <td class="col-memory" title="{{ item.memory }}">{{ item.memory }}</td>
-                            <td>{{ item.processor }}</td>
-                            <td>{{ item.generation }}</td>
-                            <td>{{ item.hd }}</td>
-                            <td>{{ item.mod_hd }}</td>
-                            <td>{{ item.windows }}</td>
-                            <td>{{ item.alimentacao|default:"-" }}</td>
-                            <td title="{{ item.observacao }}">{{ item.observacao|default:"-" }}</td>
                             <td>{% if item.last_inventory_at %}{{ item.last_inventory_at|date:"d/m/Y H:i" }}{% else %}-{% endif %}</td>
-                            <td>
-                                <div style="display:flex; gap:6px; flex-wrap:wrap;">
-                                    <button
-                                        type="button"
-                                        data-connect-rdp
-                                        data-host="{{ item.connect_host|default:''|escape }}"
-                                        data-rdp-url="{% url 'equipamentos_rdp_file' item.id %}?download=1"
-                                    >
-                                        RDP
-                                    </button>
-                                    <a
-                                        href="{% url 'equipamentos_rdp_file' item.id %}?download=1"
-                                        data-connect-rdp-file
-                                    >
-                                        Baixar RDP
-                                    </a>
-                                    <button type="button" data-connect-vnc data-host="{{ item.connect_host|default:''|escape }}" data-label="{{ item.tag_code|default:item.serial|default:item.user|escape }}">VNC</button>
-                                    <form method="post" class="inline-form" data-preserve-equipment-scroll style="margin:0;">
-                                        {% csrf_token %}
-                                        <input type="hidden" name="action" value="request_inventory_refresh" />
-                                        <input type="hidden" name="equipment_id" value="{{ item.id }}" />
-                                        <button type="submit" title="Solicitar atualização sob demanda ao agente da máquina">Atualizar</button>
-                                    </form>
-                                </div>
-                            </td>
                         </tr>
                     {% empty %}
                         <tr>
-                            <td colspan="18" class="muted">Nenhum equipamento cadastrado.</td>
+                            <td colspan="6" class="muted">Nenhum equipamento cadastrado.</td>
                         </tr>
                     {% endfor %}
                 </tbody>
             </table>
+        </div>
+
+        <div class="card" data-equipment-detail-panel hidden style="margin-top: 12px; border: 1px solid #1f2a44;">
+            <div class="topbar" style="align-items: flex-start; margin-bottom: 8px;">
+                <div>
+                    <h3 style="margin: 0;">Detalhes do equipamento</h3>
+                    <div class="muted" data-equipment-detail-title style="margin-top: 4px;">Selecione um equipamento na lista.</div>
+                </div>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                    <button type="button" data-equipment-detail-edit>Editar</button>
+                    <button type="button" data-equipment-detail-cancel hidden>Cancelar edição</button>
+                    <button type="button" data-equipment-detail-close>Fechar</button>
+                </div>
+            </div>
+
+            <div class="equipment-actions">
+                <button type="button" data-connect-rdp data-host="" data-rdp-url="">RDP</button>
+                <a href="#" data-connect-rdp-file>Baixar RDP</a>
+                <button type="button" data-connect-vnc data-host="" data-label="">VNC</button>
+                <form method="post" class="inline-form" data-preserve-equipment-scroll style="margin: 0;">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="request_inventory_refresh" />
+                    <input type="hidden" name="equipment_id" value="" data-equipment-detail-refresh-id />
+                    <button type="submit" title="Solicitar atualização sob demanda ao agente da máquina">Atualizar</button>
+                </form>
+            </div>
+
+            <form method="post" data-equipment-detail-form data-preserve-equipment-scroll>
+                {% csrf_token %}
+                <input type="hidden" name="action" value="update" />
+                <input type="hidden" name="equipment_id" value="" data-equipment-detail-id />
+                <input type="hidden" name="tag_code" value="" data-equipment-detail-tag />
+                <div class="equipment-detail-fields">
+                    <div>
+                        <label>Etiqueta</label>
+                        <div class="muted" data-equipment-detail-tag-label style="margin-top: 8px; font-weight: 700;">-</div>
+                    </div>
+                    <div>
+                        <label for="id_detail_hostname">Host</label>
+                        <input id="id_detail_hostname" name="hostname" type="text" data-detail-field disabled />
+                    </div>
+                    <div>
+                        <label for="id_detail_sector">Setor</label>
+                        <input id="id_detail_sector" name="sector" type="text" data-detail-field disabled />
+                    </div>
+                    <div>
+                        <label for="id_detail_user">Usuário</label>
+                        <input id="id_detail_user" name="user" type="text" data-detail-field disabled />
+                    </div>
+                    <div>
+                        <label for="id_detail_equipment">Equipamento</label>
+                        <input id="id_detail_equipment" name="equipment" type="text" data-detail-field disabled />
+                    </div>
+                    <div>
+                        <label for="id_detail_model">Modelo</label>
+                        <input id="id_detail_model" name="model" type="text" data-detail-field disabled />
+                    </div>
+                    <div>
+                        <label for="id_detail_brand">Marca</label>
+                        <input id="id_detail_brand" name="brand" type="text" data-detail-field disabled />
+                    </div>
+                    <div>
+                        <label for="id_detail_serial">Série</label>
+                        <input id="id_detail_serial" name="serial" type="text" data-detail-field disabled />
+                    </div>
+                    <div>
+                        <label for="id_detail_memory">Memória</label>
+                        <input id="id_detail_memory" name="memory" type="text" data-detail-field disabled />
+                    </div>
+                    <div>
+                        <label for="id_detail_processor">Processador</label>
+                        <input id="id_detail_processor" name="processor" type="text" data-detail-field disabled />
+                    </div>
+                    <div>
+                        <label for="id_detail_generation">Geração</label>
+                        <input id="id_detail_generation" name="generation" type="text" data-detail-field disabled />
+                    </div>
+                    <div>
+                        <label for="id_detail_hd">HD</label>
+                        <input id="id_detail_hd" name="hd" type="text" data-detail-field disabled />
+                    </div>
+                    <div>
+                        <label for="id_detail_mod_hd">MOD HD</label>
+                        <input id="id_detail_mod_hd" name="mod_hd" type="text" data-detail-field disabled />
+                    </div>
+                    <div>
+                        <label for="id_detail_windows">Windows</label>
+                        <input id="id_detail_windows" name="windows" type="text" data-detail-field disabled />
+                    </div>
+                    <div>
+                        <label for="id_detail_alimentacao">Alimentacao</label>
+                        <input id="id_detail_alimentacao" name="alimentacao" type="text" data-detail-field disabled />
+                    </div>
+                    <div style="grid-column: 1 / -1;">
+                        <label for="id_detail_observacao">Observacao</label>
+                        <textarea id="id_detail_observacao" name="observacao" rows="3" data-detail-field disabled></textarea>
+                    </div>
+                </div>
+                <div style="display: flex; justify-content: flex-end; margin-top: 12px;">
+                    <button type="submit" data-equipment-detail-save hidden>Salvar alterações</button>
+                </div>
+            </form>
         </div>
     {% else %}
         <p>Solicite ao administrador a inclusão no departamento <strong>TI</strong>.</p>
@@ -524,41 +583,172 @@
             resetCreate();
             open();
         };
-        const openEdit = (btn) => {
-            if (typeof window.__saveEquipamentosScrollState === 'function') window.__saveEquipamentosScrollState();
-            resetCreate();
-            if (actionInput) actionInput.value = 'update';
-            if (equipmentIdInput) equipmentIdInput.value = btn.dataset.id || '';
-            if (modalTitle) modalTitle.textContent = 'Editar equipamento';
-            if (submitBtn) submitBtn.textContent = 'Salvar alteracoes';
-            if (fieldMap.tagCode) fieldMap.tagCode.value = btn.dataset.tagCode || '';
-            if (tagDisplay) tagDisplay.textContent = (btn.dataset.tagCode || '-');
-            if (fieldMap.hostname) fieldMap.hostname.value = btn.dataset.hostname || '';
-            if (fieldMap.sector) fieldMap.sector.value = btn.dataset.sector || '';
-            if (fieldMap.user) fieldMap.user.value = btn.dataset.user || '';
-            if (fieldMap.equipment) fieldMap.equipment.value = btn.dataset.equipment || '';
-            if (fieldMap.model) fieldMap.model.value = btn.dataset.model || '';
-            if (fieldMap.brand) fieldMap.brand.value = btn.dataset.brand || '';
-            if (fieldMap.serial) fieldMap.serial.value = btn.dataset.serial || '';
-            if (fieldMap.memory) fieldMap.memory.value = btn.dataset.memory || '';
-            if (fieldMap.processor) fieldMap.processor.value = btn.dataset.processor || '';
-            if (fieldMap.generation) fieldMap.generation.value = btn.dataset.generation || '';
-            if (fieldMap.hd) fieldMap.hd.value = btn.dataset.hd || '';
-            if (fieldMap.modHd) fieldMap.modHd.value = btn.dataset.modHd || '';
-            if (fieldMap.windows) fieldMap.windows.value = btn.dataset.windows || '';
-            if (fieldMap.alimentacao) fieldMap.alimentacao.value = btn.dataset.alimentacao || '';
-            if (fieldMap.observacao) fieldMap.observacao.value = btn.dataset.observacao || '';
-            open();
-        };
 
         openBtn.addEventListener('click', openCreate);
         closeEls.forEach((el) => el.addEventListener('click', close));
-        document.querySelectorAll('tr[data-row-edit-equipment]').forEach((row) => {
+    })();
+</script>
+<script>
+    (function () {
+        const panel = document.querySelector('[data-equipment-detail-panel]');
+        const rows = Array.from(document.querySelectorAll('tr[data-row-edit-equipment]'));
+        if (!panel || !rows.length) return;
+
+        const titleEl = panel.querySelector('[data-equipment-detail-title]');
+        const closeBtn = panel.querySelector('[data-equipment-detail-close]');
+        const editBtn = panel.querySelector('[data-equipment-detail-edit]');
+        const cancelBtn = panel.querySelector('[data-equipment-detail-cancel]');
+        const saveBtn = panel.querySelector('[data-equipment-detail-save]');
+        const tagInput = panel.querySelector('[data-equipment-detail-tag]');
+        const tagLabel = panel.querySelector('[data-equipment-detail-tag-label]');
+        const equipmentIdInput = panel.querySelector('[data-equipment-detail-id]');
+        const refreshIdInput = panel.querySelector('[data-equipment-detail-refresh-id]');
+        const detailForm = panel.querySelector('[data-equipment-detail-form]');
+        const detailFields = Array.from(panel.querySelectorAll('[data-detail-field]'));
+        const searchInput = document.querySelector('input[data-table-search="equipamentos"]');
+
+        const rdpBtn = panel.querySelector('[data-connect-rdp]');
+        const rdpFileLink = panel.querySelector('[data-connect-rdp-file]');
+        const vncBtn = panel.querySelector('[data-connect-vnc]');
+
+        if (!detailForm || !detailFields.length) return;
+
+        const fieldMap = {
+            hostname: detailForm.querySelector('[name="hostname"]'),
+            sector: detailForm.querySelector('[name="sector"]'),
+            user: detailForm.querySelector('[name="user"]'),
+            equipment: detailForm.querySelector('[name="equipment"]'),
+            model: detailForm.querySelector('[name="model"]'),
+            brand: detailForm.querySelector('[name="brand"]'),
+            serial: detailForm.querySelector('[name="serial"]'),
+            memory: detailForm.querySelector('[name="memory"]'),
+            processor: detailForm.querySelector('[name="processor"]'),
+            generation: detailForm.querySelector('[name="generation"]'),
+            hd: detailForm.querySelector('[name="hd"]'),
+            modHd: detailForm.querySelector('[name="mod_hd"]'),
+            windows: detailForm.querySelector('[name="windows"]'),
+            alimentacao: detailForm.querySelector('[name="alimentacao"]'),
+            observacao: detailForm.querySelector('[name="observacao"]'),
+        };
+
+        let selectedRow = null;
+        let editMode = false;
+
+        const setEditMode = (enabled) => {
+            editMode = Boolean(enabled);
+            detailFields.forEach((field) => {
+                field.disabled = !editMode;
+            });
+            if (saveBtn) saveBtn.hidden = !editMode;
+            if (cancelBtn) cancelBtn.hidden = !editMode;
+            if (editBtn) editBtn.hidden = editMode;
+        };
+
+        const clearSelection = () => {
+            rows.forEach((row) => row.classList.remove('is-selected'));
+        };
+
+        const closePanel = () => {
+            panel.hidden = true;
+            selectedRow = null;
+            clearSelection();
+            setEditMode(false);
+        };
+
+        const applyRowData = (row) => {
+            selectedRow = row;
+            clearSelection();
+            row.classList.add('is-selected');
+
+            const data = row.dataset;
+            const tagCode = data.tagCode || '-';
+            const host = data.hostname || '-';
+            const user = data.user || '-';
+            const lastInventory = data.lastInventory || '-';
+            const connectHost = data.connectHost || '';
+            const rdpUrl = data.rdpUrl || '';
+            const vncLabel = data.tagCode || data.serial || data.user || '';
+
+            if (tagInput) tagInput.value = data.tagCode || '';
+            if (equipmentIdInput) equipmentIdInput.value = data.id || '';
+            if (refreshIdInput) refreshIdInput.value = data.id || '';
+            if (tagLabel) tagLabel.textContent = tagCode;
+            if (titleEl) titleEl.textContent = `${tagCode} | Host: ${host} | Usuário: ${user} | Últ. inventário: ${lastInventory}`;
+
+            if (rdpBtn) {
+                rdpBtn.setAttribute('data-host', connectHost);
+                rdpBtn.setAttribute('data-rdp-url', rdpUrl);
+            }
+            if (rdpFileLink) {
+                rdpFileLink.setAttribute('href', rdpUrl || '#');
+            }
+            if (vncBtn) {
+                vncBtn.setAttribute('data-host', connectHost);
+                vncBtn.setAttribute('data-label', vncLabel);
+            }
+
+            if (fieldMap.hostname) fieldMap.hostname.value = data.hostname || '';
+            if (fieldMap.sector) fieldMap.sector.value = data.sector || '';
+            if (fieldMap.user) fieldMap.user.value = data.user || '';
+            if (fieldMap.equipment) fieldMap.equipment.value = data.equipment || '';
+            if (fieldMap.model) fieldMap.model.value = data.model || '';
+            if (fieldMap.brand) fieldMap.brand.value = data.brand || '';
+            if (fieldMap.serial) fieldMap.serial.value = data.serial || '';
+            if (fieldMap.memory) fieldMap.memory.value = data.memory || '';
+            if (fieldMap.processor) fieldMap.processor.value = data.processor || '';
+            if (fieldMap.generation) fieldMap.generation.value = data.generation || '';
+            if (fieldMap.hd) fieldMap.hd.value = data.hd || '';
+            if (fieldMap.modHd) fieldMap.modHd.value = data.modHd || '';
+            if (fieldMap.windows) fieldMap.windows.value = data.windows || '';
+            if (fieldMap.alimentacao) fieldMap.alimentacao.value = data.alimentacao || '';
+            if (fieldMap.observacao) fieldMap.observacao.value = data.observacao || '';
+
+            panel.hidden = false;
+            setEditMode(false);
+        };
+
+        rows.forEach((row) => {
             row.addEventListener('click', (event) => {
-                if (event.target.closest('button, a, input, select, textarea, label')) return;
-                openEdit(row);
+                if (event.target.closest('button, a, input, select, textarea, label, form')) return;
+                applyRowData(row);
             });
         });
+
+        if (editBtn) {
+            editBtn.addEventListener('click', () => {
+                if (!selectedRow) return;
+                setEditMode(true);
+            });
+        }
+        if (cancelBtn) {
+            cancelBtn.addEventListener('click', () => {
+                if (!selectedRow) {
+                    setEditMode(false);
+                    return;
+                }
+                applyRowData(selectedRow);
+            });
+        }
+        if (closeBtn) {
+            closeBtn.addEventListener('click', closePanel);
+        }
+
+        detailForm.addEventListener('submit', (event) => {
+            if (!selectedRow) {
+                event.preventDefault();
+                return;
+            }
+            setEditMode(false);
+        });
+
+        if (searchInput) {
+            searchInput.addEventListener('input', () => {
+                if (!selectedRow) return;
+                if (selectedRow.style.display === 'none') {
+                    closePanel();
+                }
+            });
+        }
     })();
 </script>
 <script>
@@ -628,11 +818,11 @@
             wrap.classList.toggle('is-wide', vw >= 1900);
 
             if (vw < 1280) {
-                table.style.minWidth = '1420px';
+                table.style.minWidth = '780px';
             } else if (vw < 1680) {
-                table.style.minWidth = '1540px';
+                table.style.minWidth = '860px';
             } else {
-                table.style.minWidth = '1640px';
+                table.style.minWidth = '920px';
             }
         };
 
