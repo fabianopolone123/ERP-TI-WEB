@@ -229,6 +229,7 @@ class Requisition(models.Model):
     class Status(models.TextChoices):
         PENDING_APPROVAL = 'pending_approval', 'Pendente de aprovação'
         APPROVED = 'approved', 'Aprovado'
+        PARTIALLY_RECEIVED = 'partially_received', 'Entregue parcial'
         REJECTED = 'rejected', 'Reprovado'
         RECEIVED = 'received', 'Recebido'
 
@@ -241,7 +242,9 @@ class Requisition(models.Model):
     total_value = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     requested_at = models.DateField(null=True, blank=True)
     approved_at = models.DateField(null=True, blank=True)
+    partially_received_at = models.DateField(null=True, blank=True)
     received_at = models.DateField(null=True, blank=True)
+    delivered_quantity = models.PositiveIntegerField(default=0)
     invoice = models.CharField(max_length=120, blank=True, default='')
     approved_by_2 = models.CharField(max_length=200, blank=True, default='')
     req_type = models.CharField(max_length=120, blank=True, default='')

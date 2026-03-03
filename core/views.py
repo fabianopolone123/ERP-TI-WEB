@@ -15,7 +15,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.core.mail import send_mail
 from django.db import transaction
-from django.db.models import Count, Q, Case, When, Value, IntegerField, Exists, OuterRef
+from django.db.models import Count, Q, Case, When, Value, IntegerField, Exists, OuterRef, Sum
 from django.db.models.functions import TruncDate, Lower
 from django.shortcuts import redirect
 from django.utils import timezone
@@ -1979,12 +1979,30 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
         return saved_count, None
 
     @staticmethod
+    def _parse_positive_int(raw_value: str, default: int = 0) -> int:
+        try:
+            value = int(str(raw_value or '').strip())
+        except (TypeError, ValueError):
+            return int(default)
+        return value if value > 0 else int(default)
+
+    @staticmethod
+    def _expected_delivery_quantity(requisition: Requisition) -> int:
+        selected_total = (
+            requisition.quotes.filter(parent__isnull=True, is_selected=True).aggregate(total=Sum('quantity')).get('total') or 0
+        )
+        selected_int = int(selected_total or 0)
+        if selected_int > 0:
+            return selected_int
+        return int(requisition.quantity or 0)
+
+    @staticmethod
     def _sync_requisition_status_with_approved_quote(requisition: Requisition) -> None:
         has_selected_main = requisition.quotes.filter(parent__isnull=True, is_selected=True).exists()
         status_before = requisition.status
         if has_selected_main and requisition.status == Requisition.Status.PENDING_APPROVAL:
             requisition.status = Requisition.Status.APPROVED
-        elif not has_selected_main and requisition.status == Requisition.Status.APPROVED:
+        elif not has_selected_main and requisition.status in {Requisition.Status.APPROVED, Requisition.Status.PARTIALLY_RECEIVED}:
             requisition.status = Requisition.Status.PENDING_APPROVAL
         if requisition.status != status_before:
             requisition.save(update_fields=['status', 'updated_at'])
@@ -1996,9 +2014,17 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
             requisition.requested_at = requisition.created_at.date() if requisition.created_at else timezone.localdate()
             update_fields.append('requested_at')
 
-        if requisition.status in {Requisition.Status.APPROVED, Requisition.Status.RECEIVED} and not requisition.approved_at:
+        if requisition.status in {
+            Requisition.Status.APPROVED,
+            Requisition.Status.PARTIALLY_RECEIVED,
+            Requisition.Status.RECEIVED,
+        } and not requisition.approved_at:
             requisition.approved_at = timezone.localdate()
             update_fields.append('approved_at')
+
+        if requisition.status == Requisition.Status.PARTIALLY_RECEIVED and not requisition.partially_received_at:
+            requisition.partially_received_at = timezone.localdate()
+            update_fields.append('partially_received_at')
 
         if requisition.status == Requisition.Status.RECEIVED and not requisition.received_at:
             requisition.received_at = timezone.localdate()
@@ -2025,14 +2051,82 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
                 messages.success(request, 'Esta requisição já estava marcada como entregue.')
                 return redirect('requisicoes')
 
-            if requisition.status != Requisition.Status.APPROVED:
-                messages.error(request, 'Apenas requisições aprovadas podem ser marcadas como entregues.')
+            if requisition.status not in {Requisition.Status.APPROVED, Requisition.Status.PARTIALLY_RECEIVED}:
+                messages.error(request, 'Apenas requisições aprovadas ou parcialmente entregues podem ser marcadas como entregues.')
+                return redirect('requisicoes')
+
+            expected_qty = self._expected_delivery_quantity(requisition)
+            if expected_qty <= 0:
+                expected_qty = int(requisition.quantity or 0)
+            if expected_qty <= 0:
+                messages.error(request, 'Não foi possível identificar a quantidade esperada da requisição.')
                 return redirect('requisicoes')
 
             requisition.status = Requisition.Status.RECEIVED
-            requisition.save(update_fields=['status', 'updated_at'])
+            requisition.delivered_quantity = expected_qty
+            requisition.save(update_fields=['status', 'delivered_quantity', 'updated_at'])
             self._sync_requisition_timeline_dates(requisition)
-            messages.success(request, f'Requisição {requisition.code} marcada como entregue.')
+            messages.success(request, f'Requisição {requisition.code} marcada como entregue ({expected_qty}/{expected_qty}).')
+            return redirect('requisicoes')
+        if action == 'mark_partial_received':
+            requisition_id = (request.POST.get('requisition_id') or '').strip()
+            requisition = Requisition.objects.filter(id=requisition_id).first()
+            if not requisition:
+                messages.error(request, 'Requisição não encontrada para entrega parcial.')
+                return redirect('requisicoes')
+
+            self._sync_requisition_status_with_approved_quote(requisition)
+            if requisition.status == Requisition.Status.RECEIVED:
+                messages.info(request, 'Esta requisição já está totalmente entregue.')
+                return redirect('requisicoes')
+
+            if requisition.status not in {Requisition.Status.APPROVED, Requisition.Status.PARTIALLY_RECEIVED}:
+                messages.error(request, 'Apenas requisições aprovadas podem receber entrega parcial.')
+                return redirect('requisicoes')
+
+            add_qty = self._parse_positive_int(request.POST.get('delivered_quantity_add'), default=0)
+            if add_qty <= 0:
+                messages.error(request, 'Informe uma quantidade válida para entrega parcial.')
+                return redirect('requisicoes')
+
+            expected_qty = self._expected_delivery_quantity(requisition)
+            if expected_qty <= 0:
+                expected_qty = int(requisition.quantity or 0)
+            if expected_qty <= 0:
+                messages.error(request, 'Não foi possível identificar a quantidade esperada da requisição.')
+                return redirect('requisicoes')
+
+            delivered_current = int(requisition.delivered_quantity or 0)
+            remaining = max(expected_qty - delivered_current, 0)
+            if remaining <= 0:
+                requisition.status = Requisition.Status.RECEIVED
+                requisition.delivered_quantity = expected_qty
+                requisition.save(update_fields=['status', 'delivered_quantity', 'updated_at'])
+                self._sync_requisition_timeline_dates(requisition)
+                messages.success(request, f'Requisição {requisition.code} já estava totalmente entregue ({expected_qty}/{expected_qty}).')
+                return redirect('requisicoes')
+
+            if add_qty > remaining:
+                messages.error(request, f'Quantidade inválida. Restante para entrega: {remaining}.')
+                return redirect('requisicoes')
+
+            delivered_new = delivered_current + add_qty
+            requisition.delivered_quantity = delivered_new
+            if delivered_new >= expected_qty:
+                requisition.status = Requisition.Status.RECEIVED
+            else:
+                requisition.status = Requisition.Status.PARTIALLY_RECEIVED
+            requisition.save(update_fields=['status', 'delivered_quantity', 'updated_at'])
+            self._sync_requisition_timeline_dates(requisition)
+
+            if delivered_new >= expected_qty:
+                messages.success(request, f'Entrega finalizada para {requisition.code} ({delivered_new}/{expected_qty}).')
+            else:
+                pending = expected_qty - delivered_new
+                messages.success(
+                    request,
+                    f'Entrega parcial registrada para {requisition.code}: {delivered_new}/{expected_qty} entregue(s), pendente(s) {pending}.',
+                )
             return redirect('requisicoes')
         if action == 'mark_rejected':
             requisition_id = (request.POST.get('requisition_id') or '').strip()
@@ -2045,15 +2139,19 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
                 messages.success(request, 'Esta requisição já está marcada como não aprovada.')
                 return redirect('requisicoes')
 
-            if requisition.status == Requisition.Status.RECEIVED:
-                messages.error(request, 'Requisições já entregues não podem ser marcadas como não aprovadas.')
+            if requisition.status in {Requisition.Status.RECEIVED, Requisition.Status.PARTIALLY_RECEIVED}:
+                messages.error(request, 'Requisições com entrega iniciada não podem ser marcadas como não aprovadas.')
                 return redirect('requisicoes')
 
             requisition.quotes.update(is_selected=False)
             requisition.status = Requisition.Status.REJECTED
+            requisition.delivered_quantity = 0
             requisition.approved_at = None
+            requisition.partially_received_at = None
             requisition.received_at = None
-            requisition.save(update_fields=['status', 'approved_at', 'received_at', 'updated_at'])
+            requisition.save(
+                update_fields=['status', 'delivered_quantity', 'approved_at', 'partially_received_at', 'received_at', 'updated_at']
+            )
             messages.success(request, f'Requisição {requisition.code} marcada como não aprovada.')
             return redirect('requisicoes')
 
@@ -2176,6 +2274,19 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
             req.approved_quote_ids = approved_quote_ids
             req.kind_display = req.get_kind_display() if hasattr(req, 'get_kind_display') else ''
             req.rejected_at = req.updated_at.date() if req.status == Requisition.Status.REJECTED and req.updated_at else None
+            selected_quantity = sum(int(q.quantity or 0) for q in selected_mains)
+            req.expected_delivery_quantity = selected_quantity if selected_quantity > 0 else int(req.quantity or 0)
+            if req.expected_delivery_quantity < 0:
+                req.expected_delivery_quantity = 0
+            delivered_quantity = int(req.delivered_quantity or 0)
+            if req.status == Requisition.Status.RECEIVED and req.expected_delivery_quantity > 0 and delivered_quantity <= 0:
+                delivered_quantity = req.expected_delivery_quantity
+            if delivered_quantity < 0:
+                delivered_quantity = 0
+            if req.expected_delivery_quantity > 0:
+                delivered_quantity = min(delivered_quantity, req.expected_delivery_quantity)
+            req.delivered_quantity_display = delivered_quantity
+            req.pending_delivery_quantity = max(req.expected_delivery_quantity - delivered_quantity, 0)
 
             if selected_mains:
                 total = Decimal('0')

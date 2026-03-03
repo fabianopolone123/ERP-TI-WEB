@@ -121,6 +121,22 @@
         justify-content: center;
         white-space: nowrap;
     }
+
+    .partial-delivery-row {
+        display: grid;
+        grid-template-columns: 82px 1fr;
+        gap: 6px;
+        align-items: stretch;
+    }
+
+    .partial-delivery-row input[type="number"] {
+        min-height: 38px;
+        text-align: center;
+    }
+
+    .delivery-progress {
+        font-size: 0.78rem;
+    }
 </style>
 <div class="card">
     <div class="topbar">
@@ -169,6 +185,7 @@
                     <option value="">Todos</option>
                     <option value="pending_approval">Pendente de aprovação</option>
                     <option value="approved">Aprovado</option>
+                    <option value="partially_received">Entregue parcial</option>
                     <option value="rejected">Reprovado</option>
                     <option value="received">Recebido</option>
                 </select>
@@ -227,12 +244,26 @@
                             <td data-sort-value="{% if item.requested_at %}{{ item.requested_at|date:'Ymd' }}{% else %}{{ item.created_at|date:'YmdHis' }}{% endif %}">
                                 <div class="muted">Pedido: {% if item.requested_at %}{{ item.requested_at|date:'d/m/Y' }}{% else %}{{ item.created_at|date:'d/m/Y' }}{% endif %}</div>
                                 <div class="muted">Aprovação: {% if item.approved_at %}{{ item.approved_at|date:'d/m/Y' }}{% else %}-{% endif %}</div>
+                                <div class="muted">Parcial: {% if item.partially_received_at %}{{ item.partially_received_at|date:'d/m/Y' }}{% else %}-{% endif %}</div>
                                 <div class="muted">Entrega: {% if item.received_at %}{{ item.received_at|date:'d/m/Y' }}{% else %}-{% endif %}</div>
+                                <div class="muted delivery-progress">
+                                    Entregue:
+                                    {% if item.expected_delivery_quantity > 0 %}
+                                        {{ item.delivered_quantity_display }}/{{ item.expected_delivery_quantity }}
+                                    {% else %}
+                                        {{ item.delivered_quantity_display }}
+                                    {% endif %}
+                                </div>
                             </td>
                             {% if can_manage_requisicoes %}
                             <td>
                                 <div class="req-actions">
-                                    {% if item.status != 'rejected' and item.status != 'received' %}
+                                    {% if item.expected_delivery_quantity > 0 %}
+                                    <div class="muted delivery-progress">
+                                        Entregue {{ item.delivered_quantity_display }}/{{ item.expected_delivery_quantity }}{% if item.pending_delivery_quantity > 0 %} | Pendente {{ item.pending_delivery_quantity }}{% endif %}
+                                    </div>
+                                    {% endif %}
+                                    {% if item.status != 'rejected' and item.status != 'received' and item.status != 'partially_received' %}
                                         <form method="post" class="inline-form" data-mark-rejected-form>
                                             {% csrf_token %}
                                             <input type="hidden" name="action" value="mark_rejected" />
@@ -240,12 +271,33 @@
                                             <button type="submit" data-mark-rejected-button>Marcar não aprovado</button>
                                         </form>
                                     {% endif %}
-                                    {% if item.status == 'approved' %}
+                                    {% if item.status == 'approved' or item.status == 'partially_received' %}
+                                        {% if item.pending_delivery_quantity > 0 %}
+                                        <form method="post" class="inline-form" data-mark-partial-form>
+                                            {% csrf_token %}
+                                            <input type="hidden" name="action" value="mark_partial_received" />
+                                            <input type="hidden" name="requisition_id" value="{{ item.id }}" />
+                                            <div class="partial-delivery-row">
+                                                <input
+                                                    type="number"
+                                                    name="delivered_quantity_add"
+                                                    min="1"
+                                                    step="1"
+                                                    max="{% if item.pending_delivery_quantity > 0 %}{{ item.pending_delivery_quantity }}{% endif %}"
+                                                    value="1"
+                                                    data-mark-partial-input
+                                                    required
+                                                    title="Quantidade entregue agora"
+                                                />
+                                                <button type="submit" data-mark-partial-button>Entrega parcial</button>
+                                            </div>
+                                        </form>
+                                        {% endif %}
                                         <form method="post" class="inline-form" data-mark-received-form>
                                             {% csrf_token %}
                                             <input type="hidden" name="action" value="mark_received" />
                                             <input type="hidden" name="requisition_id" value="{{ item.id }}" />
-                                            <button type="submit" data-mark-received-button>Marcar entrega</button>
+                                            <button type="submit" data-mark-received-button>Marcar entrega total</button>
                                         </form>
                                     {% endif %}
                                     <button type="button" data-duplicate-requisition data-requisition-id="{{ item.id }}">Duplicar</button>
@@ -297,6 +349,7 @@
                     <select id="id_requisition_status" name="status">
                         <option value="pending_approval">Pendente de aprovação</option>
                         <option value="approved">Aprovado</option>
+                        <option value="partially_received">Entregue parcial</option>
                         <option value="rejected">Reprovado</option>
                         <option value="received">Recebido</option>
                     </select>
@@ -1573,6 +1626,11 @@
                 event.stopPropagation();
             });
         });
+        document.querySelectorAll('[data-mark-partial-form], [data-mark-partial-button], [data-mark-partial-input]').forEach((el) => {
+            el.addEventListener('click', (event) => {
+                event.stopPropagation();
+            });
+        });
         document.querySelectorAll('[data-mark-rejected-form], [data-mark-rejected-button]').forEach((el) => {
             el.addEventListener('click', (event) => {
                 event.stopPropagation();
@@ -1765,7 +1823,8 @@
             <div><strong>Título:</strong> <span data-ro-title>-</span></div>
             <div><strong>Tipo:</strong> <span data-ro-kind>-</span></div>
             <div><strong>Requisição:</strong> <span data-ro-request>-</span></div>
-            <div class="muted">Pedido: <span data-ro-requested>-</span> | Aprovação: <span data-ro-approved>-</span> | Reprovação: <span data-ro-rejected>-</span> | Entrega: <span data-ro-received>-</span></div>
+            <div class="muted">Pedido: <span data-ro-requested>-</span> | Aprovação: <span data-ro-approved>-</span> | Reprovação: <span data-ro-rejected>-</span> | Parcial: <span data-ro-partial>-</span> | Entrega: <span data-ro-received>-</span></div>
+            <div class="muted">Quantidade entregue: <span data-ro-delivery-progress>-</span></div>
             <div><strong>Total aprovado:</strong> <span data-ro-total>-</span></div>
             <div style="margin-top: 6px;">
                 <strong>Orçamentos</strong>
@@ -1792,7 +1851,11 @@
                 requested_at: "{% if item.requested_at %}{{ item.requested_at|date:'d/m/Y'|escapejs }}{% else %}{{ item.created_at|date:'d/m/Y'|escapejs }}{% endif %}",
                 approved_at: "{% if item.approved_at %}{{ item.approved_at|date:'d/m/Y'|escapejs }}{% else %}-{% endif %}",
                 rejected_at: "{% if item.rejected_at %}{{ item.rejected_at|date:'d/m/Y'|escapejs }}{% else %}-{% endif %}",
+                partially_received_at: "{% if item.partially_received_at %}{{ item.partially_received_at|date:'d/m/Y'|escapejs }}{% else %}-{% endif %}",
                 received_at: "{% if item.received_at %}{{ item.received_at|date:'d/m/Y'|escapejs }}{% else %}-{% endif %}",
+                delivered_quantity: "{{ item.delivered_quantity_display|default:0|escapejs }}",
+                expected_delivery_quantity: "{{ item.expected_delivery_quantity|default:0|escapejs }}",
+                pending_delivery_quantity: "{{ item.pending_delivery_quantity|default:0|escapejs }}",
                 total: "{% if item.quotes_total is not None %}R$ {{ item.quotes_total|br_money|escapejs }}{% else %}Aguardando aprovação{% endif %}",
                 quotes: [
                     {% for quote in item.main_quotes %}
@@ -1863,8 +1926,13 @@
             setText('[data-ro-requested]', data.requested_at || '-');
             setText('[data-ro-approved]', data.approved_at || '-');
             setText('[data-ro-rejected]', data.rejected_at || '-');
+            setText('[data-ro-partial]', data.partially_received_at || '-');
             setText('[data-ro-received]', data.received_at || '-');
             setText('[data-ro-total]', data.total || '-');
+            const deliveredQty = Number.parseInt(String(data.delivered_quantity || '0'), 10) || 0;
+            const expectedQty = Number.parseInt(String(data.expected_delivery_quantity || '0'), 10) || 0;
+            const deliveryProgress = expectedQty > 0 ? `${deliveredQty}/${expectedQty}` : String(deliveredQty);
+            setText('[data-ro-delivery-progress]', deliveryProgress);
 
             if (statusBadge) {
                 statusBadge.textContent = data.status || '-';
