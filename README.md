@@ -16,11 +16,6 @@ Para inventariar PCs automaticamente sem depender de acesso remoto por WMI:
 - Header: `Authorization: Bearer <token>`
 
 As abas `Equipamentos` e `Softwares` serao atualizadas automaticamente quando cada script enviar os dados.
-Na aba `Segurança`, o ERP passa a destacar:
-- Firewall por perfil (Dominio/Privado/Publico)
-- Defender (servico e protecao em tempo real)
-- Antivirus identificado
-- Alertas de risco por equipamento
 
 Instalacao da tarefa nas maquinas (GPO startup):
 
