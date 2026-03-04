@@ -3717,6 +3717,47 @@ def ws_tickets_ping(request):
     return JsonResponse({'ok': True, 'transport': 'http-fallback'})
 
 
+@login_required
+@require_GET
+def chamados_new_alert_api(request):
+    if not is_ti_user(request):
+        return JsonResponse({'ok': False, 'error': 'forbidden'}, status=403)
+
+    since_raw = (request.GET.get('since_id') or '').strip()
+    try:
+        since_id = int(since_raw) if since_raw else 0
+    except ValueError:
+        since_id = 0
+    if since_id < 0:
+        since_id = 0
+
+    latest_id = Ticket.objects.order_by('-id').values_list('id', flat=True).first() or 0
+    new_qs = (
+        Ticket.objects.filter(id__gt=since_id)
+        .select_related('created_by')
+        .order_by('id')[:25]
+    )
+    items = [
+        {
+            'id': item.id,
+            'title': (item.title or '').strip(),
+            'status': item.status,
+            'created_at': timezone.localtime(item.created_at).strftime('%d/%m/%Y %H:%M') if item.created_at else '',
+            'requester': (item.created_by.get_full_name() or item.created_by.username) if item.created_by else '',
+        }
+        for item in new_qs
+    ]
+
+    return JsonResponse(
+        {
+            'ok': True,
+            'latest_id': int(latest_id),
+            'count': len(items),
+            'tickets': items,
+        }
+    )
+
+
 def _resolve_media_file(relative_path: str) -> tuple[str, Path]:
     normalized = (relative_path or '').strip().replace('\\', '/').lstrip('/')
     if not normalized:

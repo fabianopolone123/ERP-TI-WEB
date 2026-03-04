@@ -259,6 +259,17 @@
         align-items: center;
         gap: 10px;
     }
+    .new-ticket-alert-list {
+        margin: 8px 0 0;
+        padding-left: 18px;
+        max-height: 220px;
+        overflow: auto;
+        color: #dbeafe;
+        line-height: 1.4;
+    }
+    .new-ticket-alert-list li {
+        margin-bottom: 6px;
+    }
     @media (max-width: 760px) {
         .ticket-create-inline {
             grid-template-columns: 1fr;
@@ -902,6 +913,23 @@
                     <button type="submit" data-close-ticket-submit>Finalizar</button>
                 </div>
             </form>
+        </div>
+    </div>
+{% endif %}
+{% if is_ti_group %}
+    <div class="modal" data-new-ticket-alert-modal hidden>
+        <div class="modal-backdrop"></div>
+        <div class="modal-content" style="width:min(620px, 94vw);">
+            <div class="topbar" style="margin-bottom: 8px;">
+                <h3 data-new-ticket-alert-title>Novo chamado</h3>
+            </div>
+            <p style="margin:0; color:#dbeafe;">
+                Um novo chamado foi aberto. Revise abaixo e clique em <strong>OK</strong> para confirmar.
+            </p>
+            <ul class="new-ticket-alert-list" data-new-ticket-alert-list></ul>
+            <div style="display:flex; justify-content:flex-end; margin-top: 10px;">
+                <button type="button" data-new-ticket-alert-ok>OK</button>
+            </div>
         </div>
     </div>
 {% endif %}
@@ -2207,9 +2235,239 @@
     })();
 </script>
 {% if is_ti_group %}
-    <script>
-        (function () {
-            const DEFAULT_SECONDS = 10;
+<script>
+    (function () {
+        const modal = document.querySelector('[data-new-ticket-alert-modal]');
+        if (!modal) return;
+
+        const titleEl = modal.querySelector('[data-new-ticket-alert-title]');
+        const listEl = modal.querySelector('[data-new-ticket-alert-list]');
+        const okBtn = modal.querySelector('[data-new-ticket-alert-ok]');
+
+        const STORAGE_KEY = 'chamados_last_seen_ticket_id_v1';
+        const CHECK_INTERVAL_MS = 12000;
+        const MAX_LISTED_ITEMS = 10;
+
+        const parsePositiveInt = (value) => {
+            const parsed = Number.parseInt(String(value || '').trim(), 10);
+            return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+        };
+
+        const maxTicketIdFromDom = () => {
+            let maxId = 0;
+            document.querySelectorAll('.ticket-card[data-ticket-id]').forEach((card) => {
+                const id = parsePositiveInt(card.dataset.ticketId);
+                if (id > maxId) maxId = id;
+            });
+            return maxId;
+        };
+
+        const loadLastSeenId = () => {
+            const fromStorage = parsePositiveInt(localStorage.getItem(STORAGE_KEY));
+            if (fromStorage > 0) return fromStorage;
+            const fromDom = maxTicketIdFromDom();
+            if (fromDom > 0) localStorage.setItem(STORAGE_KEY, String(fromDom));
+            return fromDom;
+        };
+
+        let lastSeenId = loadLastSeenId();
+        let pendingTickets = [];
+        let timerId = null;
+        let titleFlashTimerId = null;
+        let requestedBrowserPermission = false;
+        const originalTitle = document.title;
+
+        const setLastSeenId = (value) => {
+            const parsed = parsePositiveInt(value);
+            if (parsed <= 0) return;
+            if (parsed > lastSeenId) {
+                lastSeenId = parsed;
+                localStorage.setItem(STORAGE_KEY, String(lastSeenId));
+            }
+        };
+
+        const normalizeTickets = (items) => {
+            const out = [];
+            const seen = new Set();
+            (items || []).forEach((item) => {
+                const id = parsePositiveInt(item.id);
+                if (!id || seen.has(id)) return;
+                seen.add(id);
+                out.push({
+                    id,
+                    title: String(item.title || '').trim() || '(sem título)',
+                    requester: String(item.requester || '').trim(),
+                    createdAt: String(item.created_at || '').trim(),
+                });
+            });
+            return out;
+        };
+
+        const openModal = () => {
+            modal.hidden = false;
+            try {
+                window.focus();
+            } catch (_) {
+                // Browser pode bloquear foco em alguns cenários.
+            }
+        };
+
+        const closeModal = () => {
+            modal.hidden = true;
+            if (titleFlashTimerId) {
+                clearInterval(titleFlashTimerId);
+                titleFlashTimerId = null;
+                document.title = originalTitle;
+            }
+        };
+
+        const startTitleFlash = () => {
+            if (titleFlashTimerId) return;
+            let showAlertTitle = false;
+            titleFlashTimerId = window.setInterval(() => {
+                showAlertTitle = !showAlertTitle;
+                document.title = showAlertTitle ? 'Novo chamado!' : originalTitle;
+            }, 900);
+        };
+
+        const renderPendingModal = () => {
+            if (!pendingTickets.length) return;
+            const first = pendingTickets[0];
+            if (titleEl) titleEl.textContent = `Novo chamado #${first.id}`;
+            if (listEl) {
+                listEl.innerHTML = '';
+                pendingTickets.slice(0, MAX_LISTED_ITEMS).forEach((item) => {
+                    const li = document.createElement('li');
+                    let text = `#${item.id} - ${item.title}`;
+                    if (item.requester) text += ` | ${item.requester}`;
+                    if (item.createdAt) text += ` | ${item.createdAt}`;
+                    li.textContent = text;
+                    listEl.appendChild(li);
+                });
+                if (pendingTickets.length > MAX_LISTED_ITEMS) {
+                    const li = document.createElement('li');
+                    li.textContent = `... e mais ${pendingTickets.length - MAX_LISTED_ITEMS} chamado(s).`;
+                    listEl.appendChild(li);
+                }
+            }
+            startTitleFlash();
+            openModal();
+        };
+
+        const queueTickets = (incomingItems) => {
+            const incoming = normalizeTickets(incomingItems);
+            if (!incoming.length) return;
+
+            const existingIds = new Set(pendingTickets.map((item) => item.id));
+            incoming.forEach((item) => {
+                if (!existingIds.has(item.id)) {
+                    pendingTickets.push(item);
+                }
+            });
+
+            if (!document.hidden) {
+                renderPendingModal();
+            }
+        };
+
+        const notifyBrowser = (incomingItems) => {
+            if (!('Notification' in window)) return;
+            const incoming = normalizeTickets(incomingItems);
+            if (!incoming.length) return;
+
+            const showNotification = () => {
+                const body = incoming
+                    .slice(0, 3)
+                    .map((item) => `#${item.id} - ${item.title}`)
+                    .join('\n');
+                const text = incoming.length > 3 ? `${body}\n+${incoming.length - 3} chamado(s)` : body;
+                try {
+                    const n = new Notification('Novo chamado no ERP TI', {
+                        body: text,
+                        tag: 'erp-ti-new-ticket',
+                        renotify: true,
+                        requireInteraction: true,
+                    });
+                    n.onclick = () => {
+                        try {
+                            window.focus();
+                        } catch (_) {
+                            // ignore
+                        }
+                        renderPendingModal();
+                        n.close();
+                    };
+                } catch (_) {
+                    // ignore
+                }
+            };
+
+            if (Notification.permission === 'granted') {
+                showNotification();
+                return;
+            }
+            if (Notification.permission === 'default' && !requestedBrowserPermission) {
+                requestedBrowserPermission = true;
+                Notification.requestPermission()
+                    .then((perm) => {
+                        if (perm === 'granted') showNotification();
+                    })
+                    .catch(() => {});
+            }
+        };
+
+        const checkNewTickets = async () => {
+            try {
+                const response = await fetch(`{% url 'chamados_new_alert_api' %}?since_id=${encodeURIComponent(String(lastSeenId || 0))}`, {
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                });
+                if (!response.ok) return;
+                const data = await response.json();
+                if (!data || !data.ok) return;
+
+                setLastSeenId(data.latest_id);
+                const incoming = normalizeTickets(data.tickets || []);
+                if (!incoming.length) return;
+
+                queueTickets(incoming);
+                if (document.hidden) {
+                    notifyBrowser(incoming);
+                }
+            } catch (_) {
+                // ignore falhas temporárias
+            }
+        };
+
+        if (okBtn) {
+            okBtn.addEventListener('click', () => {
+                if (pendingTickets.length) {
+                    pendingTickets.shift();
+                }
+                if (pendingTickets.length) {
+                    renderPendingModal();
+                } else {
+                    closeModal();
+                }
+            });
+        }
+
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden && pendingTickets.length) {
+                renderPendingModal();
+            }
+        });
+
+        checkNewTickets();
+        timerId = window.setInterval(checkNewTickets, CHECK_INTERVAL_MS);
+        window.addEventListener('beforeunload', () => {
+            if (timerId) clearInterval(timerId);
+            closeModal();
+        });
+    })();
+</script>
+<script>
+    (function () {
+        const DEFAULT_SECONDS = 10;
             const STORAGE_KEY = 'chamados_refresh_seconds';
             const refreshInput = document.querySelector('#id_refresh_seconds');
 

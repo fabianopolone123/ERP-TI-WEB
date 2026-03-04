@@ -28,6 +28,7 @@ from .views import (
     ticket_reopen,
     ticket_timer_action,
     ws_tickets_ping,
+    chamados_new_alert_api,
     inventory_push_api,
     chamados_fill_spreadsheet,
 )
@@ -60,6 +61,7 @@ urlpatterns = [
     path('chamados/timer/', ticket_timer_action, name='chamados_timer'),
     path('chamados/preencher-planilha/', chamados_fill_spreadsheet, name='chamados_preencher_planilha'),
     path('ws/tickets/', ws_tickets_ping, name='ws_tickets_ping'),
+    path('api/chamados/novos/', chamados_new_alert_api, name='chamados_new_alert_api'),
     path('api/inventory/push/', inventory_push_api, name='inventory_push_api'),
     path('', DashboardView.as_view(), name='dashboard'),
 ]
