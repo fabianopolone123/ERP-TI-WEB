@@ -201,6 +201,8 @@
                             data-model="{{ item.model|default:''|escape }}"
                             data-brand="{{ item.brand|default:''|escape }}"
                             data-serial="{{ item.serial|default:''|escape }}"
+                            data-bios-uuid="{{ item.bios_uuid|default:''|escape }}"
+                            data-mac-addresses="{{ item.mac_addresses|default:''|escape }}"
                             data-memory="{{ item.memory|default:''|escape }}"
                             data-processor="{{ item.processor|default:''|escape }}"
                             data-generation="{{ item.generation|default:''|escape }}"
@@ -279,6 +281,14 @@
                         <div>
                             <label for="id_detail_serial">Série</label>
                             <input id="id_detail_serial" name="serial" type="text" data-detail-field disabled />
+                        </div>
+                        <div>
+                            <label for="id_detail_bios_uuid">UUID (BIOS)</label>
+                            <input id="id_detail_bios_uuid" type="text" data-detail-meta disabled />
+                        </div>
+                        <div style="grid-column: 1 / -1;">
+                            <label for="id_detail_mac_addresses">MAC(s)</label>
+                            <textarea id="id_detail_mac_addresses" rows="2" data-detail-meta disabled></textarea>
                         </div>
                         <div>
                             <label for="id_detail_memory">Memória</label>
@@ -510,6 +520,10 @@
             alimentacao: detailForm.querySelector('[name="alimentacao"]'),
             observacao: detailForm.querySelector('[name="observacao"]'),
         };
+        const metaMap = {
+            biosUuid: panel.querySelector('[data-detail-meta][id="id_detail_bios_uuid"]'),
+            macAddresses: panel.querySelector('[data-detail-meta][id="id_detail_mac_addresses"]'),
+        };
 
         let selectedRow = null;
         let editMode = false;
@@ -558,6 +572,8 @@
             if (fieldMap.model) fieldMap.model.value = data.model || '';
             if (fieldMap.brand) fieldMap.brand.value = data.brand || '';
             if (fieldMap.serial) fieldMap.serial.value = data.serial || '';
+            if (metaMap.biosUuid) metaMap.biosUuid.value = data.biosUuid || '';
+            if (metaMap.macAddresses) metaMap.macAddresses.value = (data.macAddresses || '').replace(/;/g, '\n');
             if (fieldMap.memory) fieldMap.memory.value = data.memory || '';
             if (fieldMap.processor) fieldMap.processor.value = data.processor || '';
             if (fieldMap.generation) fieldMap.generation.value = data.generation || '';
