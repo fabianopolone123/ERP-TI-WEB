@@ -201,6 +201,56 @@ if ($joinedAll -match 'nvme') {
     $diskType = 'HDD'
 }
 
+$fwDomainEnabled = $null
+$fwPrivateEnabled = $null
+$fwPublicEnabled = $null
+try {
+    $fwProfiles = Get-NetFirewallProfile -ErrorAction Stop
+    foreach ($profile in $fwProfiles) {
+        $name = ([string]$profile.Name).Trim()
+        $enabled = [bool]$profile.Enabled
+        if ($name -eq 'Domain') {
+            $fwDomainEnabled = $enabled
+        } elseif ($name -eq 'Private') {
+            $fwPrivateEnabled = $enabled
+        } elseif ($name -eq 'Public') {
+            $fwPublicEnabled = $enabled
+        }
+    }
+} catch {
+}
+
+$defenderServiceRunning = $null
+try {
+    $defSvc = Get-Service -Name WinDefend -ErrorAction Stop
+    $defenderServiceRunning = ($defSvc.Status -eq 'Running')
+} catch {
+}
+
+$defenderRealtimeEnabled = $null
+try {
+    $mp = Get-MpComputerStatus -ErrorAction Stop
+    $defenderRealtimeEnabled = [bool]$mp.RealTimeProtectionEnabled
+} catch {
+}
+
+$antivirusNames = @()
+try {
+    $antivirusNames = Get-CimInstance -Namespace root/SecurityCenter2 -ClassName AntivirusProduct -ErrorAction Stop |
+        Where-Object { $_.displayName } |
+        Select-Object -ExpandProperty displayName
+} catch {
+    $antivirusNames = @()
+}
+if ((-not $antivirusNames -or $antivirusNames.Count -eq 0) -and ($defenderServiceRunning -eq $true)) {
+    $antivirusNames = @('Microsoft Defender Antivirus')
+}
+$antivirusNames = @($antivirusNames | ForEach-Object { ([string]$_).Trim() } | Where-Object { $_ } | Select-Object -Unique)
+$fwAnyDisabled = $false
+if ($fwDomainEnabled -eq $false -or $fwPrivateEnabled -eq $false -or $fwPublicEnabled -eq $false) {
+    $fwAnyDisabled = $true
+}
+
 $payload = [PSCustomObject]@{
     Hostname  = $env:COMPUTERNAME
     UserName  = $cs.UserName
@@ -220,6 +270,13 @@ $payload = [PSCustomObject]@{
     PhysicalDisks = @($physicalDisks)
     PhysicalDisksEx = @($physicalDisksEx)
     Windows   = $os.Caption
+    FirewallDomainEnabled = $fwDomainEnabled
+    FirewallPrivateEnabled = $fwPrivateEnabled
+    FirewallPublicEnabled = $fwPublicEnabled
+    FirewallAnyDisabled = $fwAnyDisabled
+    DefenderServiceRunning = $defenderServiceRunning
+    DefenderRealtimeEnabled = $defenderRealtimeEnabled
+    AntivirusNames = @($antivirusNames)
     Software  = @(Get-InstalledSoftware)
     RequestId = if ($RequestId -gt 0) { $RequestId } else { $null }
 }

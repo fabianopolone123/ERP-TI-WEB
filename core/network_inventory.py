@@ -56,6 +56,39 @@ def _parse_payload_mac_addresses(payload: dict[str, Any]) -> list[str]:
     return values
 
 
+def _to_bool_or_none(value: Any) -> bool | None:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return bool(value)
+    text = str(value).strip().lower()
+    if not text:
+        return None
+    if text in {'true', '1', 'yes', 'sim', 'on', 'enabled', 'ativo'}:
+        return True
+    if text in {'false', '0', 'no', 'nao', 'off', 'disabled', 'desativado'}:
+        return False
+    return None
+
+
+def _parse_antivirus_names(payload: dict[str, Any]) -> str:
+    raw = payload.get('AntivirusNames') or payload.get('Antivirus') or ''
+    names: list[str] = []
+    if isinstance(raw, str):
+        chunks = re.split(r'[;,\n]+', raw)
+    elif isinstance(raw, list):
+        chunks = raw
+    else:
+        chunks = []
+    for item in chunks:
+        text = str(item or '').strip()
+        if text and text not in names:
+            names.append(text)
+    return '; '.join(names)
+
+
 def _split_lines_unique(raw_text: str) -> list[str]:
     items: list[str] = []
     for line in (raw_text or '').replace(';', '\n').splitlines():
@@ -397,6 +430,55 @@ try {{
     $softwareItems = @()
 }}
 
+$fwDomainEnabled = $null
+$fwPrivateEnabled = $null
+$fwPublicEnabled = $null
+try {{
+    $fwProfiles = Get-CimInstance -Namespace root/StandardCimv2 -ClassName MSFT_NetFirewallProfile -ComputerName $computer -ErrorAction Stop
+    foreach ($pf in $fwProfiles) {{
+        $nameText = [string]$pf.Name
+        $enabled = [bool]$pf.Enabled
+        if ($nameText -eq '1' -or $nameText -match 'Domain') {{
+            $fwDomainEnabled = $enabled
+        }} elseif ($nameText -eq '2' -or $nameText -match 'Private') {{
+            $fwPrivateEnabled = $enabled
+        }} elseif ($nameText -eq '4' -or $nameText -match 'Public') {{
+            $fwPublicEnabled = $enabled
+        }}
+    }}
+}} catch {{}}
+
+$defenderServiceRunning = $null
+try {{
+    $defSvc = Get-CimInstance -ClassName Win32_Service -ComputerName $computer -Filter "Name='WinDefend'" -ErrorAction Stop
+    if ($defSvc) {{
+        $defenderServiceRunning = ([string]$defSvc.State -eq 'Running')
+    }}
+}} catch {{}}
+
+$defenderRealtimeEnabled = $null
+try {{
+    $mpStatus = Get-CimInstance -Namespace root/Microsoft/Windows/Defender -ClassName MSFT_MpComputerStatus -ComputerName $computer -ErrorAction Stop
+    if ($mpStatus) {{
+        $defenderRealtimeEnabled = [bool]$mpStatus.RealTimeProtectionEnabled
+    }}
+}} catch {{}}
+
+$antivirusNames = @()
+try {{
+    $antivirusNames = Get-CimInstance -Namespace root/SecurityCenter2 -ClassName AntivirusProduct -ComputerName $computer -ErrorAction Stop |
+        Where-Object {{ $_.displayName }} |
+        Select-Object -ExpandProperty displayName
+}} catch {{}}
+if ((-not $antivirusNames -or $antivirusNames.Count -eq 0) -and ($defenderServiceRunning -eq $true)) {{
+    $antivirusNames = @('Microsoft Defender Antivirus')
+}}
+$antivirusNames = @($antivirusNames | ForEach-Object {{ ([string]$_).Trim() }} | Where-Object {{ $_ }} | Select-Object -Unique)
+$fwAnyDisabled = $false
+if ($fwDomainEnabled -eq $false -or $fwPrivateEnabled -eq $false -or $fwPublicEnabled -eq $false) {{
+    $fwAnyDisabled = $true
+}}
+
 $result = [PSCustomObject]@{{
     Hostname = $computer
     UserName = $cs.UserName
@@ -416,6 +498,13 @@ $result = [PSCustomObject]@{{
     PhysicalDisksEx = @($physicalDisksEx)
     Windows = $os.Caption
     Software = @($softwareItems)
+    FirewallDomainEnabled = $fwDomainEnabled
+    FirewallPrivateEnabled = $fwPrivateEnabled
+    FirewallPublicEnabled = $fwPublicEnabled
+    FirewallAnyDisabled = $fwAnyDisabled
+    DefenderServiceRunning = $defenderServiceRunning
+    DefenderRealtimeEnabled = $defenderRealtimeEnabled
+    AntivirusNames = @($antivirusNames)
 }}
 
 $result | ConvertTo-Json -Depth 6 -Compress
@@ -484,6 +573,24 @@ def upsert_inventory_from_payload(payload: dict[str, Any], source: str = 'rede')
     memory = _parse_memory_gb(payload.get('Memory'))
     hd = _parse_total_disk(payload.get('HD') or [])
     mod_hd = _infer_mod_hd(payload, str(payload.get('ModHD') or ''))
+    security_payload_present = any(
+        key in payload
+        for key in (
+            'FirewallDomainEnabled',
+            'FirewallPrivateEnabled',
+            'FirewallPublicEnabled',
+            'DefenderServiceRunning',
+            'DefenderRealtimeEnabled',
+            'AntivirusNames',
+            'Antivirus',
+        )
+    )
+    fw_domain_enabled = _to_bool_or_none(payload.get('FirewallDomainEnabled'))
+    fw_private_enabled = _to_bool_or_none(payload.get('FirewallPrivateEnabled'))
+    fw_public_enabled = _to_bool_or_none(payload.get('FirewallPublicEnabled'))
+    defender_service_running = _to_bool_or_none(payload.get('DefenderServiceRunning'))
+    defender_realtime_enabled = _to_bool_or_none(payload.get('DefenderRealtimeEnabled'))
+    antivirus_names = _parse_antivirus_names(payload)
 
     bios_uuid = _norm_identifier(payload.get('BiosUUID') or payload.get('UUID'))
     bios_serial = _norm_identifier(payload.get('BiosSerial') or payload.get('Serial'))
@@ -535,6 +642,14 @@ def upsert_inventory_from_payload(payload: dict[str, Any], source: str = 'rede')
     equipment.hostname = host
     equipment.inventory_source = source
     equipment.last_inventory_at = now
+    if security_payload_present:
+        equipment.fw_domain_enabled = fw_domain_enabled
+        equipment.fw_private_enabled = fw_private_enabled
+        equipment.fw_public_enabled = fw_public_enabled
+        equipment.defender_service_running = defender_service_running
+        equipment.defender_realtime_enabled = defender_realtime_enabled
+        equipment.antivirus_names = antivirus_names
+        equipment.last_security_scan_at = now
     equipment.save()
 
     software_items = payload.get('Software') or []

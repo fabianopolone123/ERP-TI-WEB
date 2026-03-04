@@ -81,6 +81,13 @@ class Equipment(models.Model):
     observacao = models.TextField(blank=True, default='')
     inventory_source = models.CharField(max_length=40, blank=True, default='')
     last_inventory_at = models.DateTimeField(null=True, blank=True)
+    fw_domain_enabled = models.BooleanField(null=True, blank=True)
+    fw_private_enabled = models.BooleanField(null=True, blank=True)
+    fw_public_enabled = models.BooleanField(null=True, blank=True)
+    defender_service_running = models.BooleanField(null=True, blank=True)
+    defender_realtime_enabled = models.BooleanField(null=True, blank=True)
+    antivirus_names = models.CharField(max_length=300, blank=True, default='')
+    last_security_scan_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self) -> str:
