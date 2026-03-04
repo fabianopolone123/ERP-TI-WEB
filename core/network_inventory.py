@@ -14,6 +14,7 @@ from .models import Equipment, SoftwareInventory, next_equipment_tag_code
 logger = logging.getLogger(__name__)
 
 _VALID_HOST_RE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]{0,254}$')
+_HOST_WITH_NUM_RE = re.compile(r'^(?P<prefix>.*?)(?P<num>\d+)$')
 
 
 def _sanitize_hostname_for_powershell(hostname: str) -> str:
@@ -618,7 +619,70 @@ def parse_hosts_text(raw_text: str) -> list[str]:
     if not raw_text:
         return []
     chunks = raw_text.replace(';', ',').replace('\n', ',').split(',')
-    return [item.strip() for item in chunks if item.strip()]
+    expanded: list[str] = []
+    seen: set[str] = set()
+
+    for raw_chunk in chunks:
+        chunk = (raw_chunk or '').strip()
+        if not chunk:
+            continue
+        for host in _expand_host_chunk(chunk):
+            key = host.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            expanded.append(host)
+
+    return expanded
+
+
+def _expand_host_chunk(chunk: str, max_range_size: int = 1000) -> list[str]:
+    raw = (chunk or '').strip()
+    if not raw:
+        return []
+
+    if '..' not in raw:
+        return [raw]
+
+    left_raw, right_raw = raw.split('..', 1)
+    left = left_raw.strip()
+    right = right_raw.strip()
+    if not left or not right:
+        return [raw]
+
+    left_match = _HOST_WITH_NUM_RE.fullmatch(left)
+    if not left_match:
+        return [raw]
+    left_prefix = left_match.group('prefix')
+    left_num_text = left_match.group('num')
+
+    if right.isdigit():
+        right_num_text = right
+    else:
+        right_match = _HOST_WITH_NUM_RE.fullmatch(right)
+        if not right_match:
+            return [raw]
+        right_prefix = right_match.group('prefix')
+        right_num_text = right_match.group('num')
+        if right_prefix.lower() != left_prefix.lower():
+            return [raw]
+
+    start = int(left_num_text)
+    end = int(right_num_text)
+    width = max(len(left_num_text), len(right_num_text))
+    step = 1 if end >= start else -1
+    span = abs(end - start) + 1
+    if span > max_range_size:
+        return [raw]
+
+    values: list[str] = []
+    current = start
+    while True:
+        values.append(f'{left_prefix}{str(current).zfill(width)}')
+        if current == end:
+            break
+        current += step
+    return values
 
 
 def format_inventory_run_stamp() -> str:
