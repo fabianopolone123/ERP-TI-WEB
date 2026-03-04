@@ -14,7 +14,7 @@ if "%SERVER_BASE_URL%"=="" set "SERVER_BASE_URL=http://ti-fabiano:8000"
 if "%POLL_INTERVAL%"=="" set "POLL_INTERVAL=45"
 
 if not exist "%LOG_DIR%" mkdir "%LOG_DIR%" >nul 2>&1
-echo [%date% %time%] Inicio bootstrap GPO inventario (modo push no startup/logon)>> "%LOG_FILE%"
+echo [%date% %time%] Inicio bootstrap GPO inventario (modo push no logon)>> "%LOG_FILE%"
 
 if "%TOKEN%"=="" (
   echo [%date% %time%] ERRO: token nao informado nos parametros do script.>> "%LOG_FILE%"
@@ -37,7 +37,7 @@ if errorlevel 1 (
 
 powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "Get-ChildItem -Path '%TARGET_DIR%\*.ps1' -ErrorAction SilentlyContinue | Unblock-File -ErrorAction SilentlyContinue" >> "%LOG_FILE%" 2>&1
 
-powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%TARGET_DIR%\install_inventory_agent_service.ps1" -ServerBaseUrl "%SERVER_BASE_URL%" -Token "%TOKEN%" -PollIntervalSec %POLL_INTERVAL% >> "%LOG_FILE%" 2>&1
+powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%TARGET_DIR%\install_inventory_agent_service.ps1" -ServerBaseUrl "%SERVER_BASE_URL%" -Token "%TOKEN%" -PollIntervalSec %POLL_INTERVAL% -EnableLogonPush $true -EnableStartupPush $false >> "%LOG_FILE%" 2>&1
 set "ERR=%ERRORLEVEL%"
 
 if not "%ERR%"=="0" (

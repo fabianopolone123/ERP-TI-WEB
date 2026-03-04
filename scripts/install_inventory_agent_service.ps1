@@ -18,10 +18,10 @@ param(
     [int]$PollIntervalSec = 45,
 
     [Parameter(Mandatory = $false)]
-    [bool]$EnableLogonPush = $false,
+    [bool]$EnableLogonPush = $true,
 
     [Parameter(Mandatory = $false)]
-    [bool]$EnableStartupPush = $true
+    [bool]$EnableStartupPush = $false
 )
 
 $ErrorActionPreference = 'Stop'
