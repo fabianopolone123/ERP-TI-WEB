@@ -874,7 +874,7 @@ class CustomLoginView(auth_views.LoginView):
         except Exception:
             logger.exception('Falha inesperada no login para usuario=%s', (request.POST.get('username') or '').strip())
             messages.error(request, 'Falha temporaria ao entrar no sistema. Tente novamente em alguns segundos.')
-            return self.get(request, *args, **kwargs)
+            return redirect(request.get_full_path())
 
     def get_success_url(self):
         if is_ti_user(self.request):
@@ -889,7 +889,7 @@ class UsersListView(LoginRequiredMixin, TemplateView):
         is_ti = is_ti_user(request)
         if not is_ti:
             messages.error(request, 'Apenas usuários do departamento TI podem importar do AD.')
-            return self.get(request, *args, **kwargs)
+            return redirect(request.get_full_path())
 
         action = (request.POST.get('action') or '').strip().lower()
         if action == 'create_manual_user':
@@ -907,11 +907,11 @@ class UsersListView(LoginRequiredMixin, TemplateView):
 
             if not full_name:
                 messages.error(request, 'Informe o nome completo do usuário manual.')
-                return self.get(request, *args, **kwargs)
+                return redirect(request.get_full_path())
 
             if username and ERPUser.objects.filter(username__iexact=username).exists():
                 messages.error(request, 'Já existe um usuário com esse login.')
-                return self.get(request, *args, **kwargs)
+                return redirect(request.get_full_path())
 
             user = ERPUser.objects.create(
                 full_name=full_name,
@@ -1116,7 +1116,7 @@ class UsersListView(LoginRequiredMixin, TemplateView):
             messages.success(request, f'Importação concluída: {created} novos, {updated} atualizados.')
         except Exception as exc:
             messages.error(request, f'Falha ao importar do AD: {exc}')
-        return self.get(request, *args, **kwargs)
+        return redirect(request.get_full_path())
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -1150,12 +1150,12 @@ class EquipamentosView(LoginRequiredMixin, TemplateView):
     def post(self, request, *args, **kwargs):
         if not is_ti_user(request):
             messages.error(request, 'Apenas usuários do departamento TI podem cadastrar equipamentos.')
-            return self.get(request, *args, **kwargs)
+            return redirect(request.get_full_path())
 
         action = (request.POST.get('action') or '').strip().lower()
         if action == 'delete':
             messages.error(request, 'Exclusao de equipamentos bloqueada: a etiqueta nao pode ser removida.')
-            return self.get(request, *args, **kwargs)
+            return redirect(request.get_full_path())
 
         if action == 'reconcile_inventory':
             pending_id = (request.POST.get('pending_equipment_id') or '').strip()
@@ -1163,21 +1163,21 @@ class EquipamentosView(LoginRequiredMixin, TemplateView):
             pending = Equipment.objects.filter(id=pending_id).first()
             if not pending:
                 messages.error(request, 'Equipamento pendente n?o encontrado.')
-                return self.get(request, *args, **kwargs)
+                return redirect(request.get_full_path())
             if not target_tag:
                 messages.error(request, 'Informe a etiqueta correta para vincular o invent?rio.')
-                return self.get(request, *args, **kwargs)
+                return redirect(request.get_full_path())
 
             if target_tag == (pending.tag_code or '').strip():
                 pending.needs_reconciliation = False
                 pending.save(update_fields=['needs_reconciliation'])
                 messages.success(request, f'Invent?rio da etiqueta {target_tag} confirmado.')
-                return self.get(request, *args, **kwargs)
+                return redirect(request.get_full_path())
 
             target = Equipment.objects.filter(tag_code=target_tag).exclude(id=pending.id).first()
             if not target:
                 messages.error(request, f'Etiqueta {target_tag} n?o encontrada para vincula??o.')
-                return self.get(request, *args, **kwargs)
+                return redirect(request.get_full_path())
 
             def _split_lines(raw_text: str) -> list[str]:
                 items: list[str] = []
@@ -1235,14 +1235,14 @@ class EquipamentosView(LoginRequiredMixin, TemplateView):
                 pending.delete()
 
             messages.success(request, f'Invent?rio vinculado ? etiqueta {target_tag} com sucesso.')
-            return self.get(request, *args, **kwargs)
+            return redirect(request.get_full_path())
 
         if action == 'sync_inventory':
             hosts_text = (request.POST.get('inventory_hosts') or '').strip()
             hosts = parse_hosts_text(hosts_text) or parse_hosts_text(_inventory_default_hosts())
             if not hosts:
                 messages.error(request, 'Informe pelo menos um host para inventariar (ex.: PC01,PC02).')
-                return self.get(request, *args, **kwargs)
+                return redirect(request.get_full_path())
             timeout_seconds = int(getattr(settings, 'INVENTORY_POWERSHELL_TIMEOUT', 120) or 120)
             result = sync_network_inventory(hosts=hosts, timeout_seconds=timeout_seconds)
             stamp = format_inventory_run_stamp()
@@ -1258,7 +1258,7 @@ class EquipamentosView(LoginRequiredMixin, TemplateView):
                     messages.error(request, line)
                 else:
                     messages.info(request, line)
-            return self.get(request, *args, **kwargs)
+            return redirect(request.get_full_path())
 
         hostname = request.POST.get('hostname', '').strip()
 
@@ -1287,18 +1287,18 @@ class EquipamentosView(LoginRequiredMixin, TemplateView):
             original_tag_code = (equipment_obj.tag_code or '').strip() if equipment_obj else ''
             if not equipment_obj:
                 messages.error(request, 'Equipamento n?o encontrado para edi??o.')
-                return self.get(request, *args, **kwargs)
+                return redirect(request.get_full_path())
             for field_name, field_value in equipment_payload.items():
                 setattr(equipment_obj, field_name, field_value)
             equipment_obj.tag_code = original_tag_code or (equipment_obj.tag_code or '').strip() or next_equipment_tag_code()
             equipment_obj.save()
             messages.success(request, 'Equipamento atualizado com sucesso.')
-            return self.get(request, *args, **kwargs)
+            return redirect(request.get_full_path())
 
         equipment_payload['tag_code'] = (equipment_payload.get('tag_code') or '').strip() or next_equipment_tag_code()
         Equipment.objects.create(**equipment_payload)
         messages.success(request, 'Equipamento cadastrado com sucesso.')
-        return self.get(request, *args, **kwargs)
+        return redirect(request.get_full_path())
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -1430,17 +1430,17 @@ class SoftwaresView(LoginRequiredMixin, TemplateView):
     def post(self, request, *args, **kwargs):
         if not is_ti_user(request):
             messages.error(request, 'Apenas usuários do departamento TI podem atualizar inventário de software.')
-            return self.get(request, *args, **kwargs)
+            return redirect(request.get_full_path())
 
         action = (request.POST.get('action') or '').strip().lower()
         if action != 'sync_inventory':
-            return self.get(request, *args, **kwargs)
+            return redirect(request.get_full_path())
 
         hosts_text = (request.POST.get('inventory_hosts') or '').strip()
         hosts = parse_hosts_text(hosts_text) or parse_hosts_text(_inventory_default_hosts())
         if not hosts:
             messages.error(request, 'Informe pelo menos um host para inventariar (ex.: PC01,PC02).')
-            return self.get(request, *args, **kwargs)
+            return redirect(request.get_full_path())
 
         timeout_seconds = int(getattr(settings, 'INVENTORY_POWERSHELL_TIMEOUT', 120) or 120)
         result = sync_network_inventory(hosts=hosts, timeout_seconds=timeout_seconds)
@@ -1457,7 +1457,7 @@ class SoftwaresView(LoginRequiredMixin, TemplateView):
                 messages.error(request, line)
             else:
                 messages.info(request, line)
-        return self.get(request, *args, **kwargs)
+        return redirect(request.get_full_path())
 
     def get(self, request, *args, **kwargs):
         if not is_ti_user(request):
@@ -1508,7 +1508,7 @@ class InsumosView(LoginRequiredMixin, TemplateView):
     def post(self, request, *args, **kwargs):
         if not is_ti_user(request):
             messages.error(request, 'Apenas usuários do departamento TI podem cadastrar insumos.')
-            return self.get(request, *args, **kwargs)
+            return redirect(request.get_full_path())
 
         mode = (request.POST.get('mode') or 'create').strip().lower()
         insumo_id = (request.POST.get('insumo_id') or '').strip()
@@ -1520,25 +1520,25 @@ class InsumosView(LoginRequiredMixin, TemplateView):
 
         if not item:
             messages.error(request, 'Informe o insumo.')
-            return self.get(request, *args, **kwargs)
+            return redirect(request.get_full_path())
         if not date_raw:
             messages.error(request, 'Informe a data.')
-            return self.get(request, *args, **kwargs)
+            return redirect(request.get_full_path())
         if not name:
             messages.error(request, 'Informe o nome.')
-            return self.get(request, *args, **kwargs)
+            return redirect(request.get_full_path())
 
         try:
             entry_date = datetime.strptime(date_raw, '%Y-%m-%d').date()
         except ValueError:
             messages.error(request, 'Data inválida.')
-            return self.get(request, *args, **kwargs)
+            return redirect(request.get_full_path())
 
         try:
             quantity = self._parse_decimal_br(quantity_raw)
         except (InvalidOperation, ValueError):
             messages.error(request, 'Quantidade inválida. Ex.: 1,00')
-            return self.get(request, *args, **kwargs)
+            return redirect(request.get_full_path())
 
         if mode == 'update':
             insumo = Insumo.objects.filter(id=insumo_id).first()
@@ -1580,7 +1580,7 @@ class ProtocolosView(LoginRequiredMixin, TemplateView):
     def post(self, request, *args, **kwargs):
         if not is_ti_user(request):
             messages.error(request, 'Apenas usuários do departamento TI podem cadastrar protocolos.')
-            return self.get(request, *args, **kwargs)
+            return redirect(request.get_full_path())
 
         mode = (request.POST.get('mode') or 'create').strip().lower()
         protocolo_id = (request.POST.get('protocolo_id') or '').strip()
@@ -1591,13 +1591,13 @@ class ProtocolosView(LoginRequiredMixin, TemplateView):
 
         if not nome:
             messages.error(request, 'Informe o nome.')
-            return self.get(request, *args, **kwargs)
+            return redirect(request.get_full_path())
         if not protocolo:
             messages.error(request, 'Informe o protocolo.')
-            return self.get(request, *args, **kwargs)
+            return redirect(request.get_full_path())
         if not os_value:
             messages.error(request, 'Informe a OS.')
-            return self.get(request, *args, **kwargs)
+            return redirect(request.get_full_path())
 
         if mode == 'update':
             protocolo_obj = Protocolo.objects.filter(id=protocolo_id).first()
@@ -2181,19 +2181,19 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
         title_text = (request.POST.get('title') or '').strip()
         if not title_text:
             messages.error(request, 'Informe o título da requisição.')
-            return self.get(request, *args, **kwargs)
+            return redirect(request.get_full_path())
 
         request_text = (request.POST.get('request_text') or '').strip()
         if not request_text:
             messages.error(request, 'Informe o texto da requisição.')
-            return self.get(request, *args, **kwargs)
+            return redirect(request.get_full_path())
 
         if mode == 'update':
             requisition_id = (request.POST.get('requisition_id') or '').strip()
             requisition = Requisition.objects.filter(id=requisition_id).first()
             if not requisition:
                 messages.error(request, 'Requisição não encontrada para edição.')
-                return self.get(request, *args, **kwargs)
+                return redirect(request.get_full_path())
 
             status_value = (request.POST.get('status') or Requisition.Status.PENDING_APPROVAL).strip()
             valid_statuses = {choice[0] for choice in Requisition.Status.choices}
@@ -2209,7 +2209,7 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
             saved_count, error = self._save_quotes(request, requisition, update_mode=True)
             if error:
                 messages.error(request, error)
-                return self.get(request, *args, **kwargs)
+                return redirect(request.get_full_path())
             self._sync_requisition_status_with_approved_quote(requisition)
             self._sync_requisition_timeline_dates(requisition)
 
@@ -2228,7 +2228,7 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
         if error:
             requisition.delete()
             messages.error(request, error)
-            return self.get(request, *args, **kwargs)
+            return redirect(request.get_full_path())
         self._sync_requisition_status_with_approved_quote(requisition)
         self._sync_requisition_timeline_dates(requisition)
 
@@ -2340,7 +2340,7 @@ class DicasView(LoginRequiredMixin, TemplateView):
     def post(self, request, *args, **kwargs):
         if not is_ti_user(request):
             messages.error(request, 'Apenas usuários do departamento TI podem gerenciar dicas.')
-            return self.get(request, *args, **kwargs)
+            return redirect(request.get_full_path())
 
         action = (request.POST.get('action') or 'create').strip().lower()
         if action == 'delete':
@@ -2361,7 +2361,7 @@ class DicasView(LoginRequiredMixin, TemplateView):
         attachment_error = _validate_upload(attachment, image_only=False)
         if attachment_error:
             messages.error(request, attachment_error)
-            return self.get(request, *args, **kwargs)
+            return redirect(request.get_full_path())
         category = (request.POST.get('category') or Dica.Category.GERAL).strip()
         valid_categories = {choice[0] for choice in Dica.Category.choices}
         if category not in valid_categories:
@@ -2369,10 +2369,10 @@ class DicasView(LoginRequiredMixin, TemplateView):
 
         if not title:
             messages.error(request, 'Informe o título da dica.')
-            return self.get(request, *args, **kwargs)
+            return redirect(request.get_full_path())
         if not content:
             messages.error(request, 'Informe a descrição da dica.')
-            return self.get(request, *args, **kwargs)
+            return redirect(request.get_full_path())
 
         Dica.objects.create(
             category=category,
@@ -2400,7 +2400,7 @@ class AcessosView(LoginRequiredMixin, TemplateView):
     def post(self, request, *args, **kwargs):
         if not is_ti_user(request):
             messages.error(request, 'Apenas usuários do departamento TI podem atualizar acessos.')
-            return self.get(request, *args, **kwargs)
+            return redirect(request.get_full_path())
 
         root_path = getattr(settings, 'ACCESS_ROOT_PATH', '')
         try:
@@ -2408,7 +2408,7 @@ class AcessosView(LoginRequiredMixin, TemplateView):
             messages.success(request, f'Atualização concluída: {folders} pastas, {groups} grupos, {members} membros.')
         except Exception as exc:
             messages.error(request, f'Falha ao atualizar acessos: {exc}')
-        return self.get(request, *args, **kwargs)
+        return redirect(request.get_full_path())
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -2499,13 +2499,13 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
         attachment_error = _validate_upload(attachment, image_only=False)
         if attachment_error:
             messages.error(request, attachment_error)
-            return self.get(request, *args, **kwargs)
+            return redirect(request.get_full_path())
         creator_user = request.user
         opened_at_dt = None
 
         if not title or not description:
             messages.error(request, 'Preencha título e descrição.')
-            return self.get(request, *args, **kwargs)
+            return redirect(request.get_full_path())
 
         if not is_ti:
             valid_types = {
@@ -2524,7 +2524,7 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
                 urgency = Ticket.Urgency.NAO_CLASSIFICADO
         elif not ticket_type or not urgency:
             messages.error(request, 'Preencha tipo e urgência.')
-            return self.get(request, *args, **kwargs)
+            return redirect(request.get_full_path())
         else:
             requester_user_id = (request.POST.get('requester_user_id') or '').strip()
             opened_at_raw = (request.POST.get('opened_at') or '').strip()
@@ -2533,15 +2533,15 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
                     requester_id = int(requester_user_id)
                 except ValueError:
                     messages.error(request, 'Solicitante inválido.')
-                    return self.get(request, *args, **kwargs)
+                    return redirect(request.get_full_path())
                 requester_erp_user = ERPUser.objects.filter(id=requester_id, is_active=True).first()
                 if not requester_erp_user:
                     messages.error(request, 'Solicitante não encontrado.')
-                    return self.get(request, *args, **kwargs)
+                    return redirect(request.get_full_path())
                 requester_auth_user = _get_or_create_auth_user_for_erp(requester_erp_user)
                 if not requester_auth_user:
                     messages.error(request, 'Solicitante sem login válido para abertura.')
-                    return self.get(request, *args, **kwargs)
+                    return redirect(request.get_full_path())
                 creator_user = requester_auth_user
             if opened_at_raw:
                 try:
@@ -2550,7 +2550,7 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
                         opened_at_dt = timezone.make_aware(opened_at_dt, timezone.get_current_timezone())
                 except ValueError:
                     messages.error(request, 'Data/hora de abertura inválida.')
-                    return self.get(request, *args, **kwargs)
+                    return redirect(request.get_full_path())
 
         recent_cutoff = timezone.now() - timedelta(seconds=30)
         duplicate = Ticket.objects.filter(
@@ -4090,6 +4090,7 @@ def email_templates_update(request):
     template.save()
     messages.success(request, 'Templates de e-mail atualizados.')
     return redirect('chamados')
+
 
 
 
