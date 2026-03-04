@@ -144,6 +144,32 @@ def build_modules(active_slug: str | None, allowed_slugs: set[str] | None = None
     return modules
 
 
+def _resolve_app_version() -> tuple[str, str]:
+    env_version = (getattr(settings, 'APP_VERSION', '') or '').strip()
+    if env_version:
+        return env_version, 'env'
+
+    raw_marker = (getattr(settings, 'APP_VERSION_FILE', '.release-version') or '.release-version').strip()
+    marker_path = Path(raw_marker)
+    if not marker_path.is_absolute():
+        marker_path = Path(settings.BASE_DIR) / marker_path
+
+    if marker_path.exists():
+        try:
+            marker_content = marker_path.read_text(encoding='utf-8-sig').strip()
+        except Exception:
+            marker_content = ''
+        if marker_content:
+            return marker_content, 'file'
+        try:
+            stamp = datetime.fromtimestamp(marker_path.stat().st_mtime, tz=timezone.get_current_timezone())
+            return stamp.strftime('%Y%m%d%H%M%S'), 'file-mtime'
+        except Exception:
+            pass
+
+    return 'dev', 'fallback'
+
+
 def _username_candidates(raw_username: str) -> list[str]:
     raw = (raw_username or '').strip()
     if not raw:
@@ -1183,8 +1209,12 @@ class EquipamentosView(LoginRequiredMixin, TemplateView):
                     if value not in (None, ''):
                         setattr(target, field_name, value)
 
-                if not (target.equipment or '').strip() and (pending.equipment or '').strip():
-                    target.equipment = pending.equipment
+                for field_name in ['equipment', 'alimentacao']:
+                    target_value = (getattr(target, field_name) or '').strip()
+                    pending_value = (getattr(pending, field_name) or '').strip()
+                    if not target_value and pending_value:
+                        setattr(target, field_name, pending_value)
+                target.observacao = _merge_lines(target.observacao, pending.observacao)
 
                 target.mac_addresses = _merge_lines(target.mac_addresses, pending.mac_addresses)
                 target.hostname_aliases = _merge_lines(target.hostname_aliases, pending.hostname_aliases)
@@ -3715,6 +3745,12 @@ def ticket_reopen(request):
 @require_GET
 def ws_tickets_ping(request):
     return JsonResponse({'ok': True, 'transport': 'http-fallback'})
+
+
+@require_GET
+def app_version_api(request):
+    version, source = _resolve_app_version()
+    return JsonResponse({'ok': True, 'version': version, 'source': source})
 
 
 @login_required

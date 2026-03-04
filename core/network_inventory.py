@@ -127,6 +127,7 @@ def _find_equipment_by_inventory_identifiers(
     model: str,
     user_name: str,
     queryset=None,
+    allow_user_model_match: bool = True,
 ) -> Equipment | None:
     base_qs = queryset if queryset is not None else Equipment.objects.all()
 
@@ -169,7 +170,7 @@ def _find_equipment_by_inventory_identifiers(
         if equipment:
             return equipment
 
-    if user_name and model:
+    if allow_user_model_match and user_name and model:
         equipment = base_qs.filter(user__iexact=user_name, model__iexact=model).first()
         if equipment:
             return equipment
@@ -596,14 +597,7 @@ def upsert_inventory_from_payload(payload: dict[str, Any], source: str = 'rede')
     bios_serial = _norm_identifier(payload.get('BiosSerial') or payload.get('Serial'))
     baseboard_serial = _norm_identifier(payload.get('BaseboardSerial'))
     mac_addresses = _parse_payload_mac_addresses(payload)
-
-    inventory_scope_qs = Equipment.objects.all()
-    if source == 'agent':
-        # Inventário vindo do agente GPO fica sempre no bloco de conciliação
-        # e não deve atualizar diretamente a lista principal importada.
-        inventory_scope_qs = Equipment.objects.filter(needs_reconciliation=True)
-
-    equipment = _find_equipment_by_inventory_identifiers(
+    lookup_kwargs = dict(
         host=host,
         bios_uuid=bios_uuid,
         bios_serial=bios_serial,
@@ -612,15 +606,39 @@ def upsert_inventory_from_payload(payload: dict[str, Any], source: str = 'rede')
         serial=serial,
         model=model,
         user_name=user_name,
-        queryset=inventory_scope_qs,
     )
+    matched_reconciled_equipment = False
+
+    if source == 'agent':
+        equipment = _find_equipment_by_inventory_identifiers(
+            queryset=Equipment.objects.filter(needs_reconciliation=True),
+            **lookup_kwargs,
+        )
+        if equipment is None:
+            equipment = _find_equipment_by_inventory_identifiers(
+                queryset=Equipment.objects.filter(needs_reconciliation=False),
+                allow_user_model_match=False,
+                **lookup_kwargs,
+            )
+            matched_reconciled_equipment = equipment is not None
+    else:
+        equipment = _find_equipment_by_inventory_identifiers(
+            queryset=Equipment.objects.all(),
+            **lookup_kwargs,
+        )
     is_new_equipment = equipment is None
     if equipment is None:
         equipment = Equipment(hostname=host)
 
     if is_new_equipment or not (equipment.tag_code or '').strip():
         equipment.tag_code = next_equipment_tag_code()
-    equipment.needs_reconciliation = bool(source == 'agent')
+    if source == 'agent':
+        if matched_reconciled_equipment:
+            equipment.needs_reconciliation = False
+        elif is_new_equipment:
+            equipment.needs_reconciliation = True
+    else:
+        equipment.needs_reconciliation = False
     old_hostname = equipment.hostname or ''
     equipment.user = user_name or equipment.user
     equipment.sector = sector or equipment.sector
