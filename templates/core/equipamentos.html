@@ -107,17 +107,6 @@
                 placeholder="Pesquisar por host, usuário, setor ou modelo..."
                 data-table-search="equipamentos"
             />
-            <form method="post" class="inline-form" data-preserve-equipment-scroll style="display:flex; gap:8px; align-items:center;">
-                {% csrf_token %}
-                <input type="hidden" name="action" value="request_inventory_refresh_host" />
-                <input
-                    type="text"
-                    name="refresh_hosts"
-                    placeholder="Atualizar host(s): CPU-022, CPU-022..CPU-050 ou CPU-022..050"
-                    style="min-width: 320px;"
-                />
-                <button type="submit">Atualizar Hostname</button>
-            </form>
         </div>
 
         <div class="card" style="padding: 14px; margin-bottom: 12px; border: 1px solid #43331a; background: #121826;">
@@ -251,15 +240,6 @@
                         <button type="button" data-equipment-detail-cancel hidden>Cancelar edição</button>
                         <button type="button" data-equipment-detail-close data-close-equipment-detail>Fechar</button>
                     </div>
-                </div>
-
-                <div class="equipment-actions">
-                    <form method="post" class="inline-form" data-preserve-equipment-scroll style="margin: 0;">
-                        {% csrf_token %}
-                        <input type="hidden" name="action" value="request_inventory_refresh" />
-                        <input type="hidden" name="equipment_id" value="" data-equipment-detail-refresh-id />
-                        <button type="submit" title="Solicitar atualização sob demanda ao agente da máquina">Atualizar</button>
-                    </form>
                 </div>
 
                 <form method="post" data-equipment-detail-form data-preserve-equipment-scroll>
@@ -507,7 +487,6 @@
         const tagInput = panel.querySelector('[data-equipment-detail-tag]');
         const tagLabel = panel.querySelector('[data-equipment-detail-tag-label]');
         const equipmentIdInput = panel.querySelector('[data-equipment-detail-id]');
-        const refreshIdInput = panel.querySelector('[data-equipment-detail-refresh-id]');
         const detailForm = panel.querySelector('[data-equipment-detail-form]');
         const detailFields = Array.from(panel.querySelectorAll('[data-detail-field]'));
         const searchInput = document.querySelector('input[data-table-search="equipamentos"]');
@@ -569,7 +548,6 @@
 
             if (tagInput) tagInput.value = data.tagCode || '';
             if (equipmentIdInput) equipmentIdInput.value = data.id || '';
-            if (refreshIdInput) refreshIdInput.value = data.id || '';
             if (tagLabel) tagLabel.textContent = tagCode;
             if (titleEl) titleEl.textContent = `${tagCode} | Host: ${host} | Usuário: ${user} | Últ. inventário: ${lastInventory}`;
 

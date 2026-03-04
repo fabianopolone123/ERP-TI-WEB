@@ -18,7 +18,7 @@ param(
     [int]$PollIntervalSec = 45,
 
     [Parameter(Mandatory = $false)]
-    [bool]$EnableLogonPush = $true,
+    [bool]$EnableLogonPush = $false,
 
     [Parameter(Mandatory = $false)]
     [bool]$EnableStartupPush = $true
@@ -39,20 +39,14 @@ if (-not (Test-IsAdmin)) {
 
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $sourceAgent = Join-Path $scriptRoot 'inventory_agent.ps1'
-$sourceDaemon = Join-Path $scriptRoot 'inventory_agent_daemon.ps1'
 if (-not (Test-Path $sourceAgent)) {
     throw "Arquivo nao encontrado: $sourceAgent"
-}
-if (-not (Test-Path $sourceDaemon)) {
-    throw "Arquivo nao encontrado: $sourceDaemon"
 }
 
 New-Item -ItemType Directory -Path $TargetDir -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $TargetDir 'logs') -Force | Out-Null
 
 $targetAgent = Join-Path $TargetDir 'inventory_agent.ps1'
-$targetDaemon = Join-Path $TargetDir 'inventory_agent_daemon.ps1'
-$logPath = Join-Path $TargetDir 'logs\inventory_agent_daemon.log'
 $taskNameLogonPush = "$TaskName - Logon Push"
 $taskNameStartupPush = "$TaskName - Startup Push"
 $serverBaseNormalized = ([string]$ServerBaseUrl).Trim().TrimEnd('/')
@@ -62,7 +56,6 @@ if ([string]::IsNullOrWhiteSpace($serverBaseNormalized)) {
 $pushUrl = "$serverBaseNormalized/api/inventory/push/"
 
 Copy-Item -Path $sourceAgent -Destination $targetAgent -Force
-Copy-Item -Path $sourceDaemon -Destination $targetDaemon -Force
 
 $legacy = Get-Service -Name $LegacyServiceName -ErrorAction SilentlyContinue
 if ($legacy) {
@@ -70,27 +63,10 @@ if ($legacy) {
     & sc.exe delete $LegacyServiceName | Out-Null
 }
 
-$args = "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$targetDaemon`" -ServerBaseUrl `"$serverBaseNormalized`" -Token `"$Token`" -AgentScriptPath `"$targetAgent`" -PollIntervalSec $PollIntervalSec -LogPath `"$logPath`""
-$action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $args
-$trigger = New-ScheduledTaskTrigger -AtStartup
-$principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -RunLevel Highest
-$settings = New-ScheduledTaskSettingsSet `
-    -StartWhenAvailable `
-    -RunOnlyIfNetworkAvailable `
-    -DontStopIfGoingOnBatteries `
-    -AllowStartIfOnBatteries `
-    -ExecutionTimeLimit (New-TimeSpan -Hours 0) `
-    -RestartCount 5 `
-    -RestartInterval (New-TimeSpan -Minutes 1) `
-    -MultipleInstances IgnoreNew
+# Remove tarefa antiga do daemon, caso exista.
+Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
 
-Register-ScheduledTask `
-    -TaskName $TaskName `
-    -Action $action `
-    -Trigger $trigger `
-    -Principal $principal `
-    -Settings $settings `
-    -Force | Out-Null
+$principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -RunLevel Highest
 
 if ($EnableLogonPush) {
     $logonArgs = "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$targetAgent`" -ServerUrl `"$pushUrl`" -Token `"$Token`" -TimeoutSec 60"
@@ -138,12 +114,6 @@ if ($EnableStartupPush) {
     Unregister-ScheduledTask -TaskName $taskNameStartupPush -Confirm:$false -ErrorAction SilentlyContinue
 }
 
-try {
-    Start-ScheduledTask -TaskName $TaskName -ErrorAction Stop
-} catch {
-    # Pode falhar se a tarefa ja estiver executando.
-}
-
 if ($EnableStartupPush) {
     try {
         Start-ScheduledTask -TaskName $taskNameStartupPush -ErrorAction Stop
@@ -152,5 +122,5 @@ if ($EnableStartupPush) {
     }
 }
 
-Write-Output "Tarefas de inventario configuradas e iniciadas com sucesso."
+Write-Output "Tarefas de inventario (startup/logon) configuradas e iniciadas com sucesso."
 
