@@ -71,6 +71,22 @@
         gap: 8px;
         margin-bottom: 12px;
     }
+    .equipment-detail-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 10px 12px;
+    }
+    .equipment-detail-item {
+        border: 1px solid #263348;
+        border-radius: 8px;
+        padding: 8px 10px;
+        background: #0d1a2c;
+    }
+    .equipment-detail-value {
+        margin-top: 4px;
+        white-space: pre-line;
+        word-break: break-word;
+    }
 </style>
 <div class="card">
     <div class="topbar">
@@ -249,7 +265,81 @@
                     <input type="hidden" name="action" value="update" />
                     <input type="hidden" name="equipment_id" value="" data-equipment-detail-id />
                     <input type="hidden" name="tag_code" value="" data-equipment-detail-tag />
-                    <div class="equipment-detail-fields">
+                    <div class="equipment-detail-list" data-equipment-detail-view>
+                        <div class="equipment-detail-item">
+                            <div class="muted">Etiqueta</div>
+                            <div class="equipment-detail-value" data-view-tag>-</div>
+                        </div>
+                        <div class="equipment-detail-item">
+                            <div class="muted">Host</div>
+                            <div class="equipment-detail-value" data-view-hostname>-</div>
+                        </div>
+                        <div class="equipment-detail-item">
+                            <div class="muted">Setor</div>
+                            <div class="equipment-detail-value" data-view-sector>-</div>
+                        </div>
+                        <div class="equipment-detail-item">
+                            <div class="muted">Usuário</div>
+                            <div class="equipment-detail-value" data-view-user>-</div>
+                        </div>
+                        <div class="equipment-detail-item">
+                            <div class="muted">Tipo</div>
+                            <div class="equipment-detail-value" data-view-equipment>-</div>
+                        </div>
+                        <div class="equipment-detail-item">
+                            <div class="muted">Modelo</div>
+                            <div class="equipment-detail-value" data-view-model>-</div>
+                        </div>
+                        <div class="equipment-detail-item">
+                            <div class="muted">Marca</div>
+                            <div class="equipment-detail-value" data-view-brand>-</div>
+                        </div>
+                        <div class="equipment-detail-item">
+                            <div class="muted">Série</div>
+                            <div class="equipment-detail-value" data-view-serial>-</div>
+                        </div>
+                        <div class="equipment-detail-item">
+                            <div class="muted">UUID (BIOS)</div>
+                            <div class="equipment-detail-value" data-view-bios-uuid>-</div>
+                        </div>
+                        <div class="equipment-detail-item">
+                            <div class="muted">MAC(s)</div>
+                            <div class="equipment-detail-value" data-view-mac-addresses>-</div>
+                        </div>
+                        <div class="equipment-detail-item">
+                            <div class="muted">Memória</div>
+                            <div class="equipment-detail-value" data-view-memory>-</div>
+                        </div>
+                        <div class="equipment-detail-item">
+                            <div class="muted">Processador</div>
+                            <div class="equipment-detail-value" data-view-processor>-</div>
+                        </div>
+                        <div class="equipment-detail-item">
+                            <div class="muted">Geração</div>
+                            <div class="equipment-detail-value" data-view-generation>-</div>
+                        </div>
+                        <div class="equipment-detail-item">
+                            <div class="muted">HD</div>
+                            <div class="equipment-detail-value" data-view-hd>-</div>
+                        </div>
+                        <div class="equipment-detail-item">
+                            <div class="muted">MOD HD</div>
+                            <div class="equipment-detail-value" data-view-mod-hd>-</div>
+                        </div>
+                        <div class="equipment-detail-item">
+                            <div class="muted">Windows</div>
+                            <div class="equipment-detail-value" data-view-windows>-</div>
+                        </div>
+                        <div class="equipment-detail-item">
+                            <div class="muted">Alimentação</div>
+                            <div class="equipment-detail-value" data-view-alimentacao>-</div>
+                        </div>
+                        <div class="equipment-detail-item" style="grid-column: 1 / -1;">
+                            <div class="muted">Observação</div>
+                            <div class="equipment-detail-value" data-view-observacao>-</div>
+                        </div>
+                    </div>
+                    <div class="equipment-detail-fields" data-equipment-detail-edit-fields hidden>
                         <div>
                             <label>Etiqueta</label>
                             <div class="muted" data-equipment-detail-tag-label style="margin-top: 8px; font-weight: 700;">-</div>
@@ -498,6 +588,8 @@
         const tagLabel = panel.querySelector('[data-equipment-detail-tag-label]');
         const equipmentIdInput = panel.querySelector('[data-equipment-detail-id]');
         const detailForm = panel.querySelector('[data-equipment-detail-form]');
+        const detailView = panel.querySelector('[data-equipment-detail-view]');
+        const editFieldsWrap = panel.querySelector('[data-equipment-detail-edit-fields]');
         const detailFields = Array.from(panel.querySelectorAll('[data-detail-field]'));
         const searchInput = document.querySelector('input[data-table-search="equipamentos"]');
 
@@ -524,15 +616,42 @@
             biosUuid: panel.querySelector('[data-detail-meta][id="id_detail_bios_uuid"]'),
             macAddresses: panel.querySelector('[data-detail-meta][id="id_detail_mac_addresses"]'),
         };
+        const viewMap = {
+            tag: panel.querySelector('[data-view-tag]'),
+            hostname: panel.querySelector('[data-view-hostname]'),
+            sector: panel.querySelector('[data-view-sector]'),
+            user: panel.querySelector('[data-view-user]'),
+            equipment: panel.querySelector('[data-view-equipment]'),
+            model: panel.querySelector('[data-view-model]'),
+            brand: panel.querySelector('[data-view-brand]'),
+            serial: panel.querySelector('[data-view-serial]'),
+            biosUuid: panel.querySelector('[data-view-bios-uuid]'),
+            macAddresses: panel.querySelector('[data-view-mac-addresses]'),
+            memory: panel.querySelector('[data-view-memory]'),
+            processor: panel.querySelector('[data-view-processor]'),
+            generation: panel.querySelector('[data-view-generation]'),
+            hd: panel.querySelector('[data-view-hd]'),
+            modHd: panel.querySelector('[data-view-mod-hd]'),
+            windows: panel.querySelector('[data-view-windows]'),
+            alimentacao: panel.querySelector('[data-view-alimentacao]'),
+            observacao: panel.querySelector('[data-view-observacao]'),
+        };
 
         let selectedRow = null;
         let editMode = false;
+
+        const displayValue = (value) => {
+            const text = (value || '').toString().trim();
+            return text || '-';
+        };
 
         const setEditMode = (enabled) => {
             editMode = Boolean(enabled);
             detailFields.forEach((field) => {
                 field.disabled = !editMode;
             });
+            if (editFieldsWrap) editFieldsWrap.hidden = !editMode;
+            if (detailView) detailView.hidden = editMode;
             if (saveBtn) saveBtn.hidden = !editMode;
             if (cancelBtn) cancelBtn.hidden = !editMode;
             if (editBtn) editBtn.hidden = editMode;
@@ -582,6 +701,26 @@
             if (fieldMap.windows) fieldMap.windows.value = data.windows || '';
             if (fieldMap.alimentacao) fieldMap.alimentacao.value = data.alimentacao || '';
             if (fieldMap.observacao) fieldMap.observacao.value = data.observacao || '';
+
+            const macText = (data.macAddresses || '').replace(/;/g, '\n');
+            if (viewMap.tag) viewMap.tag.textContent = displayValue(data.tagCode);
+            if (viewMap.hostname) viewMap.hostname.textContent = displayValue(data.hostname);
+            if (viewMap.sector) viewMap.sector.textContent = displayValue(data.sector);
+            if (viewMap.user) viewMap.user.textContent = displayValue(data.user);
+            if (viewMap.equipment) viewMap.equipment.textContent = displayValue(data.equipment);
+            if (viewMap.model) viewMap.model.textContent = displayValue(data.model);
+            if (viewMap.brand) viewMap.brand.textContent = displayValue(data.brand);
+            if (viewMap.serial) viewMap.serial.textContent = displayValue(data.serial);
+            if (viewMap.biosUuid) viewMap.biosUuid.textContent = displayValue(data.biosUuid);
+            if (viewMap.macAddresses) viewMap.macAddresses.textContent = displayValue(macText);
+            if (viewMap.memory) viewMap.memory.textContent = displayValue(data.memory);
+            if (viewMap.processor) viewMap.processor.textContent = displayValue(data.processor);
+            if (viewMap.generation) viewMap.generation.textContent = displayValue(data.generation);
+            if (viewMap.hd) viewMap.hd.textContent = displayValue(data.hd);
+            if (viewMap.modHd) viewMap.modHd.textContent = displayValue(data.modHd);
+            if (viewMap.windows) viewMap.windows.textContent = displayValue(data.windows);
+            if (viewMap.alimentacao) viewMap.alimentacao.textContent = displayValue(data.alimentacao);
+            if (viewMap.observacao) viewMap.observacao.textContent = displayValue(data.observacao);
 
             panel.hidden = false;
             setEditMode(false);
