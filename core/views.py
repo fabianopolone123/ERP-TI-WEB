@@ -1634,6 +1634,114 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
     template_name = 'core/requisicoes.html'
 
     @staticmethod
+    def _excel_safe(value):
+        text = str(value or '-')
+        return ILLEGAL_CHARACTERS_RE.sub('', text)
+
+    @staticmethod
+    def _normalize_text(value: str) -> str:
+        return (value or '').strip().lower()
+
+    def _filter_requisitions_for_export(self, requisitions, search_raw: str, status_raw: str):
+        query = self._normalize_text(search_raw)
+        status = self._normalize_text(status_raw)
+        filtered = []
+        for req in requisitions:
+            if status and self._normalize_text(req.status) != status:
+                continue
+
+            if query:
+                quote_names = ' '.join((quote.name or '') for quote in getattr(req, 'main_quotes', [])).strip()
+                haystack = ' '.join(
+                    [
+                        req.code or '',
+                        req.title or '',
+                        req.request or '',
+                        getattr(req, 'kind_display', '') or '',
+                        req.get_status_display() if hasattr(req, 'get_status_display') else '',
+                        req.status or '',
+                        quote_names,
+                    ]
+                )
+                if query not in self._normalize_text(haystack):
+                    continue
+
+            filtered.append(req)
+        return filtered
+
+    def _export_excel(self, requisitions, search_raw: str = '', status_raw: str = ''):
+        items = self._filter_requisitions_for_export(list(requisitions), search_raw, status_raw)
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = 'Requisicoes'
+        ws.append(
+            [
+                'ID',
+                'Codigo',
+                'Titulo',
+                'Requisicao',
+                'Tipo',
+                'Status',
+                'Orcamentos',
+                'Suborcamentos',
+                'Total aprovado',
+                'Qtd esperada',
+                'Qtd entregue',
+                'Qtd pendente',
+                'Data pedido',
+                'Data aprovacao',
+                'Data entrega parcial',
+                'Data entrega total',
+                'Orcamento(s) aprovado(s)',
+            ]
+        )
+
+        for req in items:
+            approved_quotes = [
+                quote.name
+                for quote in getattr(req, 'main_quotes', [])
+                if quote.id in getattr(req, 'approved_quote_ids', set())
+            ]
+            requested_at = req.requested_at or (req.created_at.date() if req.created_at else None)
+            ws.append(
+                [
+                    req.id,
+                    self._excel_safe(req.code),
+                    self._excel_safe(req.title),
+                    self._excel_safe(req.request),
+                    self._excel_safe(getattr(req, 'kind_display', '') or '-'),
+                    self._excel_safe(req.get_status_display() if hasattr(req, 'get_status_display') else req.status),
+                    int(getattr(req, 'main_quotes_count', 0) or 0),
+                    int(getattr(req, 'sub_quotes_count', 0) or 0),
+                    float(req.quotes_total) if getattr(req, 'quotes_total', None) is not None else '',
+                    int(getattr(req, 'expected_delivery_quantity', 0) or 0),
+                    int(getattr(req, 'delivered_quantity_display', 0) or 0),
+                    int(getattr(req, 'pending_delivery_quantity', 0) or 0),
+                    requested_at.strftime('%d/%m/%Y') if requested_at else '',
+                    req.approved_at.strftime('%d/%m/%Y') if req.approved_at else '',
+                    req.partially_received_at.strftime('%d/%m/%Y') if req.partially_received_at else '',
+                    req.received_at.strftime('%d/%m/%Y') if req.received_at else '',
+                    self._excel_safe(', '.join([name for name in approved_quotes if name])),
+                ]
+            )
+
+        output = BytesIO()
+        wb.save(output)
+        output.seek(0)
+
+        stamp = timezone.localtime(timezone.now()).strftime('%Y%m%d_%H%M%S')
+        has_filter = bool((search_raw or '').strip() or (status_raw or '').strip())
+        suffix = 'filtro' if has_filter else 'todos'
+        filename = f'requisicoes_{suffix}_{stamp}.xlsx'
+        response = HttpResponse(
+            output.getvalue(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+        response['Content-Disposition'] = f'attachment; filename=\"{filename}\"'
+        return response
+
+    @staticmethod
     def _parse_decimal_br(raw_value: str) -> Decimal:
         normalized_value = (raw_value or '').strip().replace(' ', '')
         if ',' in normalized_value and '.' in normalized_value:
@@ -2234,6 +2342,23 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
 
         messages.success(request, f'Requisição cadastrada com sucesso com {created_quotes} orçamento(s).')
         return redirect('requisicoes')
+
+    def get(self, request, *args, **kwargs):
+        export_flag = (request.GET.get('export') or '').strip().lower()
+        if export_flag in {'1', 'true', 'xlsx'}:
+            is_ti = is_ti_user(request)
+            can_readonly = can_view_requisitions_readonly(request)
+            can_decide = can_decide_requisitions(request)
+            can_view = is_ti or can_readonly or can_decide
+            if not can_view:
+                messages.error(request, 'Seu usuário não possui acesso para exportar requisições.')
+                return redirect('chamados')
+            context = self.get_context_data()
+            requisitions = list(context.get('requisitions') or [])
+            search_raw = (request.GET.get('q') or '').strip()
+            status_raw = (request.GET.get('status') or '').strip()
+            return self._export_excel(requisitions, search_raw=search_raw, status_raw=status_raw)
+        return super().get(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)

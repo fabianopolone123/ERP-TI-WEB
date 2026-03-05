@@ -209,6 +209,9 @@
                     <option value="received">Recebido</option>
                 </select>
             </div>
+            <div style="display: flex; align-items: flex-end;">
+                <button type="button" data-requisicoes-export>Exportar Excel</button>
+            </div>
         </div>
 
         <div style="overflow-x: auto;">
@@ -2312,6 +2315,7 @@
     (function () {
         const searchInput = document.querySelector('[data-req-search]');
         const statusSelect = document.querySelector('[data-req-status-filter]');
+        const exportBtn = document.querySelector('[data-requisicoes-export]');
         const rows = Array.from(document.querySelectorAll('[data-req-row]'));
         if (!searchInput || !statusSelect || !rows.length) return;
 
@@ -2329,6 +2333,19 @@
 
         searchInput.addEventListener('input', applyFilters);
         statusSelect.addEventListener('change', applyFilters);
+        if (exportBtn) {
+            exportBtn.addEventListener('click', () => {
+                const params = new URLSearchParams(window.location.search);
+                const query = (searchInput.value || '').trim();
+                const status = (statusSelect.value || '').trim();
+                if (query) params.set('q', query);
+                else params.delete('q');
+                if (status) params.set('status', status);
+                else params.delete('status');
+                params.set('export', '1');
+                window.location.href = `${window.location.pathname}?${params.toString()}`;
+            });
+        }
     })();
 </script>
 {% endif %}
