@@ -18,6 +18,43 @@ if ([string]::IsNullOrWhiteSpace($Token)) {
     throw 'Token nao informado. Use -Token no script/agendador.'
 }
 
+function Get-LoggedOnUserName {
+    try {
+        $cs = Get-CimInstance -ClassName Win32_ComputerSystem -ErrorAction SilentlyContinue
+        $direct = ([string]$cs.UserName).Trim()
+        if (-not [string]::IsNullOrWhiteSpace($direct)) {
+            return $direct
+        }
+    } catch {
+    }
+
+    # Fallback: pega o dono de processo explorer.exe (usuario interativo)
+    try {
+        $explorers = Get-CimInstance -ClassName Win32_Process -Filter "Name='explorer.exe'" -ErrorAction SilentlyContinue
+        foreach ($proc in @($explorers)) {
+            $owner = Invoke-CimMethod -InputObject $proc -MethodName GetOwner -ErrorAction SilentlyContinue
+            if (-not $owner -or $owner.ReturnValue -ne 0) {
+                continue
+            }
+            $user = ([string]$owner.User).Trim()
+            $domain = ([string]$owner.Domain).Trim()
+            if ([string]::IsNullOrWhiteSpace($user)) {
+                continue
+            }
+            if ($user -match '^(SYSTEM|LOCAL SERVICE|NETWORK SERVICE)$') {
+                continue
+            }
+            if ([string]::IsNullOrWhiteSpace($domain)) {
+                return $user
+            }
+            return "$domain\$user"
+        }
+    } catch {
+    }
+
+    return ''
+}
+
 function Get-InstalledSoftware {
     $paths = @(
         'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
@@ -251,9 +288,11 @@ if ($fwDomainEnabled -eq $false -or $fwPrivateEnabled -eq $false -or $fwPublicEn
     $fwAnyDisabled = $true
 }
 
+$loggedOnUser = Get-LoggedOnUserName
+
 $payload = [PSCustomObject]@{
     Hostname  = $env:COMPUTERNAME
-    UserName  = $cs.UserName
+    UserName  = $loggedOnUser
     Sector    = ''
     Model     = $cs.Model
     Brand     = $cs.Manufacturer
