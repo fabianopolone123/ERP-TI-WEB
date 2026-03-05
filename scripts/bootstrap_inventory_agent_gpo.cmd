@@ -37,7 +37,7 @@ if errorlevel 1 (
 
 powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "Get-ChildItem -Path '%TARGET_DIR%\*.ps1' -ErrorAction SilentlyContinue | Unblock-File -ErrorAction SilentlyContinue" >> "%LOG_FILE%" 2>&1
 
-powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%TARGET_DIR%\install_inventory_agent_service.ps1" -ServerBaseUrl "%SERVER_BASE_URL%" -Token "%TOKEN%" -PollIntervalSec %POLL_INTERVAL% -EnableLogonPush $true -EnableStartupPush $false >> "%LOG_FILE%" 2>&1
+powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%TARGET_DIR%\install_inventory_agent_service.ps1" -ServerBaseUrl "%SERVER_BASE_URL%" -Token "%TOKEN%" -PollIntervalSec %POLL_INTERVAL% -EnableLogonPush 1 -EnableStartupPush 0 >> "%LOG_FILE%" 2>&1
 set "ERR=%ERRORLEVEL%"
 
 if not "%ERR%"=="0" (
