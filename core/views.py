@@ -15,7 +15,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.core.mail import send_mail
 from django.db import transaction
-from django.db.models import Count, Q, Case, When, Value, IntegerField, Exists, OuterRef, Sum
+from django.db.models import Count, Q, Case, When, Value, IntegerField, Exists, OuterRef, Sum, Max
 from django.db.models.functions import TruncDate
 from django.shortcuts import redirect
 from django.utils import timezone
@@ -2070,6 +2070,14 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
         return value if value > 0 else int(default)
 
     @staticmethod
+    def _fallback_requisition_quantity(requisition: Requisition) -> int:
+        main_quote_max = (
+            requisition.quotes.filter(parent__isnull=True).aggregate(max_qty=Max('quantity')).get('max_qty') or 0
+        )
+        base_qty = int(requisition.quantity or 0)
+        return max(base_qty, int(main_quote_max or 0), 0)
+
+    @staticmethod
     def _expected_delivery_quantity(requisition: Requisition) -> int:
         selected_total = (
             requisition.quotes.filter(parent__isnull=True, is_selected=True).aggregate(total=Sum('quantity')).get('total') or 0
@@ -2077,7 +2085,7 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
         selected_int = int(selected_total or 0)
         if selected_int > 0:
             return selected_int
-        return int(requisition.quantity or 0)
+        return RequisicoesView._fallback_requisition_quantity(requisition)
 
     @staticmethod
     def _sync_requisition_status_with_approved_quote(requisition: Requisition) -> None:
@@ -2432,7 +2440,8 @@ class RequisicoesView(LoginRequiredMixin, TemplateView):
             req.kind_display = req.get_kind_display() if hasattr(req, 'get_kind_display') else ''
             req.rejected_at = req.updated_at.date() if req.status == Requisition.Status.REJECTED and req.updated_at else None
             selected_quantity = sum(int(q.quantity or 0) for q in selected_mains)
-            req.expected_delivery_quantity = selected_quantity if selected_quantity > 0 else int(req.quantity or 0)
+            fallback_qty = max(int(req.quantity or 0), max((int(q.quantity or 0) for q in main_quotes), default=0), 0)
+            req.expected_delivery_quantity = selected_quantity if selected_quantity > 0 else fallback_qty
             if req.expected_delivery_quantity < 0:
                 req.expected_delivery_quantity = 0
             delivered_quantity = int(req.delivered_quantity or 0)
