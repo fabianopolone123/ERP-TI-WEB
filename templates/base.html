@@ -265,6 +265,41 @@
         .message.success { border-color: #14532d; color: #86efac; }
         .message.error { border-color: #7f1d1d; color: #fecaca; }
 
+        .app-update-banner {
+            position: fixed;
+            right: 20px;
+            bottom: 20px;
+            width: min(420px, calc(100vw - 24px));
+            background: #14213d;
+            border: 1px solid #3b82f6;
+            border-radius: 12px;
+            box-shadow: 0 14px 28px rgba(2, 6, 23, 0.45);
+            padding: 14px;
+            z-index: 1200;
+        }
+        .app-update-title {
+            margin: 0 0 6px;
+            font-size: 0.95rem;
+            color: #bfdbfe;
+        }
+        .app-update-text {
+            margin: 0;
+            color: #dbeafe;
+            font-size: 0.9rem;
+        }
+        .app-update-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+        .app-update-actions button[data-action="dismiss"] {
+            background: #334155;
+        }
+        .app-update-actions button[data-action="dismiss"]:hover {
+            background: #475569;
+        }
+
         .data-table {
             width: 100%;
             border-collapse: collapse;
@@ -628,6 +663,16 @@
         {% endif %}
         {% block content %}{% endblock %}
     </div>
+    <div id="app-update-banner" class="app-update-banner" hidden>
+        <h3 class="app-update-title">Nova versão disponível</h3>
+        <p id="app-update-text" class="app-update-text">
+            Uma atualização foi publicada no servidor. Clique em atualizar para aplicar.
+        </p>
+        <div class="app-update-actions">
+            <button type="button" data-action="reload">Atualizar agora</button>
+            <button type="button" data-action="dismiss">Lembrar depois</button>
+        </div>
+    </div>
 
     <script>
         (function () {
@@ -735,6 +780,121 @@
                 };
 
                 input.addEventListener('input', filterRows);
+            });
+        })();
+    </script>
+
+    <script>
+        (function () {
+            const banner = document.getElementById('app-update-banner');
+            if (!banner) return;
+
+            const text = document.getElementById('app-update-text');
+            const reloadBtn = banner.querySelector('button[data-action="reload"]');
+            const dismissBtn = banner.querySelector('button[data-action="dismiss"]');
+            const endpoint = '{% url "app_version_api" %}';
+            const pollIntervalMs = 60000;
+            const dismissStorageKey = 'erp_ti_dismissed_version';
+
+            let currentVersion = '';
+            let lastNotifiedVersion = '';
+            let timerId = null;
+
+            const showBanner = (version) => {
+                if (!version) return;
+                if (text) {
+                    text.textContent = `Uma atualização (${version}) foi publicada no servidor. Clique em atualizar para aplicar.`;
+                }
+                banner.hidden = false;
+            };
+
+            const hideBanner = () => {
+                banner.hidden = true;
+            };
+
+            const notifyBrowser = (version) => {
+                if (!version || !document.hidden || !('Notification' in window)) return;
+                const show = () => {
+                    try {
+                        const notification = new Notification('ERP TI: atualização disponível', {
+                            body: `Versão ${version}. Abra o app e clique em Atualizar agora.`,
+                            tag: 'erp-ti-app-update',
+                            renotify: true,
+                            requireInteraction: true,
+                        });
+                        notification.onclick = () => {
+                            try {
+                                window.focus();
+                            } catch (_) {
+                                // ignore
+                            }
+                            showBanner(version);
+                            notification.close();
+                        };
+                    } catch (_) {
+                        // ignore
+                    }
+                };
+
+                if (Notification.permission === 'granted') {
+                    show();
+                    return;
+                }
+                if (Notification.permission === 'default') {
+                    Notification.requestPermission().then((perm) => {
+                        if (perm === 'granted') show();
+                    }).catch(() => {});
+                }
+            };
+
+            const checkVersion = async () => {
+                try {
+                    const response = await fetch(endpoint, {
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                        cache: 'no-store',
+                    });
+                    if (!response.ok) return;
+                    const payload = await response.json();
+                    const nextVersion = String(payload?.version || '').trim();
+                    if (!nextVersion) return;
+
+                    if (!currentVersion) {
+                        currentVersion = nextVersion;
+                        return;
+                    }
+                    if (nextVersion === currentVersion) return;
+
+                    const dismissedVersion = localStorage.getItem(dismissStorageKey) || '';
+                    if (dismissedVersion === nextVersion) return;
+                    if (lastNotifiedVersion === nextVersion) return;
+
+                    lastNotifiedVersion = nextVersion;
+                    showBanner(nextVersion);
+                    notifyBrowser(nextVersion);
+                } catch (_) {
+                    // ignore falhas temporarias
+                }
+            };
+
+            if (reloadBtn) {
+                reloadBtn.addEventListener('click', () => {
+                    localStorage.removeItem(dismissStorageKey);
+                    window.location.reload();
+                });
+            }
+            if (dismissBtn) {
+                dismissBtn.addEventListener('click', () => {
+                    if (lastNotifiedVersion) {
+                        localStorage.setItem(dismissStorageKey, lastNotifiedVersion);
+                    }
+                    hideBanner();
+                });
+            }
+
+            checkVersion();
+            timerId = window.setInterval(checkVersion, pollIntervalMs);
+            window.addEventListener('beforeunload', () => {
+                if (timerId) clearInterval(timerId);
             });
         })();
     </script>

@@ -3,6 +3,12 @@
 ## HTTPS para rede interna
 Veja HTTPS_SETUP.md para configurar acesso HTTPS em outros PCs.
 
+## App desktop por maquina + aviso de atualizacao
+Veja `DESKTOP_LOCAL_SETUP.md` para:
+- instalar um "app desktop" em cada computador (Edge/Chrome em modo app)
+- publicar nova versao no servidor
+- avisar os usuarios para recarregar quando houver atualizacao
+
 ## Inventario automatico via script (GPO)
 Para inventariar PCs automaticamente sem depender de acesso remoto por WMI:
 

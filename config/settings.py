@@ -259,6 +259,10 @@ CHAMADOS_XLSX_PATH = os.environ.get(
     r'S:\TI\Documentos\Chamados\Chamados 2026 - Fabiano.xlsx',
 )
 
+# Versao do frontend/app para notificar clientes de atualizacao
+APP_VERSION = (os.environ.get('ERP_APP_VERSION', '') or '').strip()
+APP_VERSION_FILE = (os.environ.get('ERP_APP_VERSION_FILE', '.release-version') or '.release-version').strip()
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
