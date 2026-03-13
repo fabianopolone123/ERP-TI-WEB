@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
+ROOT_DIR="$(cd "$(dirname "$SCRIPT_PATH")/.." && pwd)"
 VENV_DIR="${VENV_DIR:-$ROOT_DIR/.venv}"
 SERVICE_NAME="${SERVICE_NAME:-erp-ti}"
 BACKUP_DIR="${BACKUP_DIR:-$HOME/erp-ti-backups}"
