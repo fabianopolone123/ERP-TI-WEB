@@ -24,6 +24,7 @@ staticfiles/
 .env.*
 !.env.example
 .django_secret_key
+.release-version
 
 # Tooling caches
 .pytest_cache/
