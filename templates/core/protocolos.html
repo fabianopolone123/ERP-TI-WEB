@@ -66,7 +66,7 @@
                                     data-protocolo-codigo="{{ item.protocolo|escape }}"
                                     data-protocolo-os="{{ item.os|escape }}"
                                     data-protocolo-observacao="{{ item.observacao|default:''|escape }}"
-                                    data-protocolo-created-at="{{ item.created_at|date:'d/m/Y H:i' }}"
+                                    data-protocolo-created-at="{{ item.created_at|date:'Y-m-d\\TH:i' }}"
                                 >
                                     Editar
                                 </button>
@@ -111,7 +111,13 @@
                         </div>
                         <div>
                             <label for="id_protocolo_data_hora">Data/Hora</label>
-                            <input id="id_protocolo_data_hora" type="text" readonly data-protocolo-data-hora-input />
+                            <input
+                                id="id_protocolo_data_hora"
+                                name="created_at"
+                                type="datetime-local"
+                                required
+                                data-protocolo-data-hora-input
+                            />
                         </div>
                     </div>
                     <button type="submit">Salvar</button>
@@ -138,7 +144,7 @@
                 const formatNow = () => {
                     const now = new Date();
                     const pad = (v) => String(v).padStart(2, '0');
-                    return `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+                    return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
                 };
 
                 const openCreate = () => {
@@ -161,7 +167,7 @@
                     codigoInput.value = btn.getAttribute('data-protocolo-codigo') || '';
                     osInput.value = btn.getAttribute('data-protocolo-os') || '';
                     observacaoInput.value = btn.getAttribute('data-protocolo-observacao') || '';
-                    dataHoraInput.value = btn.getAttribute('data-protocolo-created-at') || '-';
+                    dataHoraInput.value = btn.getAttribute('data-protocolo-created-at') || formatNow();
                     modal.hidden = false;
                 };
 

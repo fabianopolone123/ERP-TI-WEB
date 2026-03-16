@@ -1577,6 +1577,19 @@ class InsumosView(LoginRequiredMixin, TemplateView):
 class ProtocolosView(LoginRequiredMixin, TemplateView):
     template_name = 'core/protocolos.html'
 
+    @staticmethod
+    def _parse_created_at(value: str):
+        raw = (value or '').strip()
+        if not raw:
+            return timezone.localtime(timezone.now()).replace(second=0, microsecond=0)
+        try:
+            dt_value = datetime.fromisoformat(raw)
+        except ValueError:
+            return None
+        if timezone.is_naive(dt_value):
+            dt_value = timezone.make_aware(dt_value, timezone.get_current_timezone())
+        return dt_value
+
     def post(self, request, *args, **kwargs):
         if not is_ti_user(request):
             messages.error(request, 'Apenas usuários do departamento TI podem cadastrar protocolos.')
@@ -1588,6 +1601,8 @@ class ProtocolosView(LoginRequiredMixin, TemplateView):
         protocolo = (request.POST.get('protocolo') or '').strip()
         os_value = (request.POST.get('os') or '').strip()
         observacao = (request.POST.get('observacao') or '').strip()
+        created_at_raw = (request.POST.get('created_at') or '').strip()
+        created_at_dt = self._parse_created_at(created_at_raw)
 
         if not nome:
             messages.error(request, 'Informe o nome.')
@@ -1597,6 +1612,9 @@ class ProtocolosView(LoginRequiredMixin, TemplateView):
             return redirect(request.get_full_path())
         if not os_value:
             messages.error(request, 'Informe a OS.')
+            return redirect(request.get_full_path())
+        if created_at_dt is None:
+            messages.error(request, 'Informe uma data/hora válida.')
             return redirect(request.get_full_path())
 
         if mode == 'update':
@@ -1608,16 +1626,18 @@ class ProtocolosView(LoginRequiredMixin, TemplateView):
             protocolo_obj.protocolo = protocolo
             protocolo_obj.os = os_value
             protocolo_obj.observacao = observacao
-            protocolo_obj.save(update_fields=['nome', 'protocolo', 'os', 'observacao', 'updated_at'])
+            protocolo_obj.created_at = created_at_dt
+            protocolo_obj.save(update_fields=['nome', 'protocolo', 'os', 'observacao', 'created_at', 'updated_at'])
             messages.success(request, 'Protocolo atualizado com sucesso.')
             return redirect('protocolos')
 
-        Protocolo.objects.create(
+        protocolo_obj = Protocolo.objects.create(
             nome=nome,
             protocolo=protocolo,
             os=os_value,
             observacao=observacao,
         )
+        Protocolo.objects.filter(id=protocolo_obj.id).update(created_at=created_at_dt)
         messages.success(request, 'Protocolo cadastrado com sucesso.')
         return redirect('protocolos')
 
