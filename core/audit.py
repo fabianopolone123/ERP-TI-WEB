@@ -48,6 +48,7 @@ def describe_request(request, response=None) -> tuple[str, str, str]:
         'chamados': 'Chamados',
         'usuarios': 'Usuarios',
         'atribuicoes': 'Atribuicoes',
+        'pendencias': 'Pendencias',
         'acessos': 'Acessos',
         'equipamentos': 'Equipamentos',
         'softwares': 'Softwares',

@@ -56,6 +56,7 @@ from .models import (
     AuditLog,
     Dica,
     Responsibility,
+    Pendencia,
     Ticket,
     TicketMessage,
     TicketTimelineEvent,
@@ -95,6 +96,7 @@ ERP_MODULES = [
     {'slug': 'chamados', 'label': 'Chamados', 'url_name': 'chamados'},
     {'slug': 'usuarios', 'label': 'Usuários', 'url_name': 'usuarios'},
     {'slug': 'atribuicoes', 'label': 'Atribuições', 'url_name': 'atribuicoes'},
+    {'slug': 'pendencias', 'label': 'Pendencias', 'url_name': 'pendencias'},
     {'slug': 'acessos', 'label': 'Acessos', 'url_name': 'acessos'},
     {'slug': 'equipamentos', 'label': 'Equipamentos', 'url_name': 'equipamentos'},
     {'slug': 'ips', 'label': 'IPs', 'url_name': None},
@@ -2675,6 +2677,102 @@ class AtribuicoesView(LoginRequiredMixin, TemplateView):
             item.assignee_ids_csv = ','.join(str(user.id) for user in assignee_items)
             item.assignee_names = ', '.join(user.full_name for user in assignee_items) if assignee_items else ''
         context['responsibilities'] = responsibilities
+        return context
+
+
+class PendenciasView(LoginRequiredMixin, TemplateView):
+    template_name = 'core/pendencias.html'
+
+    def post(self, request, *args, **kwargs):
+        if not is_ti_user(request):
+            messages.error(request, 'Apenas usuarios do departamento TI podem gerenciar pendencias.')
+            return redirect(request.get_full_path())
+
+        action = (request.POST.get('action') or 'create_pendency').strip().lower()
+
+        if action == 'set_done_status':
+            pendency_id_raw = (request.POST.get('pendency_id') or '').strip()
+            try:
+                pendency_id = int(pendency_id_raw)
+            except (TypeError, ValueError):
+                messages.error(request, 'Pendencia invalida para atualizacao.')
+                return redirect('pendencias')
+
+            pendency = Pendencia.objects.select_related('attendant').filter(id=pendency_id).first()
+            if not pendency:
+                messages.error(request, 'Pendencia nao encontrada.')
+                return redirect('pendencias')
+
+            new_done = bool(request.POST.get('is_done'))
+            if new_done == bool(pendency.is_done):
+                messages.info(request, 'Nenhuma alteracao foi identificada para essa pendencia.')
+                return redirect('pendencias')
+
+            pendency.is_done = new_done
+            pendency.done_at = timezone.now() if new_done else None
+            pendency.save(update_fields=['is_done', 'done_at', 'updated_at'])
+            if new_done:
+                messages.success(request, 'Pendencia marcada como concluida.')
+            else:
+                messages.success(request, 'Pendencia retornou para pendente.')
+            return redirect('pendencias')
+
+        if action == 'create_pendency':
+            attendant_id_raw = (request.POST.get('attendant_id') or '').strip()
+            description = (request.POST.get('description') or '').strip()
+
+            if not description:
+                messages.error(request, 'Informe a pendencia.')
+                return redirect('pendencias')
+
+            try:
+                attendant_id = int(attendant_id_raw)
+            except (TypeError, ValueError):
+                messages.error(request, 'Atendente TI invalido.')
+                return redirect('pendencias')
+
+            attendant = ERPUser.objects.filter(
+                id=attendant_id,
+                department__iexact='TI',
+                is_active=True,
+            ).first()
+            if not attendant:
+                messages.error(request, 'Atendente TI nao encontrado.')
+                return redirect('pendencias')
+
+            Pendencia.objects.create(
+                attendant=attendant,
+                description=description,
+                is_done=False,
+            )
+            messages.success(request, 'Pendencia cadastrada com sucesso.')
+            return redirect('pendencias')
+
+        messages.error(request, 'Acao invalida para pendencias.')
+        return redirect('pendencias')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        is_ti = is_ti_user(self.request)
+        context['is_ti_group'] = is_ti
+        context['modules'] = build_modules('pendencias') if is_ti else []
+        context['ti_users'] = []
+        context['pending_items'] = []
+        context['completed_items'] = []
+        if not is_ti:
+            return context
+
+        context['ti_users'] = ERPUser.objects.filter(department__iexact='TI', is_active=True).order_by('full_name')
+        context['pending_items'] = (
+            Pendencia.objects.select_related('attendant')
+            .filter(is_done=False)
+            .order_by('-created_at', '-id')
+        )
+        context['completed_items'] = (
+            Pendencia.objects.select_related('attendant')
+            .filter(is_done=True)
+            .order_by('-done_at', '-updated_at', '-id')
+        )
         return context
 
 

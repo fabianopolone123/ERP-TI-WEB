@@ -398,6 +398,25 @@ class Responsibility(models.Model):
         return self.name
 
 
+class Pendencia(models.Model):
+    attendant = models.ForeignKey(
+        ERPUser,
+        on_delete=models.CASCADE,
+        related_name='pendencias',
+    )
+    description = models.CharField(max_length=300)
+    is_done = models.BooleanField(default=False)
+    done_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['is_done', '-created_at', '-id']
+
+    def __str__(self) -> str:
+        return f'{self.attendant.full_name}: {self.description}'
+
+
 class Ticket(models.Model):
     class TicketType(models.TextChoices):
         NAO_CLASSIFICADO = 'nao_classificado', 'Não classificado'
