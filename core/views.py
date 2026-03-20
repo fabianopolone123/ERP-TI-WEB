@@ -2562,7 +2562,7 @@ class AtribuicoesView(LoginRequiredMixin, TemplateView):
 
         if action == 'move_responsibility':
             responsibility_id_raw = (request.POST.get('responsibility_id') or '').strip()
-            target_user_id_raw = (request.POST.get('target_user_id') or '').strip()
+            target_user_ids_raw = request.POST.getlist('target_user_ids')
 
             try:
                 responsibility_id = int(responsibility_id_raw)
@@ -2570,49 +2570,46 @@ class AtribuicoesView(LoginRequiredMixin, TemplateView):
                 messages.error(request, 'Responsabilidade inválida para movimentação.')
                 return redirect('atribuicoes')
 
-            responsibility = Responsibility.objects.select_related('assigned_to').filter(id=responsibility_id).first()
+            responsibility = Responsibility.objects.prefetch_related('assignees').filter(id=responsibility_id).first()
             if not responsibility:
                 messages.error(request, 'Responsabilidade não encontrada.')
                 return redirect('atribuicoes')
 
-            old_assignee_name = responsibility.assigned_to.full_name if responsibility.assigned_to else 'Sem responsável'
-
-            if not target_user_id_raw:
-                if responsibility.assigned_to_id is None:
-                    messages.info(request, 'Esta responsabilidade já está sem responsável.')
+            target_user_ids: set[int] = set()
+            for raw_id in target_user_ids_raw:
+                value = (raw_id or '').strip()
+                if not value:
+                    continue
+                try:
+                    target_user_ids.add(int(value))
+                except (TypeError, ValueError):
+                    messages.error(request, 'Usuário TI inválido para movimentação.')
                     return redirect('atribuicoes')
-                responsibility.assigned_to = None
-                responsibility.save(update_fields=['assigned_to', 'updated_at'])
-                messages.success(
-                    request,
-                    f'Responsabilidade "{responsibility.name}" movida de {old_assignee_name} para Sem responsável.',
-                )
+
+            target_users = list(
+                ERPUser.objects.filter(
+                    id__in=target_user_ids,
+                    department__iexact='TI',
+                    is_active=True,
+                ).order_by('full_name')
+            )
+            if len(target_users) != len(target_user_ids):
+                messages.error(request, 'Um ou mais usuários TI não foram encontrados para receber a responsabilidade.')
                 return redirect('atribuicoes')
 
-            try:
-                target_user_id = int(target_user_id_raw)
-            except (TypeError, ValueError):
-                messages.error(request, 'Usuário TI inválido para movimentação.')
+            current_users = list(responsibility.assignees.order_by('full_name'))
+            current_ids = {item.id for item in current_users}
+            if current_ids == target_user_ids:
+                messages.info(request, 'A responsabilidade já está atribuída exatamente para os atendentes selecionados.')
                 return redirect('atribuicoes')
 
-            target_user = ERPUser.objects.filter(
-                id=target_user_id,
-                department__iexact='TI',
-                is_active=True,
-            ).first()
-            if not target_user:
-                messages.error(request, 'Usuário TI não encontrado para receber a responsabilidade.')
-                return redirect('atribuicoes')
+            responsibility.assignees.set(target_users)
 
-            if responsibility.assigned_to_id == target_user.id:
-                messages.info(request, 'A responsabilidade já está atribuída para esse usuário TI.')
-                return redirect('atribuicoes')
-
-            responsibility.assigned_to = target_user
-            responsibility.save(update_fields=['assigned_to', 'updated_at'])
+            old_assignee_names = ', '.join(item.full_name for item in current_users) if current_users else 'Sem responsável'
+            new_assignee_names = ', '.join(item.full_name for item in target_users) if target_users else 'Sem responsável'
             messages.success(
                 request,
-                f'Responsabilidade "{responsibility.name}" movida de {old_assignee_name} para {target_user.full_name}.',
+                f'Responsabilidade "{responsibility.name}" atualizada: {old_assignee_names} -> {new_assignee_names}.',
             )
             return redirect('atribuicoes')
 
@@ -2645,8 +2642,13 @@ class AtribuicoesView(LoginRequiredMixin, TemplateView):
         if not is_ti:
             return context
 
-        context['ti_users'] = ERPUser.objects.filter(department__iexact='TI', is_active=True).order_by('full_name')
-        responsibilities = Responsibility.objects.select_related('assigned_to').order_by('name', 'id')
+        ti_users = list(ERPUser.objects.filter(department__iexact='TI', is_active=True).order_by('full_name'))
+        context['ti_users'] = ti_users
+        responsibilities = list(Responsibility.objects.prefetch_related('assignees').order_by('name', 'id'))
+        for item in responsibilities:
+            assignee_items = sorted(list(item.assignees.all()), key=lambda user: (user.full_name or '').lower())
+            item.assignee_ids = {user.id for user in assignee_items}
+            item.assignee_names = ', '.join(user.full_name for user in assignee_items) if assignee_items else ''
         context['responsibilities'] = responsibilities
         return context
 
@@ -4347,12 +4349,3 @@ def email_templates_update(request):
     template.save()
     messages.success(request, 'Templates de e-mail atualizados.')
     return redirect('chamados')
-
-
-
-
-
-
-
-
-

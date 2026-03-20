@@ -384,12 +384,10 @@ class Dica(models.Model):
 class Responsibility(models.Model):
     name = models.CharField(max_length=200)
     description = models.TextField(blank=True, default='')
-    assigned_to = models.ForeignKey(
+    assignees = models.ManyToManyField(
         ERPUser,
-        null=True,
         blank=True,
-        on_delete=models.SET_NULL,
-        related_name='responsibilities',
+        related_name='assigned_responsibilities',
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
