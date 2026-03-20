@@ -2642,18 +2642,12 @@ class AtribuicoesView(LoginRequiredMixin, TemplateView):
         context['modules'] = build_modules('atribuicoes') if is_ti else []
         context['ti_users'] = []
         context['responsibilities'] = []
-        context['unassigned_count'] = 0
         if not is_ti:
             return context
 
-        context['ti_users'] = (
-            ERPUser.objects.filter(department__iexact='TI', is_active=True)
-            .annotate(responsibility_count=Count('responsibilities'))
-            .order_by('full_name')
-        )
+        context['ti_users'] = ERPUser.objects.filter(department__iexact='TI', is_active=True).order_by('full_name')
         responsibilities = Responsibility.objects.select_related('assigned_to').order_by('name', 'id')
         context['responsibilities'] = responsibilities
-        context['unassigned_count'] = responsibilities.filter(assigned_to__isnull=True).count()
         return context
 
 

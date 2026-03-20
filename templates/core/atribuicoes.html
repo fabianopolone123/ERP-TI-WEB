@@ -57,33 +57,6 @@
         </div>
 
         <div class="topbar" style="margin-top: 16px; margin-bottom: 10px;">
-            <h3>Perfis TI</h3>
-            <span class="muted">Sem responsável: {{ unassigned_count }}</span>
-        </div>
-        <div style="overflow-x: auto;">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>Nome</th>
-                        <th>Responsabilidades atuais</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for user in ti_users %}
-                        <tr>
-                            <td>{{ user.full_name }}</td>
-                            <td>{{ user.responsibility_count }}</td>
-                        </tr>
-                    {% empty %}
-                        <tr>
-                            <td colspan="2" class="muted">Nenhum usuário TI ativo encontrado.</td>
-                        </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-
-        <div class="topbar" style="margin-top: 16px; margin-bottom: 10px;">
             <h3>Lista de responsabilidades</h3>
             <input
                 type="text"
