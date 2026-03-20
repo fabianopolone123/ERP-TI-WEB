@@ -3065,8 +3065,40 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
         ti_users = list(ERPUser.objects.filter(department__iexact='TI', is_active=True).order_by('full_name'))
         context['ti_users'] = ti_users
         ti_usernames_set = {(item.username or '').strip().lower() for item in ti_users if (item.username or '').strip()}
+        attendant_pendencias_map: dict[int, dict[str, list[dict[str, str | int]]]] = {
+            user.id: {'pending': [], 'completed': []}
+            for user in ti_users
+        }
         last_paths: dict[int, str] = {}
         ti_ids = [u.id for u in ti_users]
+        if ti_ids:
+            pend_rows = (
+                Pendencia.objects.filter(attendant_id__in=ti_ids)
+                .order_by('-created_at', '-id')
+                .values('id', 'attendant_id', 'description', 'is_done', 'created_at', 'done_at')
+            )
+            for row in pend_rows:
+                attendant_id = int(row.get('attendant_id') or 0)
+                bucket = attendant_pendencias_map.get(attendant_id)
+                if not bucket:
+                    continue
+                description = (row.get('description') or '').strip() or '-'
+                payload = {
+                    'id': int(row.get('id') or 0),
+                    'description': description,
+                    'when_text': '',
+                }
+                if row.get('is_done'):
+                    done_at = row.get('done_at') or row.get('created_at')
+                    if done_at:
+                        payload['when_text'] = timezone.localtime(done_at).strftime('%d/%m/%Y %H:%M')
+                    bucket['completed'].append(payload)
+                else:
+                    created_at = row.get('created_at')
+                    if created_at:
+                        payload['when_text'] = timezone.localtime(created_at).strftime('%d/%m/%Y %H:%M')
+                    bucket['pending'].append(payload)
+        context['attendant_pendencias_map'] = attendant_pendencias_map
         if ti_ids:
             logs_with_path = (
                 TicketWorkLog.objects.filter(attendant_id__in=ti_ids)

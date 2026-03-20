@@ -364,7 +364,14 @@
 
             {% for user in ti_users %}
                 <div class="kanban-column" data-target="user_{{ user.id }}">
-                    <div class="kanban-header">{{ user.full_name }}</div>
+                    <div
+                        class="kanban-header"
+                        data-open-attendant-pendencias
+                        data-attendant-id="{{ user.id }}"
+                        data-attendant-name="{{ user.full_name|escape }}"
+                        style="cursor: pointer;"
+                        title="Clique para ver pendencias"
+                    >{{ user.full_name }}</div>
                     <div class="kanban-body">
                         {% for ticket in user_tickets|get_item:user.id %}
                             <div class="ticket-card urgency-bg-{{ ticket.urgency }}{% if ticket_meta|get_item:ticket.id|default:''|get_item:'is_multi_attendant' %} shared-ticket{% endif %}{% if ticket_cycle_map|get_item:ticket.id|default:''|get_item:user.id %} playing{% endif %}" draggable="true" data-ticket-id="{{ ticket.id }}" data-ticket-status="{{ ticket.status }}" data-opened-at="{{ ticket.created_at|date:'c' }}" data-requester-priority="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'requester_priority'|default:0 }}" data-urgency-priority="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'urgency_priority'|default:5 }}" data-failure-type="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'failure_type' }}" data-last-action="{{ ticket_meta|get_item:ticket.id|default:''|get_item:'last_action_text'|default:''|escape }}" data-cycle-running="{% if ticket_cycle_map|get_item:ticket.id|default:''|get_item:user.id %}1{% else %}0{% endif %}">
@@ -667,6 +674,29 @@
         {% endif %}
     </div>
 </div>
+
+{% if is_ti_group %}
+<div class="modal" data-attendant-pendencias-modal hidden>
+    <div class="modal-backdrop" data-close-attendant-pendencias></div>
+    <div class="modal-content">
+        <div class="topbar" style="margin-bottom: 8px;">
+            <h3 style="margin: 0;">Pendencias do atendente</h3>
+            <button type="button" data-close-attendant-pendencias>Fechar</button>
+        </div>
+        <div class="ticket-details" style="padding-top: 0;">
+            <div><strong>Atendente:</strong> <span data-attendant-pendencias-name>-</span></div>
+        </div>
+        <div style="margin-top: 8px;">
+            <h4 style="margin: 0 0 8px 0;">Pendentes</h4>
+            <div class="chat-list" data-attendant-pendencias-pending></div>
+        </div>
+        <div style="margin-top: 12px;">
+            <h4 style="margin: 0 0 8px 0;">Concluidas</h4>
+            <div class="chat-list" data-attendant-pendencias-completed></div>
+        </div>
+    </div>
+</div>
+{% endif %}
 
 {% if is_ti_group %}
     <div class="modal" data-whatsapp-modal hidden>
@@ -1908,6 +1938,85 @@
         }
     })();
 </script>
+{% if is_ti_group %}
+<script>
+    (function () {
+        const modal = document.querySelector('[data-attendant-pendencias-modal]');
+        const openButtons = document.querySelectorAll('[data-open-attendant-pendencias]');
+        if (!modal || !openButtons.length) return;
+
+        const closeEls = modal.querySelectorAll('[data-close-attendant-pendencias]');
+        const nameEl = modal.querySelector('[data-attendant-pendencias-name]');
+        const pendingEl = modal.querySelector('[data-attendant-pendencias-pending]');
+        const completedEl = modal.querySelector('[data-attendant-pendencias-completed]');
+
+        const pendenciasByAttendant = {
+            {% for user in ti_users %}
+            "{{ user.id }}": {
+                pending: [
+                    {% for item in attendant_pendencias_map|get_item:user.id|get_item:'pending' %}
+                    {
+                        id: {{ item.id }},
+                        description: "{{ item.description|escapejs }}",
+                        when: "{{ item.when_text|escapejs }}",
+                    },
+                    {% endfor %}
+                ],
+                completed: [
+                    {% for item in attendant_pendencias_map|get_item:user.id|get_item:'completed' %}
+                    {
+                        id: {{ item.id }},
+                        description: "{{ item.description|escapejs }}",
+                        when: "{{ item.when_text|escapejs }}",
+                    },
+                    {% endfor %}
+                ],
+            },
+            {% endfor %}
+        };
+
+        const renderList = (container, items, emptyText, whenLabel) => {
+            if (!container) return;
+            container.innerHTML = '';
+            if (!Array.isArray(items) || !items.length) {
+                const empty = document.createElement('div');
+                empty.className = 'muted';
+                empty.textContent = emptyText;
+                container.appendChild(empty);
+                return;
+            }
+            items.forEach((item) => {
+                const row = document.createElement('div');
+                row.className = 'chat-message';
+                const base = `#${item.id} - ${item.description || '-'}`;
+                const when = (item.when || '').trim();
+                row.textContent = when ? `${base} | ${whenLabel}: ${when}` : base;
+                container.appendChild(row);
+            });
+        };
+
+        const openModal = (button) => {
+            const attendantId = (button.getAttribute('data-attendant-id') || '').trim();
+            const attendantName = (button.getAttribute('data-attendant-name') || '').trim() || '-';
+            const data = pendenciasByAttendant[attendantId] || { pending: [], completed: [] };
+
+            if (nameEl) nameEl.textContent = attendantName;
+            renderList(pendingEl, data.pending || [], 'Nenhuma pendencia pendente.', 'Criada em');
+            renderList(completedEl, data.completed || [], 'Nenhuma pendencia concluida.', 'Concluida em');
+            modal.hidden = false;
+        };
+
+        const closeModal = () => {
+            modal.hidden = true;
+        };
+
+        openButtons.forEach((button) => {
+            button.addEventListener('click', () => openModal(button));
+        });
+        closeEls.forEach((el) => el.addEventListener('click', closeModal));
+    })();
+</script>
+{% endif %}
 <script>
     (function () {
         const modal = document.querySelector('[data-email-modal]');
