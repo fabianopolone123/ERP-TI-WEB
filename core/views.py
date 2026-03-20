@@ -2780,6 +2780,46 @@ class PendenciasView(LoginRequiredMixin, TemplateView):
         return context
 
 
+@login_required
+@require_POST
+def pendencias_toggle_status_api(request):
+    if not is_ti_user(request):
+        return JsonResponse({'ok': False, 'error': 'forbidden'}, status=403)
+
+    pendency_id_raw = (request.POST.get('pendency_id') or '').strip()
+    try:
+        pendency_id = int(pendency_id_raw)
+    except (TypeError, ValueError):
+        return JsonResponse({'ok': False, 'error': 'invalid_pendency_id'}, status=400)
+
+    pendency = Pendencia.objects.select_related('attendant').filter(id=pendency_id).first()
+    if not pendency:
+        return JsonResponse({'ok': False, 'error': 'pendency_not_found'}, status=404)
+
+    new_done = bool(request.POST.get('is_done'))
+    changed = bool(pendency.is_done) != new_done
+    if changed:
+        pendency.is_done = new_done
+        pendency.done_at = timezone.now() if new_done else None
+        pendency.save(update_fields=['is_done', 'done_at', 'updated_at'])
+
+    when_dt = pendency.done_at if pendency.is_done else pendency.created_at
+    when_text = timezone.localtime(when_dt).strftime('%d/%m/%Y %H:%M') if when_dt else ''
+    return JsonResponse(
+        {
+            'ok': True,
+            'changed': changed,
+            'item': {
+                'id': pendency.id,
+                'attendant_id': pendency.attendant_id,
+                'description': pendency.description,
+                'is_done': bool(pendency.is_done),
+                'when_text': when_text,
+            },
+        }
+    )
+
+
 class AcessosView(LoginRequiredMixin, TemplateView):
     template_name = 'core/acessos.html'
 

@@ -1949,6 +1949,8 @@
         const nameEl = modal.querySelector('[data-attendant-pendencias-name]');
         const pendingEl = modal.querySelector('[data-attendant-pendencias-pending]');
         const completedEl = modal.querySelector('[data-attendant-pendencias-completed]');
+        const toggleApiUrl = '{% url "pendencias_toggle_status_api" %}';
+        let currentAttendantId = '';
 
         const pendenciasByAttendant = {
             {% for user in ti_users %}
@@ -1975,7 +1977,38 @@
             {% endfor %}
         };
 
-        const renderList = (container, items, emptyText, whenLabel) => {
+        const getCookie = (name) => {
+            const value = `; ${document.cookie}`;
+            const parts = value.split(`; ${name}=`);
+            if (parts.length === 2) return parts.pop().split(';').shift();
+            return '';
+        };
+
+        const upsertItem = (attendantId, payload) => {
+            const key = String(attendantId || '').trim();
+            if (!key) return;
+            if (!pendenciasByAttendant[key]) {
+                pendenciasByAttendant[key] = { pending: [], completed: [] };
+            }
+            const bucket = pendenciasByAttendant[key];
+            const id = Number(payload.id || 0);
+            if (!id) return;
+            bucket.pending = (bucket.pending || []).filter((item) => Number(item.id || 0) !== id);
+            bucket.completed = (bucket.completed || []).filter((item) => Number(item.id || 0) !== id);
+
+            const normalized = {
+                id,
+                description: String(payload.description || '').trim() || '-',
+                when: String(payload.when_text || '').trim(),
+            };
+            if (payload.is_done) {
+                bucket.completed.unshift(normalized);
+            } else {
+                bucket.pending.unshift(normalized);
+            }
+        };
+
+        const renderList = (container, items, emptyText, whenLabel, doneValue) => {
             if (!container) return;
             container.innerHTML = '';
             if (!Array.isArray(items) || !items.length) {
@@ -1988,21 +2021,70 @@
             items.forEach((item) => {
                 const row = document.createElement('div');
                 row.className = 'chat-message';
+                row.style.display = 'flex';
+                row.style.alignItems = 'center';
+                row.style.justifyContent = 'space-between';
+                row.style.gap = '10px';
+
+                const text = document.createElement('span');
                 const base = `#${item.id} - ${item.description || '-'}`;
                 const when = (item.when || '').trim();
-                row.textContent = when ? `${base} | ${whenLabel}: ${when}` : base;
+                text.textContent = when ? `${base} | ${whenLabel}: ${when}` : base;
+                row.appendChild(text);
+
+                const toggle = document.createElement('input');
+                toggle.type = 'checkbox';
+                toggle.checked = !!doneValue;
+                toggle.title = doneValue ? 'Marcar como pendente' : 'Marcar como concluida';
+                toggle.addEventListener('change', async () => {
+                    const pendencyId = Number(item.id || 0);
+                    if (!pendencyId || !currentAttendantId) return;
+                    toggle.disabled = true;
+                    try {
+                        const response = await fetch(toggleApiUrl, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/x-www-form-urlencoded',
+                                'X-CSRFToken': getCookie('csrftoken'),
+                            },
+                            body: new URLSearchParams({
+                                pendency_id: String(pendencyId),
+                                is_done: toggle.checked ? '1' : '',
+                            }),
+                        });
+                        const data = await response.json().catch(() => ({}));
+                        if (!response.ok || !data.ok) {
+                            alert('Nao foi possivel atualizar a pendencia.');
+                            toggle.checked = !toggle.checked;
+                            return;
+                        }
+                        upsertItem(currentAttendantId, data.item || {});
+                        renderCurrent();
+                    } catch (_) {
+                        alert('Falha de rede ao atualizar pendencia.');
+                        toggle.checked = !toggle.checked;
+                    } finally {
+                        toggle.disabled = false;
+                    }
+                });
+                row.appendChild(toggle);
                 container.appendChild(row);
             });
+        };
+
+        const renderCurrent = () => {
+            const data = pendenciasByAttendant[currentAttendantId] || { pending: [], completed: [] };
+            renderList(pendingEl, data.pending || [], 'Nenhuma pendencia pendente.', 'Criada em', false);
+            renderList(completedEl, data.completed || [], 'Nenhuma pendencia concluida.', 'Concluida em', true);
         };
 
         const openModal = (button) => {
             const attendantId = (button.getAttribute('data-attendant-id') || '').trim();
             const attendantName = (button.getAttribute('data-attendant-name') || '').trim() || '-';
-            const data = pendenciasByAttendant[attendantId] || { pending: [], completed: [] };
+            currentAttendantId = attendantId;
 
             if (nameEl) nameEl.textContent = attendantName;
-            renderList(pendingEl, data.pending || [], 'Nenhuma pendencia pendente.', 'Criada em');
-            renderList(completedEl, data.completed || [], 'Nenhuma pendencia concluida.', 'Concluida em');
+            renderCurrent();
             modal.hidden = false;
         };
 
