@@ -383,7 +383,6 @@ class Dica(models.Model):
 
 class Responsibility(models.Model):
     name = models.CharField(max_length=200)
-    description = models.TextField(blank=True, default='')
     assignees = models.ManyToManyField(
         ERPUser,
         blank=True,

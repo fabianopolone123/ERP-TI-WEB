@@ -2615,7 +2615,6 @@ class AtribuicoesView(LoginRequiredMixin, TemplateView):
 
         if action == 'create_responsibility':
             name = (request.POST.get('name') or '').strip()
-            description = (request.POST.get('description') or '').strip()
 
             if not name:
                 messages.error(request, 'Informe o nome da responsabilidade.')
@@ -2625,7 +2624,7 @@ class AtribuicoesView(LoginRequiredMixin, TemplateView):
                 messages.error(request, 'Já existe uma responsabilidade com esse nome.')
                 return redirect('atribuicoes')
 
-            Responsibility.objects.create(name=name, description=description)
+            Responsibility.objects.create(name=name)
             messages.success(request, 'Responsabilidade cadastrada com sucesso.')
             return redirect('atribuicoes')
 
