@@ -91,10 +91,10 @@
             <div class="form-row">
                 <div style="max-width: 360px;">
                     <label for="id_pendency_attendant">Atendente TI</label>
-                    <select id="id_pendency_attendant" name="attendant_id" required>
+                    <select id="id_pendency_attendant" name="attendant_id" data-default-attendant-id="{{ default_pendency_attendant_id|default:'' }}" required>
                         <option value="">Selecione...</option>
                         {% for user in ti_users %}
-                            <option value="{{ user.id }}">{{ user.full_name }}</option>
+                            <option value="{{ user.id }}" {% if default_pendency_attendant_id == user.id %}selected{% endif %}>{{ user.full_name }}</option>
                         {% endfor %}
                     </select>
                 </div>
@@ -174,8 +174,24 @@
         const createModal = document.querySelector('[data-pendency-create-modal]');
         const createOpenBtn = document.querySelector('[data-open-pendency-create-modal]');
         const createCloseEls = document.querySelectorAll('[data-close-pendency-create-modal]');
+        const createAttendantSelect = document.querySelector('#id_pendency_attendant');
+        const createDescriptionInput = document.querySelector('#id_pendency_description');
         if (createModal && createOpenBtn) {
-            const open = () => { createModal.hidden = false; };
+            const open = () => {
+                if (createAttendantSelect) {
+                    const defaultId = (createAttendantSelect.getAttribute('data-default-attendant-id') || '').trim();
+                    if (defaultId && Array.from(createAttendantSelect.options).some((opt) => String(opt.value) === defaultId)) {
+                        createAttendantSelect.value = defaultId;
+                    }
+                }
+                if (createDescriptionInput) {
+                    createDescriptionInput.value = '';
+                }
+                createModal.hidden = false;
+                if (createDescriptionInput) {
+                    window.requestAnimationFrame(() => createDescriptionInput.focus());
+                }
+            };
             const close = () => { createModal.hidden = true; };
             createOpenBtn.addEventListener('click', open);
             createCloseEls.forEach((el) => el.addEventListener('click', close));

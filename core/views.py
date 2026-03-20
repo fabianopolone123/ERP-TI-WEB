@@ -2757,12 +2757,16 @@ class PendenciasView(LoginRequiredMixin, TemplateView):
         context['is_ti_group'] = is_ti
         context['modules'] = build_modules('pendencias') if is_ti else []
         context['ti_users'] = []
+        context['default_pendency_attendant_id'] = None
         context['pending_items'] = []
         context['completed_items'] = []
         if not is_ti:
             return context
 
-        context['ti_users'] = ERPUser.objects.filter(department__iexact='TI', is_active=True).order_by('full_name')
+        ti_users = ERPUser.objects.filter(department__iexact='TI', is_active=True).order_by('full_name')
+        context['ti_users'] = ti_users
+        default_attendant = ti_users.filter(full_name__iexact='Fabiano Polone').first() or ti_users.first()
+        context['default_pendency_attendant_id'] = default_attendant.id if default_attendant else None
         context['pending_items'] = (
             Pendencia.objects.select_related('attendant')
             .filter(is_done=False)
