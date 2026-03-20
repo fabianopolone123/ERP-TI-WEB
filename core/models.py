@@ -381,6 +381,26 @@ class Dica(models.Model):
         return self.title
 
 
+class Responsibility(models.Model):
+    name = models.CharField(max_length=200)
+    description = models.TextField(blank=True, default='')
+    assigned_to = models.ForeignKey(
+        ERPUser,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='responsibilities',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['name', 'id']
+
+    def __str__(self) -> str:
+        return self.name
+
+
 class Ticket(models.Model):
     class TicketType(models.TextChoices):
         NAO_CLASSIFICADO = 'nao_classificado', 'Não classificado'

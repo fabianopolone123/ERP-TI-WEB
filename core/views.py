@@ -55,6 +55,7 @@ from .models import (
     AccessMember,
     AuditLog,
     Dica,
+    Responsibility,
     Ticket,
     TicketMessage,
     TicketTimelineEvent,
@@ -93,6 +94,7 @@ DEFAULT_WA_TEMPLATES = {
 ERP_MODULES = [
     {'slug': 'chamados', 'label': 'Chamados', 'url_name': 'chamados'},
     {'slug': 'usuarios', 'label': 'Usuários', 'url_name': 'usuarios'},
+    {'slug': 'atribuicoes', 'label': 'Atribuições', 'url_name': 'atribuicoes'},
     {'slug': 'acessos', 'label': 'Acessos', 'url_name': 'acessos'},
     {'slug': 'equipamentos', 'label': 'Equipamentos', 'url_name': 'equipamentos'},
     {'slug': 'ips', 'label': 'IPs', 'url_name': None},
@@ -2545,6 +2547,113 @@ class DicasView(LoginRequiredMixin, TemplateView):
         context['modules'] = build_modules('dicas') if is_ti else []
         context['dicas'] = Dica.objects.select_related('created_by').order_by('-updated_at', '-id') if is_ti else []
         context['dica_categories'] = Dica.Category.choices
+        return context
+
+
+class AtribuicoesView(LoginRequiredMixin, TemplateView):
+    template_name = 'core/atribuicoes.html'
+
+    def post(self, request, *args, **kwargs):
+        if not is_ti_user(request):
+            messages.error(request, 'Apenas usuários do departamento TI podem gerenciar atribuições.')
+            return redirect(request.get_full_path())
+
+        action = (request.POST.get('action') or 'create_responsibility').strip().lower()
+
+        if action == 'move_responsibility':
+            responsibility_id_raw = (request.POST.get('responsibility_id') or '').strip()
+            target_user_id_raw = (request.POST.get('target_user_id') or '').strip()
+
+            try:
+                responsibility_id = int(responsibility_id_raw)
+            except (TypeError, ValueError):
+                messages.error(request, 'Responsabilidade inválida para movimentação.')
+                return redirect('atribuicoes')
+
+            responsibility = Responsibility.objects.select_related('assigned_to').filter(id=responsibility_id).first()
+            if not responsibility:
+                messages.error(request, 'Responsabilidade não encontrada.')
+                return redirect('atribuicoes')
+
+            old_assignee_name = responsibility.assigned_to.full_name if responsibility.assigned_to else 'Sem responsável'
+
+            if not target_user_id_raw:
+                if responsibility.assigned_to_id is None:
+                    messages.info(request, 'Esta responsabilidade já está sem responsável.')
+                    return redirect('atribuicoes')
+                responsibility.assigned_to = None
+                responsibility.save(update_fields=['assigned_to', 'updated_at'])
+                messages.success(
+                    request,
+                    f'Responsabilidade "{responsibility.name}" movida de {old_assignee_name} para Sem responsável.',
+                )
+                return redirect('atribuicoes')
+
+            try:
+                target_user_id = int(target_user_id_raw)
+            except (TypeError, ValueError):
+                messages.error(request, 'Usuário TI inválido para movimentação.')
+                return redirect('atribuicoes')
+
+            target_user = ERPUser.objects.filter(
+                id=target_user_id,
+                department__iexact='TI',
+                is_active=True,
+            ).first()
+            if not target_user:
+                messages.error(request, 'Usuário TI não encontrado para receber a responsabilidade.')
+                return redirect('atribuicoes')
+
+            if responsibility.assigned_to_id == target_user.id:
+                messages.info(request, 'A responsabilidade já está atribuída para esse usuário TI.')
+                return redirect('atribuicoes')
+
+            responsibility.assigned_to = target_user
+            responsibility.save(update_fields=['assigned_to', 'updated_at'])
+            messages.success(
+                request,
+                f'Responsabilidade "{responsibility.name}" movida de {old_assignee_name} para {target_user.full_name}.',
+            )
+            return redirect('atribuicoes')
+
+        if action == 'create_responsibility':
+            name = (request.POST.get('name') or '').strip()
+            description = (request.POST.get('description') or '').strip()
+
+            if not name:
+                messages.error(request, 'Informe o nome da responsabilidade.')
+                return redirect('atribuicoes')
+
+            if Responsibility.objects.filter(name__iexact=name).exists():
+                messages.error(request, 'Já existe uma responsabilidade com esse nome.')
+                return redirect('atribuicoes')
+
+            Responsibility.objects.create(name=name, description=description)
+            messages.success(request, 'Responsabilidade cadastrada com sucesso.')
+            return redirect('atribuicoes')
+
+        messages.error(request, 'Ação inválida para atribuições.')
+        return redirect('atribuicoes')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        is_ti = is_ti_user(self.request)
+        context['is_ti_group'] = is_ti
+        context['modules'] = build_modules('atribuicoes') if is_ti else []
+        context['ti_users'] = []
+        context['responsibilities'] = []
+        context['unassigned_count'] = 0
+        if not is_ti:
+            return context
+
+        context['ti_users'] = (
+            ERPUser.objects.filter(department__iexact='TI', is_active=True)
+            .annotate(responsibility_count=Count('responsibilities'))
+            .order_by('full_name')
+        )
+        responsibilities = Responsibility.objects.select_related('assigned_to').order_by('name', 'id')
+        context['responsibilities'] = responsibilities
+        context['unassigned_count'] = responsibilities.filter(assigned_to__isnull=True).count()
         return context
 
 
