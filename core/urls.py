@@ -35,6 +35,7 @@ from .views import (
     inventory_push_api,
     chamados_fill_spreadsheet,
     pendencias_toggle_status_api,
+    pendencias_create_api,
 )
 
 urlpatterns = [
@@ -71,5 +72,6 @@ urlpatterns = [
     path('api/chamados/novos/', chamados_new_alert_api, name='chamados_new_alert_api'),
     path('api/inventory/push/', inventory_push_api, name='inventory_push_api'),
     path('api/pendencias/toggle-status/', pendencias_toggle_status_api, name='pendencias_toggle_status_api'),
+    path('api/pendencias/create/', pendencias_create_api, name='pendencias_create_api'),
     path('', DashboardView.as_view(), name='dashboard'),
 ]

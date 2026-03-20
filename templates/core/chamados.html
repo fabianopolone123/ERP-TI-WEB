@@ -686,6 +686,17 @@
         <div class="ticket-details" style="padding-top: 0;">
             <div><strong>Atendente:</strong> <span data-attendant-pendencias-name>-</span></div>
         </div>
+        <form data-attendant-pendencias-create-form style="margin-top: 8px;">
+            <div class="form-row">
+                <div style="flex: 1;">
+                    <label for="id_attendant_pendency_new">Nova pendencia</label>
+                    <div style="display: flex; gap: 8px;">
+                        <input id="id_attendant_pendency_new" type="text" placeholder="Descreva a pendencia..." required />
+                        <button type="submit">Cadastrar</button>
+                    </div>
+                </div>
+            </div>
+        </form>
         <div style="margin-top: 8px;">
             <h4 style="margin: 0 0 8px 0;">Pendentes</h4>
             <div class="chat-list" data-attendant-pendencias-pending></div>
@@ -1949,7 +1960,10 @@
         const nameEl = modal.querySelector('[data-attendant-pendencias-name]');
         const pendingEl = modal.querySelector('[data-attendant-pendencias-pending]');
         const completedEl = modal.querySelector('[data-attendant-pendencias-completed]');
+        const createForm = modal.querySelector('[data-attendant-pendencias-create-form]');
+        const createInput = modal.querySelector('#id_attendant_pendency_new');
         const toggleApiUrl = '{% url "pendencias_toggle_status_api" %}';
+        const createApiUrl = '{% url "pendencias_create_api" %}';
         let currentAttendantId = '';
 
         const pendenciasByAttendant = {
@@ -2084,8 +2098,12 @@
             currentAttendantId = attendantId;
 
             if (nameEl) nameEl.textContent = attendantName;
+            if (createInput) createInput.value = '';
             renderCurrent();
             modal.hidden = false;
+            if (createInput) {
+                window.requestAnimationFrame(() => createInput.focus());
+            }
         };
 
         const closeModal = () => {
@@ -2096,6 +2114,46 @@
             button.addEventListener('click', () => openModal(button));
         });
         closeEls.forEach((el) => el.addEventListener('click', closeModal));
+
+        if (createForm && createInput) {
+            createForm.addEventListener('submit', async (event) => {
+                event.preventDefault();
+                if (!currentAttendantId) return;
+                const description = (createInput.value || '').trim();
+                if (!description) {
+                    createInput.focus();
+                    return;
+                }
+                const submitBtn = createForm.querySelector('button[type="submit"]');
+                if (submitBtn) submitBtn.disabled = true;
+                try {
+                    const response = await fetch(createApiUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                            'X-CSRFToken': getCookie('csrftoken'),
+                        },
+                        body: new URLSearchParams({
+                            attendant_id: String(currentAttendantId),
+                            description,
+                        }),
+                    });
+                    const data = await response.json().catch(() => ({}));
+                    if (!response.ok || !data.ok) {
+                        alert('Nao foi possivel cadastrar a pendencia.');
+                        return;
+                    }
+                    upsertItem(currentAttendantId, data.item || {});
+                    createInput.value = '';
+                    renderCurrent();
+                    createInput.focus();
+                } catch (_) {
+                    alert('Falha de rede ao cadastrar pendencia.');
+                } finally {
+                    if (submitBtn) submitBtn.disabled = false;
+                }
+            });
+        }
     })();
 </script>
 {% endif %}

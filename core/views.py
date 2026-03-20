@@ -96,7 +96,6 @@ ERP_MODULES = [
     {'slug': 'chamados', 'label': 'Chamados', 'url_name': 'chamados'},
     {'slug': 'usuarios', 'label': 'Usuários', 'url_name': 'usuarios'},
     {'slug': 'atribuicoes', 'label': 'Atribuições', 'url_name': 'atribuicoes'},
-    {'slug': 'pendencias', 'label': 'Pendencias', 'url_name': 'pendencias'},
     {'slug': 'acessos', 'label': 'Acessos', 'url_name': 'acessos'},
     {'slug': 'equipamentos', 'label': 'Equipamentos', 'url_name': 'equipamentos'},
     {'slug': 'ips', 'label': 'IPs', 'url_name': None},
@@ -2814,6 +2813,50 @@ def pendencias_toggle_status_api(request):
                 'attendant_id': pendency.attendant_id,
                 'description': pendency.description,
                 'is_done': bool(pendency.is_done),
+                'when_text': when_text,
+            },
+        }
+    )
+
+
+@login_required
+@require_POST
+def pendencias_create_api(request):
+    if not is_ti_user(request):
+        return JsonResponse({'ok': False, 'error': 'forbidden'}, status=403)
+
+    attendant_id_raw = (request.POST.get('attendant_id') or '').strip()
+    description = (request.POST.get('description') or '').strip()
+    if not description:
+        return JsonResponse({'ok': False, 'error': 'description_required'}, status=400)
+
+    try:
+        attendant_id = int(attendant_id_raw)
+    except (TypeError, ValueError):
+        return JsonResponse({'ok': False, 'error': 'invalid_attendant_id'}, status=400)
+
+    attendant = ERPUser.objects.filter(
+        id=attendant_id,
+        department__iexact='TI',
+        is_active=True,
+    ).first()
+    if not attendant:
+        return JsonResponse({'ok': False, 'error': 'attendant_not_found'}, status=404)
+
+    pendency = Pendencia.objects.create(
+        attendant=attendant,
+        description=description,
+        is_done=False,
+    )
+    when_text = timezone.localtime(pendency.created_at).strftime('%d/%m/%Y %H:%M') if pendency.created_at else ''
+    return JsonResponse(
+        {
+            'ok': True,
+            'item': {
+                'id': pendency.id,
+                'attendant_id': pendency.attendant_id,
+                'description': pendency.description,
+                'is_done': False,
                 'when_text': when_text,
             },
         }
