@@ -109,11 +109,22 @@
             <h3 style="margin: 0;">Editar responsabilidade</h3>
             <button type="button" data-close-responsibility-edit-modal>Fechar</button>
         </div>
-        <p class="muted" style="margin-top: 0;">Responsabilidade: <strong data-responsibility-edit-name>-</strong></p>
         <form method="post" data-move-responsibility-form>
             {% csrf_token %}
-            <input type="hidden" name="action" value="move_responsibility" />
+            <input type="hidden" name="action" value="update_responsibility" />
             <input type="hidden" name="responsibility_id" value="" data-responsibility-edit-id />
+            <div class="form-row">
+                <div style="flex: 1;">
+                    <label for="id_responsibility_edit_name">Responsabilidade</label>
+                    <input
+                        id="id_responsibility_edit_name"
+                        name="name"
+                        type="text"
+                        required
+                        placeholder="Ex.: Gestao de backups"
+                    />
+                </div>
+            </div>
             <div class="form-row">
                 <div style="flex: 1;">
                     <label for="id_responsibility_edit_users">Atribuir para</label>
@@ -144,10 +155,10 @@
         const editModal = document.querySelector('[data-responsibility-edit-modal]');
         const editOpenBtns = document.querySelectorAll('[data-open-responsibility-edit-modal]');
         const editCloseEls = document.querySelectorAll('[data-close-responsibility-edit-modal]');
-        const editName = document.querySelector('[data-responsibility-edit-name]');
+        const editNameInput = document.querySelector('#id_responsibility_edit_name');
         const editIdInput = document.querySelector('[data-responsibility-edit-id]');
         const editUsersSelect = document.querySelector('#id_responsibility_edit_users');
-        if (editModal && editOpenBtns.length && editIdInput && editUsersSelect) {
+        if (editModal && editOpenBtns.length && editIdInput && editUsersSelect && editNameInput) {
             const openEdit = (btn) => {
                 const responsibilityId = btn.getAttribute('data-responsibility-id') || '';
                 const responsibilityName = btn.getAttribute('data-responsibility-name') || '-';
@@ -160,7 +171,7 @@
                 );
 
                 editIdInput.value = responsibilityId;
-                if (editName) editName.textContent = responsibilityName;
+                editNameInput.value = responsibilityName;
                 Array.from(editUsersSelect.options).forEach((opt) => {
                     opt.selected = selectedIds.has(String(opt.value || '').trim());
                 });

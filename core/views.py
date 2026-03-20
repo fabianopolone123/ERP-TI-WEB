@@ -2560,7 +2560,7 @@ class AtribuicoesView(LoginRequiredMixin, TemplateView):
 
         action = (request.POST.get('action') or 'create_responsibility').strip().lower()
 
-        if action == 'move_responsibility':
+        if action in {'move_responsibility', 'update_responsibility'}:
             responsibility_id_raw = (request.POST.get('responsibility_id') or '').strip()
             target_user_ids_raw = request.POST.getlist('target_user_ids')
 
@@ -2597,20 +2597,46 @@ class AtribuicoesView(LoginRequiredMixin, TemplateView):
                 messages.error(request, 'Um ou mais usuários TI não foram encontrados para receber a responsabilidade.')
                 return redirect('atribuicoes')
 
+            updated_name = (request.POST.get('name') or '').strip()
+            if action == 'update_responsibility':
+                if not updated_name:
+                    messages.error(request, 'Informe o nome da responsabilidade.')
+                    return redirect('atribuicoes')
+                if Responsibility.objects.filter(name__iexact=updated_name).exclude(id=responsibility.id).exists():
+                    messages.error(request, 'Já existe uma responsabilidade com esse nome.')
+                    return redirect('atribuicoes')
+            else:
+                updated_name = responsibility.name
+
             current_users = list(responsibility.assignees.order_by('full_name'))
             current_ids = {item.id for item in current_users}
-            if current_ids == target_user_ids:
-                messages.info(request, 'A responsabilidade já está atribuída exatamente para os atendentes selecionados.')
+            current_name = (responsibility.name or '').strip()
+            has_name_change = (updated_name or '').strip() != current_name
+            has_assignee_change = current_ids != target_user_ids
+            if not has_name_change and not has_assignee_change:
+                messages.info(request, 'Nenhuma alteração foi identificada para esta responsabilidade.')
                 return redirect('atribuicoes')
 
-            responsibility.assignees.set(target_users)
+            if has_name_change:
+                responsibility.name = updated_name
+                responsibility.save(update_fields=['name', 'updated_at'])
+            if has_assignee_change:
+                responsibility.assignees.set(target_users)
 
             old_assignee_names = ', '.join(item.full_name for item in current_users) if current_users else 'Sem responsável'
             new_assignee_names = ', '.join(item.full_name for item in target_users) if target_users else 'Sem responsável'
-            messages.success(
-                request,
-                f'Responsabilidade "{responsibility.name}" atualizada: {old_assignee_names} -> {new_assignee_names}.',
-            )
+            if has_name_change and has_assignee_change:
+                messages.success(
+                    request,
+                    f'Responsabilidade atualizada: nome "{current_name}" -> "{updated_name}" e atendentes {old_assignee_names} -> {new_assignee_names}.',
+                )
+            elif has_name_change:
+                messages.success(request, f'Nome da responsabilidade alterado: "{current_name}" -> "{updated_name}".')
+            else:
+                messages.success(
+                    request,
+                    f'Responsabilidade "{responsibility.name}" atualizada: {old_assignee_names} -> {new_assignee_names}.',
+                )
             return redirect('atribuicoes')
 
         if action == 'create_responsibility':
