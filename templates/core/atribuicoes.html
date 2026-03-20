@@ -42,7 +42,7 @@
                         <th>ID</th>
                         <th>Responsabilidade</th>
                         <th>Responsaveis atuais</th>
-                        <th>Atribuir para</th>
+                        <th>Acoes</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -52,20 +52,15 @@
                             <td>{{ item.name }}</td>
                             <td>{% if item.assignee_names %}{{ item.assignee_names }}{% else %}<span class="muted">Sem responsavel</span>{% endif %}</td>
                             <td>
-                                <form method="post" class="inline-form" data-move-responsibility-form>
-                                    {% csrf_token %}
-                                    <input type="hidden" name="action" value="move_responsibility" />
-                                    <input type="hidden" name="responsibility_id" value="{{ item.id }}" />
-                                    <div style="display: flex; gap: 8px; align-items: flex-start;">
-                                        <select name="target_user_ids" multiple size="4" style="min-width: 240px;">
-                                            {% for user in ti_users %}
-                                                <option value="{{ user.id }}" {% if user.id in item.assignee_ids %}selected{% endif %}>{{ user.full_name }}</option>
-                                            {% endfor %}
-                                        </select>
-                                        <button type="submit">Salvar</button>
-                                    </div>
-                                    <div class="muted" style="margin-top: 4px;">Use Ctrl para selecionar mais de um atendente.</div>
-                                </form>
+                                <button
+                                    type="button"
+                                    data-open-responsibility-edit-modal
+                                    data-responsibility-id="{{ item.id }}"
+                                    data-responsibility-name="{{ item.name|escape }}"
+                                    data-assignee-ids="{{ item.assignee_ids_csv }}"
+                                >
+                                    Editar
+                                </button>
                             </td>
                         </tr>
                     {% empty %}
@@ -107,6 +102,33 @@
         </form>
     </div>
 </div>
+<div class="modal" data-responsibility-edit-modal hidden>
+    <div class="modal-backdrop" data-close-responsibility-edit-modal></div>
+    <div class="modal-content">
+        <div class="topbar" style="margin-bottom: 8px;">
+            <h3 style="margin: 0;">Editar responsabilidade</h3>
+            <button type="button" data-close-responsibility-edit-modal>Fechar</button>
+        </div>
+        <p class="muted" style="margin-top: 0;">Responsabilidade: <strong data-responsibility-edit-name>-</strong></p>
+        <form method="post" data-move-responsibility-form>
+            {% csrf_token %}
+            <input type="hidden" name="action" value="move_responsibility" />
+            <input type="hidden" name="responsibility_id" value="" data-responsibility-edit-id />
+            <div class="form-row">
+                <div style="flex: 1;">
+                    <label for="id_responsibility_edit_users">Atribuir para</label>
+                    <select id="id_responsibility_edit_users" name="target_user_ids" multiple size="6" style="min-width: 280px;">
+                        {% for user in ti_users %}
+                            <option value="{{ user.id }}">{{ user.full_name }}</option>
+                        {% endfor %}
+                    </select>
+                    <div class="muted" style="margin-top: 4px;">Use Ctrl para selecionar mais de um atendente.</div>
+                </div>
+            </div>
+            <button type="submit">Salvar</button>
+        </form>
+    </div>
+</div>
 <script>
     (function () {
         const modal = document.querySelector('[data-responsibility-modal]');
@@ -117,6 +139,39 @@
             const close = () => { modal.hidden = true; };
             openBtn.addEventListener('click', open);
             closeEls.forEach((el) => el.addEventListener('click', close));
+        }
+
+        const editModal = document.querySelector('[data-responsibility-edit-modal]');
+        const editOpenBtns = document.querySelectorAll('[data-open-responsibility-edit-modal]');
+        const editCloseEls = document.querySelectorAll('[data-close-responsibility-edit-modal]');
+        const editName = document.querySelector('[data-responsibility-edit-name]');
+        const editIdInput = document.querySelector('[data-responsibility-edit-id]');
+        const editUsersSelect = document.querySelector('#id_responsibility_edit_users');
+        if (editModal && editOpenBtns.length && editIdInput && editUsersSelect) {
+            const openEdit = (btn) => {
+                const responsibilityId = btn.getAttribute('data-responsibility-id') || '';
+                const responsibilityName = btn.getAttribute('data-responsibility-name') || '-';
+                const assigneeCsv = btn.getAttribute('data-assignee-ids') || '';
+                const selectedIds = new Set(
+                    assigneeCsv
+                        .split(',')
+                        .map((v) => v.trim())
+                        .filter((v) => v.length > 0)
+                );
+
+                editIdInput.value = responsibilityId;
+                if (editName) editName.textContent = responsibilityName;
+                Array.from(editUsersSelect.options).forEach((opt) => {
+                    opt.selected = selectedIds.has(String(opt.value || '').trim());
+                });
+                editModal.hidden = false;
+            };
+            const closeEdit = () => { editModal.hidden = true; };
+
+            editOpenBtns.forEach((btn) => {
+                btn.addEventListener('click', () => openEdit(btn));
+            });
+            editCloseEls.forEach((el) => el.addEventListener('click', closeEdit));
         }
 
         const key = 'atribuicoes_scroll_y';

@@ -2646,7 +2646,7 @@ class AtribuicoesView(LoginRequiredMixin, TemplateView):
         responsibilities = list(Responsibility.objects.prefetch_related('assignees').order_by('name', 'id'))
         for item in responsibilities:
             assignee_items = sorted(list(item.assignees.all()), key=lambda user: (user.full_name or '').lower())
-            item.assignee_ids = {user.id for user in assignee_items}
+            item.assignee_ids_csv = ','.join(str(user.id) for user in assignee_items)
             item.assignee_names = ', '.join(user.full_name for user in assignee_items) if assignee_items else ''
         context['responsibilities'] = responsibilities
         return context
