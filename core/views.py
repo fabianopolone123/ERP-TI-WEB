@@ -2863,6 +2863,90 @@ def pendencias_create_api(request):
     )
 
 
+@login_required
+@require_POST
+def pendencias_create_ticket_api(request):
+    if not is_ti_user(request):
+        return JsonResponse({'ok': False, 'error': 'forbidden'}, status=403)
+
+    pendency_id_raw = (request.POST.get('pendency_id') or '').strip()
+    try:
+        pendency_id = int(pendency_id_raw)
+    except (TypeError, ValueError):
+        return JsonResponse({'ok': False, 'error': 'invalid_pendency_id'}, status=400)
+
+    pendency = Pendencia.objects.select_related('attendant').filter(id=pendency_id).first()
+    if not pendency:
+        return JsonResponse({'ok': False, 'error': 'pendency_not_found'}, status=404)
+    if pendency.is_done:
+        return JsonResponse({'ok': False, 'error': 'pendency_already_done'}, status=400)
+
+    attendant = pendency.attendant
+    if not attendant or not attendant.is_active or (attendant.department or '').strip().upper() != 'TI':
+        return JsonResponse({'ok': False, 'error': 'attendant_not_available'}, status=400)
+
+    description = (pendency.description or '').strip()
+    if not description:
+        return JsonResponse({'ok': False, 'error': 'empty_pendency_description'}, status=400)
+
+    title = description[:200]
+    now_dt = timezone.now()
+
+    ticket = Ticket.objects.create(
+        title=title,
+        description=description,
+        ticket_type=Ticket.TicketType.PROGRAMADO,
+        urgency=Ticket.Urgency.PROGRAMADA,
+        status=Ticket.Status.EM_ATENDIMENTO,
+        created_by=request.user,
+        assigned_to=attendant,
+    )
+
+    cycle = _get_ticket_attendant_cycle(ticket, attendant.id, create=True)
+    if cycle and not cycle.current_cycle_started_at:
+        cycle.current_cycle_started_at = now_dt
+        cycle.save(update_fields=['current_cycle_started_at', 'updated_at'])
+    _sync_ticket_cycle_snapshot(ticket)
+
+    _log_ticket_timeline(
+        ticket=ticket,
+        event_type=TicketTimelineEvent.EventType.CREATED,
+        request_user=request.user,
+        to_status=Ticket.Status.EM_ATENDIMENTO,
+        note=f'Chamado criado a partir da pendencia #{pendency.id}.',
+    )
+    _log_ticket_timeline(
+        ticket=ticket,
+        event_type=TicketTimelineEvent.EventType.ASSIGNED,
+        request_user=request.user,
+        from_status=Ticket.Status.EM_ATENDIMENTO,
+        to_status=Ticket.Status.EM_ATENDIMENTO,
+        note=f'Play iniciado para {attendant.full_name}.',
+    )
+
+    pendency.is_done = True
+    pendency.done_at = now_dt
+    pendency.save(update_fields=['is_done', 'done_at', 'updated_at'])
+    when_text = timezone.localtime(pendency.done_at).strftime('%d/%m/%Y %H:%M') if pendency.done_at else ''
+
+    return JsonResponse(
+        {
+            'ok': True,
+            'ticket': {
+                'id': ticket.id,
+                'title': ticket.title,
+            },
+            'pendency': {
+                'id': pendency.id,
+                'attendant_id': pendency.attendant_id,
+                'description': pendency.description,
+                'is_done': True,
+                'when_text': when_text,
+            },
+        }
+    )
+
+
 class AcessosView(LoginRequiredMixin, TemplateView):
     template_name = 'core/acessos.html'
 

@@ -1964,6 +1964,7 @@
         const createInput = modal.querySelector('#id_attendant_pendency_new');
         const toggleApiUrl = '{% url "pendencias_toggle_status_api" %}';
         const createApiUrl = '{% url "pendencias_create_api" %}';
+        const createTicketApiUrl = '{% url "pendencias_create_ticket_api" %}';
         let currentAttendantId = '';
 
         const pendenciasByAttendant = {
@@ -2046,6 +2047,11 @@
                 text.textContent = when ? `${base} | ${whenLabel}: ${when}` : base;
                 row.appendChild(text);
 
+                const actions = document.createElement('div');
+                actions.style.display = 'flex';
+                actions.style.alignItems = 'center';
+                actions.style.gap = '8px';
+
                 const toggle = document.createElement('input');
                 toggle.type = 'checkbox';
                 toggle.checked = !!doneValue;
@@ -2081,7 +2087,48 @@
                         toggle.disabled = false;
                     }
                 });
-                row.appendChild(toggle);
+                actions.appendChild(toggle);
+
+                if (!doneValue) {
+                    const createTicketBtn = document.createElement('button');
+                    createTicketBtn.type = 'button';
+                    createTicketBtn.textContent = 'Criar chamado';
+                    createTicketBtn.addEventListener('click', async () => {
+                        const pendencyId = Number(item.id || 0);
+                        if (!pendencyId || !currentAttendantId) return;
+                        createTicketBtn.disabled = true;
+                        try {
+                            const response = await fetch(createTicketApiUrl, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/x-www-form-urlencoded',
+                                    'X-CSRFToken': getCookie('csrftoken'),
+                                },
+                                body: new URLSearchParams({
+                                    pendency_id: String(pendencyId),
+                                }),
+                            });
+                            const data = await response.json().catch(() => ({}));
+                            if (!response.ok || !data.ok) {
+                                alert('Nao foi possivel criar chamado a partir da pendencia.');
+                                return;
+                            }
+                            upsertItem(currentAttendantId, data.pendency || {});
+                            renderCurrent();
+                            if (typeof window.__saveChamadosScrollState === 'function') {
+                                window.__saveChamadosScrollState();
+                            }
+                            window.location.reload();
+                        } catch (_) {
+                            alert('Falha de rede ao criar chamado da pendencia.');
+                        } finally {
+                            createTicketBtn.disabled = false;
+                        }
+                    });
+                    actions.appendChild(createTicketBtn);
+                }
+
+                row.appendChild(actions);
                 container.appendChild(row);
             });
         };
