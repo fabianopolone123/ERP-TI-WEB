@@ -31,6 +31,7 @@
                     placeholder="Pesquisar por responsabilidade ou responsavel..."
                     data-table-search="atribuicoes"
                 />
+                <button type="button" data-print-atribuicoes-relatorio>Imprimir relatorio</button>
                 <button type="button" data-open-responsibility-modal>Cadastrar responsabilidade</button>
             </div>
         </div>
@@ -142,6 +143,13 @@
 </div>
 <script>
     (function () {
+        const printBtn = document.querySelector('[data-print-atribuicoes-relatorio]');
+        if (printBtn) {
+            printBtn.addEventListener('click', () => {
+                window.open('{% url "atribuicoes_relatorio" %}', '_blank', 'noopener');
+            });
+        }
+
         const modal = document.querySelector('[data-responsibility-modal]');
         const openBtn = document.querySelector('[data-open-responsibility-modal]');
         const closeEls = document.querySelectorAll('[data-close-responsibility-modal]');

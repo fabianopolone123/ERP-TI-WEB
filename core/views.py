@@ -2693,6 +2693,35 @@ class DicasView(LoginRequiredMixin, TemplateView):
 class AtribuicoesView(LoginRequiredMixin, TemplateView):
     template_name = 'core/atribuicoes.html'
 
+    @classmethod
+    def _load_atribuicoes_data(cls):
+        ti_users = list(ERPUser.objects.filter(department__iexact='TI', is_active=True).order_by('full_name'))
+        responsibilities = list(Responsibility.objects.prefetch_related('assignees').order_by('name', 'id'))
+        responsibilities_by_user_id: dict[int, list[str]] = {user.id: [] for user in ti_users}
+
+        for item in responsibilities:
+            assignee_items = sorted(list(item.assignees.all()), key=lambda user: (user.full_name or '').lower())
+            item.assignee_ids_csv = ','.join(str(user.id) for user in assignee_items)
+            item.assignee_names = ', '.join(user.full_name for user in assignee_items) if assignee_items else ''
+            for assignee in assignee_items:
+                if assignee.id not in responsibilities_by_user_id:
+                    responsibilities_by_user_id[assignee.id] = []
+                responsibilities_by_user_id[assignee.id].append(item.name)
+
+        ti_profiles_report = []
+        for user in ti_users:
+            responsibility_names = sorted(responsibilities_by_user_id.get(user.id, []), key=lambda value: value.lower())
+            ti_profiles_report.append(
+                {
+                    'user': user,
+                    'responsibility_names': responsibility_names,
+                    'responsibility_names_text': ', '.join(responsibility_names),
+                    'responsibility_count': len(responsibility_names),
+                }
+            )
+
+        return ti_users, responsibilities, ti_profiles_report
+
     def post(self, request, *args, **kwargs):
         if not is_ti_user(request):
             messages.error(request, 'Apenas usuários do departamento TI podem gerenciar atribuições.')
@@ -2804,17 +2833,32 @@ class AtribuicoesView(LoginRequiredMixin, TemplateView):
         context['modules'] = build_modules('atribuicoes') if is_ti else []
         context['ti_users'] = []
         context['responsibilities'] = []
+        context['ti_profiles_report'] = []
         if not is_ti:
             return context
 
-        ti_users = list(ERPUser.objects.filter(department__iexact='TI', is_active=True).order_by('full_name'))
+        ti_users, responsibilities, ti_profiles_report = self._load_atribuicoes_data()
         context['ti_users'] = ti_users
-        responsibilities = list(Responsibility.objects.prefetch_related('assignees').order_by('name', 'id'))
-        for item in responsibilities:
-            assignee_items = sorted(list(item.assignees.all()), key=lambda user: (user.full_name or '').lower())
-            item.assignee_ids_csv = ','.join(str(user.id) for user in assignee_items)
-            item.assignee_names = ', '.join(user.full_name for user in assignee_items) if assignee_items else ''
         context['responsibilities'] = responsibilities
+        context['ti_profiles_report'] = ti_profiles_report
+        return context
+
+
+class AtribuicoesReportView(LoginRequiredMixin, TemplateView):
+    template_name = 'core/atribuicoes_report.html'
+
+    def dispatch(self, request, *args, **kwargs):
+        if not is_ti_user(request):
+            messages.error(request, 'Apenas usuários do departamento TI podem visualizar o relatório de atribuições.')
+            return redirect('atribuicoes')
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        _, responsibilities, ti_profiles_report = AtribuicoesView._load_atribuicoes_data()
+        context['responsibilities'] = responsibilities
+        context['ti_profiles_report'] = ti_profiles_report
+        context['generated_at'] = timezone.localtime(timezone.now())
         return context
 
 

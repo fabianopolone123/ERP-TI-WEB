@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Relatorio de atribuicoes</title>
+    <style>
+        :root {
+            color-scheme: light;
+        }
+        body {
+            margin: 0;
+            font-family: "Segoe UI", Tahoma, sans-serif;
+            background: #f3f6fc;
+            color: #10213d;
+        }
+        .actions {
+            max-width: 1100px;
+            margin: 16px auto 0 auto;
+            padding: 0 16px;
+            display: flex;
+            gap: 8px;
+        }
+        .sheet {
+            max-width: 1100px;
+            margin: 12px auto 24px auto;
+            background: #ffffff;
+            border: 1px solid #d8e2f1;
+            border-radius: 10px;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        h1 {
+            margin: 0 0 6px 0;
+            font-size: 24px;
+        }
+        h2 {
+            margin: 20px 0 8px 0;
+            font-size: 18px;
+        }
+        p.meta {
+            margin: 0;
+            color: #4a5f80;
+            font-size: 13px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        th, td {
+            border: 1px solid #d8e2f1;
+            padding: 8px;
+            vertical-align: top;
+            text-align: left;
+            font-size: 13px;
+        }
+        th {
+            background: #eef3fd;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+        .muted {
+            color: #667a99;
+        }
+        .col-small {
+            width: 90px;
+        }
+        button {
+            border: 1px solid #9cb4d8;
+            background: #ffffff;
+            color: #20385f;
+            border-radius: 8px;
+            padding: 6px 12px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        button:hover {
+            background: #edf3ff;
+        }
+        @media print {
+            body {
+                background: #ffffff;
+            }
+            .no-print {
+                display: none !important;
+            }
+            .sheet {
+                margin: 0;
+                border: none;
+                border-radius: 0;
+                padding: 0;
+                max-width: 100%;
+            }
+            th, td {
+                font-size: 11px;
+                padding: 6px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="actions no-print">
+        <button type="button" onclick="window.print()">Imprimir</button>
+        <button type="button" onclick="window.close()">Fechar</button>
+    </div>
+
+    <div class="sheet">
+        <h1>Relatorio de atribuicoes TI</h1>
+        <p class="meta">Gerado em {{ generated_at|date:"d/m/Y H:i" }}</p>
+
+        <h2>Responsabilidades cadastradas</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th class="col-small">ID</th>
+                    <th>Responsabilidade</th>
+                    <th>Responsaveis</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in responsibilities %}
+                    <tr>
+                        <td>{{ item.id }}</td>
+                        <td>{{ item.name }}</td>
+                        <td>
+                            {% if item.assignee_names %}
+                                {{ item.assignee_names }}
+                            {% else %}
+                                <span class="muted">Sem responsavel</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="3" class="muted">Nenhuma responsabilidade cadastrada.</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <h2>Resumo por perfil TI</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Perfil TI</th>
+                    <th class="col-small">Quantidade</th>
+                    <th>Responsabilidades</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in ti_profiles_report %}
+                    <tr>
+                        <td>{{ row.user.full_name }}</td>
+                        <td>{{ row.responsibility_count }}</td>
+                        <td>
+                            {% if row.responsibility_names_text %}
+                                {{ row.responsibility_names_text }}
+                            {% else %}
+                                <span class="muted">Sem responsabilidades atribuidas</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="3" class="muted">Nenhum perfil TI encontrado.</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        window.addEventListener('load', () => {
+            window.print();
+        });
+    </script>
+</body>
+</html>
