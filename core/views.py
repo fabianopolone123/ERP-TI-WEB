@@ -1492,7 +1492,30 @@ class InsumosView(LoginRequiredMixin, TemplateView):
     template_name = 'core/insumos.html'
 
     @staticmethod
-    def _parse_decimal_br(raw_value: str) -> Decimal:
+    def _normalize_item_name(raw_value: str) -> str:
+        return re.sub(r'\s+', ' ', (raw_value or '').strip())
+
+    @classmethod
+    def _stock_snapshot(cls) -> dict[str, dict[str, Decimal | str]]:
+        snapshot: dict[str, dict[str, Decimal | str]] = {}
+        for row in Insumo.objects.only('item', 'quantity').order_by('item', 'id'):
+            item_name = cls._normalize_item_name(row.item)
+            if not item_name:
+                continue
+            key = item_name.casefold()
+            if key not in snapshot:
+                snapshot[key] = {'item': item_name, 'quantity': Decimal('0')}
+            snapshot[key]['quantity'] = Decimal(snapshot[key]['quantity']) + Decimal(row.quantity or 0)
+        return snapshot
+
+    @classmethod
+    def _stock_rows(cls) -> list[dict[str, Decimal | str]]:
+        rows = list(cls._stock_snapshot().values())
+        rows.sort(key=lambda row: str(row['item']).casefold())
+        return rows
+
+    @staticmethod
+    def _parse_decimal_br(raw_value: str, *, allow_negative: bool = False) -> Decimal:
         normalized_value = (raw_value or '').strip().replace(' ', '')
         if ',' in normalized_value and '.' in normalized_value:
             if normalized_value.rfind(',') > normalized_value.rfind('.'):
@@ -1504,7 +1527,9 @@ class InsumosView(LoginRequiredMixin, TemplateView):
         elif normalized_value.count('.') > 1:
             normalized_value = normalized_value.replace('.', '')
         value = Decimal(normalized_value or '0')
-        if value <= 0:
+        if value == 0:
+            raise InvalidOperation
+        if value < 0 and not allow_negative:
             raise InvalidOperation
         return value
 
@@ -1514,8 +1539,77 @@ class InsumosView(LoginRequiredMixin, TemplateView):
             return redirect(request.get_full_path())
 
         mode = (request.POST.get('mode') or 'create').strip().lower()
+
+        if mode == 'stock_create':
+            stock_item = self._normalize_item_name(request.POST.get('stock_item') or request.POST.get('item'))
+            stock_quantity_raw = (request.POST.get('stock_quantity') or request.POST.get('quantity') or '').strip()
+            if not stock_item:
+                messages.error(request, 'Informe o nome do insumo para cadastrar no estoque.')
+                return redirect('insumos')
+            try:
+                stock_quantity = self._parse_decimal_br(stock_quantity_raw)
+            except (InvalidOperation, ValueError):
+                messages.error(request, 'Quantidade invalida. Ex.: 1,00')
+                return redirect('insumos')
+            Insumo.objects.create(
+                item=stock_item,
+                date=timezone.localdate(),
+                quantity=stock_quantity,
+                name='Estoque',
+                department='Cadastro de estoque',
+            )
+            messages.success(request, f'Estoque de "{stock_item}" cadastrado com sucesso.')
+            return redirect('insumos')
+
+        if mode == 'stock_adjust':
+            stock_item = self._normalize_item_name(request.POST.get('stock_item') or request.POST.get('item'))
+            stock_direction = (request.POST.get('stock_direction') or '').strip().lower()
+            stock_quantity_raw = (request.POST.get('stock_quantity') or request.POST.get('quantity') or '').strip()
+            stock_target = (request.POST.get('stock_target') or request.POST.get('name') or '').strip()
+            stock_reason = (request.POST.get('stock_reason') or '').strip()
+
+            if not stock_item:
+                messages.error(request, 'Informe o insumo.')
+                return redirect('insumos')
+            if stock_direction not in {'inc', 'dec'}:
+                messages.error(request, 'Movimentacao invalida.')
+                return redirect('insumos')
+            if not stock_target:
+                messages.error(request, 'Informe para quem foi o insumo.')
+                return redirect('insumos')
+            if not stock_reason:
+                messages.error(request, 'Informe o motivo da movimentacao.')
+                return redirect('insumos')
+
+            try:
+                stock_quantity = self._parse_decimal_br(stock_quantity_raw)
+            except (InvalidOperation, ValueError):
+                messages.error(request, 'Quantidade invalida. Ex.: 1,00')
+                return redirect('insumos')
+
+            movement_quantity = stock_quantity
+            if stock_direction == 'dec':
+                current_qty = Decimal(self._stock_snapshot().get(stock_item.casefold(), {}).get('quantity') or 0)
+                if current_qty < stock_quantity:
+                    current_text = f'{current_qty:.2f}'.replace('.', ',')
+                    messages.error(request, f'Estoque insuficiente de "{stock_item}". Atual: {current_text}')
+                    return redirect('insumos')
+                movement_quantity = -stock_quantity
+
+            direction_label = 'Entrada' if stock_direction == 'inc' else 'Saida'
+            department_value = f'{direction_label}: {stock_reason}'
+            Insumo.objects.create(
+                item=stock_item,
+                date=timezone.localdate(),
+                quantity=movement_quantity,
+                name=stock_target[:200],
+                department=department_value[:120],
+            )
+            messages.success(request, 'Movimentacao de estoque registrada com sucesso.')
+            return redirect('insumos')
+
         insumo_id = (request.POST.get('insumo_id') or '').strip()
-        item = (request.POST.get('item') or '').strip()
+        item = self._normalize_item_name(request.POST.get('item') or '')
         date_raw = (request.POST.get('date') or '').strip()
         quantity_raw = (request.POST.get('quantity') or '').strip()
         name = (request.POST.get('name') or '').strip()
@@ -1538,7 +1632,7 @@ class InsumosView(LoginRequiredMixin, TemplateView):
             return redirect(request.get_full_path())
 
         try:
-            quantity = self._parse_decimal_br(quantity_raw)
+            quantity = self._parse_decimal_br(quantity_raw, allow_negative=(mode == 'update'))
         except (InvalidOperation, ValueError):
             messages.error(request, 'Quantidade inválida. Ex.: 1,00')
             return redirect(request.get_full_path())
@@ -1573,6 +1667,7 @@ class InsumosView(LoginRequiredMixin, TemplateView):
         context['is_ti_group'] = is_ti
         context['modules'] = build_modules('insumos') if is_ti else []
         context['insumos'] = Insumo.objects.all().order_by('-date', '-id') if is_ti else []
+        context['estoque_atual'] = self._stock_rows() if is_ti else []
         context['insumo_default_date'] = timezone.localdate().isoformat()
         return context
 

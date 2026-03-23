@@ -33,6 +33,7 @@
                     data-table-search="insumos"
                 />
                 <button type="button" data-open-insumo-modal>Adicionar</button>
+                <button type="button" data-open-stock-modal>Estoque</button>
             </div>
         </div>
 
@@ -46,7 +47,7 @@
                         <th>Qtd</th>
                         <th>Nome</th>
                         <th>Departamento</th>
-                        <th>Ações</th>
+                        <th>Acoes</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -122,11 +123,138 @@
             </div>
         </div>
 
+        <div class="modal" data-stock-modal hidden>
+            <div class="modal-backdrop" data-close-stock-modal></div>
+            <div class="modal-content">
+                <div class="topbar" style="margin-bottom: 8px;">
+                    <h3 style="margin: 0;">Estoque de insumos</h3>
+                    <button type="button" data-close-stock-modal>Fechar</button>
+                </div>
+                <div class="topbar" style="margin-bottom: 10px;">
+                    <p class="muted" style="margin: 0;">Controle rapido de estoque atual com entrada e saida.</p>
+                    <button type="button" data-open-stock-create>Cadastrar estoque</button>
+                </div>
+                <div style="overflow-x: auto;">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Insumo</th>
+                                <th>Estoque atual</th>
+                                <th>Acoes</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for estoque in estoque_atual %}
+                                <tr>
+                                    <td>{{ estoque.item }}</td>
+                                    <td>{{ estoque.quantity|br_money }}</td>
+                                    <td>
+                                        <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                                            <button
+                                                type="button"
+                                                data-open-stock-move
+                                                data-stock-direction="inc"
+                                                data-stock-item="{{ estoque.item|escape }}"
+                                                title="Entrada"
+                                            >
+                                                +
+                                            </button>
+                                            <button
+                                                type="button"
+                                                data-open-stock-move
+                                                data-stock-direction="dec"
+                                                data-stock-item="{{ estoque.item|escape }}"
+                                                title="Saida"
+                                            >
+                                                -
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            {% empty %}
+                                <tr>
+                                    <td colspan="3" class="muted">Nenhum item no estoque. Clique em "Cadastrar estoque" para iniciar.</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal" data-stock-create-modal hidden>
+            <div class="modal-backdrop" data-close-stock-create-modal></div>
+            <div class="modal-content">
+                <div class="topbar" style="margin-bottom: 8px;">
+                    <h3 style="margin: 0;">Cadastrar estoque</h3>
+                    <button type="button" data-close-stock-create-modal>Fechar</button>
+                </div>
+                <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="mode" value="stock_create" />
+                    <div class="form-row">
+                        <div>
+                            <label for="id_stock_item">Nome do insumo</label>
+                            <input id="id_stock_item" name="stock_item" type="text" required placeholder="Ex.: Mouse" />
+                        </div>
+                        <div>
+                            <label for="id_stock_quantity">Quantidade</label>
+                            <input id="id_stock_quantity" name="stock_quantity" type="text" required value="1,00" />
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <button type="button" data-back-stock-from-create>Voltar</button>
+                        <button type="submit">Salvar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="modal" data-stock-move-modal hidden>
+            <div class="modal-backdrop" data-close-stock-move-modal></div>
+            <div class="modal-content">
+                <div class="topbar" style="margin-bottom: 8px;">
+                    <h3 style="margin: 0;" data-stock-move-title>Movimentar estoque</h3>
+                    <button type="button" data-close-stock-move-modal>Fechar</button>
+                </div>
+                <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="mode" value="stock_adjust" data-stock-mode-input />
+                    <input type="hidden" name="stock_direction" value="" data-stock-direction-input />
+                    <input type="hidden" name="stock_item" value="" data-stock-item-input />
+                    <div class="form-row">
+                        <div>
+                            <label>Insumo</label>
+                            <input type="text" value="" data-stock-item-label readonly />
+                        </div>
+                        <div>
+                            <label for="id_stock_move_quantity">Quantidade</label>
+                            <input id="id_stock_move_quantity" name="stock_quantity" type="text" required value="1,00" data-stock-move-quantity />
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div>
+                            <label for="id_stock_target">Para quem foi o insumo</label>
+                            <input id="id_stock_target" name="stock_target" type="text" required placeholder="Ex.: Joao Silva" data-stock-target-input />
+                        </div>
+                        <div>
+                            <label for="id_stock_reason">Por que</label>
+                            <input id="id_stock_reason" name="stock_reason" type="text" required placeholder="Ex.: Troca de periferico" data-stock-reason-input />
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <button type="button" data-back-stock-from-move>Voltar</button>
+                        <button type="submit">Salvar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
         <script>
             (function () {
-                const modal = document.querySelector('[data-insumo-modal]');
-                const openBtn = document.querySelector('[data-open-insumo-modal]');
-                const closeEls = document.querySelectorAll('[data-close-insumo-modal]');
+                const insumoModal = document.querySelector('[data-insumo-modal]');
+                const openInsumoBtn = document.querySelector('[data-open-insumo-modal]');
+                const closeInsumoEls = document.querySelectorAll('[data-close-insumo-modal]');
                 const modalTitle = document.querySelector('[data-insumo-modal-title]');
                 const modeInput = document.querySelector('[data-insumo-mode]');
                 const idInput = document.querySelector('[data-insumo-id-input]');
@@ -135,41 +263,128 @@
                 const quantityInput = document.querySelector('[data-insumo-quantity-input]');
                 const nameInput = document.querySelector('[data-insumo-name-input]');
                 const departmentInput = document.querySelector('[data-insumo-department-input]');
-                if (!modal || !openBtn || !modeInput || !idInput || !itemInput || !dateInput || !quantityInput || !nameInput || !departmentInput) return;
 
-                const openCreate = () => {
-                    modeInput.value = 'create';
-                    idInput.value = '';
-                    modalTitle.textContent = 'Novo registro';
-                    itemInput.value = '';
-                    dateInput.value = '{{ insumo_default_date }}';
-                    quantityInput.value = '1,00';
-                    nameInput.value = '';
-                    departmentInput.value = '';
-                    modal.hidden = false;
+                const stockModal = document.querySelector('[data-stock-modal]');
+                const openStockBtn = document.querySelector('[data-open-stock-modal]');
+                const closeStockEls = document.querySelectorAll('[data-close-stock-modal]');
+
+                const stockCreateModal = document.querySelector('[data-stock-create-modal]');
+                const openStockCreateBtn = document.querySelector('[data-open-stock-create]');
+                const closeStockCreateEls = document.querySelectorAll('[data-close-stock-create-modal]');
+                const backStockCreateBtn = document.querySelector('[data-back-stock-from-create]');
+
+                const stockMoveModal = document.querySelector('[data-stock-move-modal]');
+                const closeStockMoveEls = document.querySelectorAll('[data-close-stock-move-modal]');
+                const backStockMoveBtn = document.querySelector('[data-back-stock-from-move]');
+                const stockMoveTitle = document.querySelector('[data-stock-move-title]');
+                const stockModeInput = document.querySelector('[data-stock-mode-input]');
+                const stockDirectionInput = document.querySelector('[data-stock-direction-input]');
+                const stockItemInput = document.querySelector('[data-stock-item-input]');
+                const stockItemLabel = document.querySelector('[data-stock-item-label]');
+                const stockMoveQuantity = document.querySelector('[data-stock-move-quantity]');
+                const stockTargetInput = document.querySelector('[data-stock-target-input]');
+                const stockReasonInput = document.querySelector('[data-stock-reason-input]');
+
+                const openModal = (modal) => {
+                    if (modal) modal.hidden = false;
+                };
+                const closeModal = (modal) => {
+                    if (modal) modal.hidden = true;
                 };
 
-                const openEdit = (btn) => {
-                    modeInput.value = 'update';
-                    idInput.value = btn.getAttribute('data-insumo-id') || '';
-                    modalTitle.textContent = `Editar registro #${idInput.value}`;
-                    itemInput.value = btn.getAttribute('data-insumo-item') || '';
-                    dateInput.value = btn.getAttribute('data-insumo-date') || '{{ insumo_default_date }}';
-                    quantityInput.value = btn.getAttribute('data-insumo-quantity') || '1,00';
-                    nameInput.value = btn.getAttribute('data-insumo-name') || '';
-                    departmentInput.value = btn.getAttribute('data-insumo-department') || '';
-                    modal.hidden = false;
-                };
+                if (insumoModal && openInsumoBtn && modeInput && idInput && itemInput && dateInput && quantityInput && nameInput && departmentInput) {
+                    const openCreate = () => {
+                        modeInput.value = 'create';
+                        idInput.value = '';
+                        modalTitle.textContent = 'Novo registro';
+                        itemInput.value = '';
+                        dateInput.value = '{{ insumo_default_date }}';
+                        quantityInput.value = '1,00';
+                        nameInput.value = '';
+                        departmentInput.value = '';
+                        openModal(insumoModal);
+                    };
 
-                const close = () => {
-                    modal.hidden = true;
-                };
+                    const openEdit = (btn) => {
+                        modeInput.value = 'update';
+                        idInput.value = btn.getAttribute('data-insumo-id') || '';
+                        modalTitle.textContent = `Editar registro #${idInput.value}`;
+                        itemInput.value = btn.getAttribute('data-insumo-item') || '';
+                        dateInput.value = btn.getAttribute('data-insumo-date') || '{{ insumo_default_date }}';
+                        quantityInput.value = btn.getAttribute('data-insumo-quantity') || '1,00';
+                        nameInput.value = btn.getAttribute('data-insumo-name') || '';
+                        departmentInput.value = btn.getAttribute('data-insumo-department') || '';
+                        openModal(insumoModal);
+                    };
 
-                openBtn.addEventListener('click', openCreate);
-                closeEls.forEach((el) => el.addEventListener('click', close));
-                document.querySelectorAll('[data-edit-insumo]').forEach((btn) => {
-                    btn.addEventListener('click', () => openEdit(btn));
-                });
+                    openInsumoBtn.addEventListener('click', openCreate);
+                    closeInsumoEls.forEach((el) => el.addEventListener('click', () => closeModal(insumoModal)));
+                    document.querySelectorAll('[data-edit-insumo]').forEach((btn) => {
+                        btn.addEventListener('click', () => openEdit(btn));
+                    });
+                }
+
+                if (stockModal && openStockBtn) {
+                    openStockBtn.addEventListener('click', () => openModal(stockModal));
+                    closeStockEls.forEach((el) => el.addEventListener('click', () => closeModal(stockModal)));
+                }
+
+                if (stockCreateModal && openStockCreateBtn) {
+                    openStockCreateBtn.addEventListener('click', () => {
+                        closeModal(stockModal);
+                        openModal(stockCreateModal);
+                    });
+                    closeStockCreateEls.forEach((el) => el.addEventListener('click', () => closeModal(stockCreateModal)));
+                    if (backStockCreateBtn) {
+                        backStockCreateBtn.addEventListener('click', () => {
+                            closeModal(stockCreateModal);
+                            openModal(stockModal);
+                        });
+                    }
+                }
+
+                if (
+                    stockMoveModal &&
+                    stockMoveTitle &&
+                    stockModeInput &&
+                    stockDirectionInput &&
+                    stockItemInput &&
+                    stockItemLabel &&
+                    stockMoveQuantity &&
+                    stockTargetInput &&
+                    stockReasonInput
+                ) {
+                    const openStockMove = (direction, itemName) => {
+                        stockModeInput.value = 'stock_adjust';
+                        stockDirectionInput.value = direction;
+                        stockItemInput.value = itemName;
+                        stockItemLabel.value = itemName;
+                        stockMoveTitle.textContent = direction === 'inc' ? `Entrada de estoque: ${itemName}` : `Saida de estoque: ${itemName}`;
+                        stockMoveQuantity.value = '1,00';
+                        stockTargetInput.value = '';
+                        stockReasonInput.value = '';
+                        closeModal(stockModal);
+                        openModal(stockMoveModal);
+                        stockTargetInput.focus();
+                    };
+
+                    document.querySelectorAll('[data-open-stock-move]').forEach((btn) => {
+                        btn.addEventListener('click', () => {
+                            const direction = btn.getAttribute('data-stock-direction') || '';
+                            const itemName = btn.getAttribute('data-stock-item') || '';
+                            if (!direction || !itemName) return;
+                            openStockMove(direction, itemName);
+                        });
+                    });
+
+                    closeStockMoveEls.forEach((el) => el.addEventListener('click', () => closeModal(stockMoveModal)));
+                    if (backStockMoveBtn) {
+                        backStockMoveBtn.addEventListener('click', () => {
+                            closeModal(stockMoveModal);
+                            openModal(stockModal);
+                        });
+                    }
+                }
             })();
         </script>
     {% else %}
@@ -177,3 +392,4 @@
     {% endif %}
 </div>
 {% endblock %}
+
