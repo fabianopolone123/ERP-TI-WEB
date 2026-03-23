@@ -701,8 +701,27 @@
             <h4 style="margin: 0 0 8px 0;">Pendentes</h4>
             <div class="chat-list" data-attendant-pendencias-pending></div>
         </div>
+        <div style="margin-top: 12px; display: flex; justify-content: flex-end;">
+            <button type="button" data-open-attendant-concluidas>Ver concluidos</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal" data-attendant-concluidas-modal hidden>
+    <div class="modal-backdrop" data-close-attendant-concluidas></div>
+    <div class="modal-content">
+        <div class="topbar" style="margin-bottom: 8px;">
+            <h3 style="margin: 0;">Pendencias concluidas</h3>
+            <button type="button" data-close-attendant-concluidas>Fechar</button>
+        </div>
+        <div class="ticket-details" style="padding-top: 0;">
+            <div><strong>Atendente:</strong> <span data-attendant-concluidas-name>-</span></div>
+        </div>
+        <div style="margin-top: 8px;">
+            <label for="id_attendant_concluidas_search">Pesquisar</label>
+            <input id="id_attendant_concluidas_search" type="text" placeholder="Pesquisar pendencia concluida..." data-attendant-concluidas-search />
+        </div>
         <div style="margin-top: 12px;">
-            <h4 style="margin: 0 0 8px 0;">Concluidas</h4>
             <div class="chat-list" data-attendant-pendencias-completed></div>
         </div>
     </div>
@@ -1956,10 +1975,15 @@
         const openButtons = document.querySelectorAll('[data-open-attendant-pendencias]');
         if (!modal || !openButtons.length) return;
 
+        const completedModal = document.querySelector('[data-attendant-concluidas-modal]');
         const closeEls = modal.querySelectorAll('[data-close-attendant-pendencias]');
+        const openCompletedBtn = modal.querySelector('[data-open-attendant-concluidas]');
+        const closeCompletedEls = completedModal ? completedModal.querySelectorAll('[data-close-attendant-concluidas]') : [];
         const nameEl = modal.querySelector('[data-attendant-pendencias-name]');
+        const completedNameEl = completedModal ? completedModal.querySelector('[data-attendant-concluidas-name]') : null;
         const pendingEl = modal.querySelector('[data-attendant-pendencias-pending]');
-        const completedEl = modal.querySelector('[data-attendant-pendencias-completed]');
+        const completedEl = completedModal ? completedModal.querySelector('[data-attendant-pendencias-completed]') : null;
+        const completedSearchInput = completedModal ? completedModal.querySelector('[data-attendant-concluidas-search]') : null;
         const createForm = modal.querySelector('[data-attendant-pendencias-create-form]');
         const createInput = modal.querySelector('#id_attendant_pendency_new');
         const toggleApiUrl = '{% url "pendencias_toggle_status_api" %}';
@@ -1998,6 +2022,8 @@
             if (parts.length === 2) return parts.pop().split(';').shift();
             return '';
         };
+
+        const normalizeSearch = (value) => String(value || '').trim().toLowerCase();
 
         const upsertItem = (attendantId, payload) => {
             const key = String(attendantId || '').trim();
@@ -2079,7 +2105,7 @@
                             return;
                         }
                         upsertItem(currentAttendantId, data.item || {});
-                        renderCurrent();
+                        renderAll();
                     } catch (_) {
                         alert('Falha de rede ao atualizar pendencia.');
                         toggle.checked = !toggle.checked;
@@ -2114,7 +2140,7 @@
                                 return;
                             }
                             upsertItem(currentAttendantId, data.pendency || {});
-                            renderCurrent();
+                            renderAll();
                             if (typeof window.__saveChamadosScrollState === 'function') {
                                 window.__saveChamadosScrollState();
                             }
@@ -2133,10 +2159,33 @@
             });
         };
 
+        const currentData = () => pendenciasByAttendant[currentAttendantId] || { pending: [], completed: [] };
+
         const renderCurrent = () => {
-            const data = pendenciasByAttendant[currentAttendantId] || { pending: [], completed: [] };
+            const data = currentData();
             renderList(pendingEl, data.pending || [], 'Nenhuma pendencia pendente.', 'Criada em', false);
-            renderList(completedEl, data.completed || [], 'Nenhuma pendencia concluida.', 'Concluida em', true);
+        };
+
+        const renderCompletedCurrent = () => {
+            if (!completedEl) return;
+            const data = currentData();
+            const query = normalizeSearch(completedSearchInput ? completedSearchInput.value : '');
+            const completedItems = Array.isArray(data.completed) ? data.completed : [];
+            const filtered = !query
+                ? completedItems
+                : completedItems.filter((item) => {
+                    const idText = String(item.id || '');
+                    const description = String(item.description || '');
+                    const whenText = String(item.when || '');
+                    const haystack = `${idText} ${description} ${whenText}`.toLowerCase();
+                    return haystack.includes(query);
+                });
+            renderList(completedEl, filtered, 'Nenhuma pendencia concluida.', 'Concluida em', true);
+        };
+
+        const renderAll = () => {
+            renderCurrent();
+            renderCompletedCurrent();
         };
 
         const openModal = (button) => {
@@ -2145,22 +2194,47 @@
             currentAttendantId = attendantId;
 
             if (nameEl) nameEl.textContent = attendantName;
+            if (completedNameEl) completedNameEl.textContent = attendantName;
             if (createInput) createInput.value = '';
-            renderCurrent();
+            if (completedSearchInput) completedSearchInput.value = '';
+            renderAll();
             modal.hidden = false;
             if (createInput) {
                 window.requestAnimationFrame(() => createInput.focus());
             }
         };
 
+        const openCompletedModal = () => {
+            if (!completedModal || !currentAttendantId) return;
+            if (completedSearchInput) completedSearchInput.value = '';
+            renderCompletedCurrent();
+            completedModal.hidden = false;
+            if (completedSearchInput) {
+                window.requestAnimationFrame(() => completedSearchInput.focus());
+            }
+        };
+
+        const closeCompletedModal = () => {
+            if (!completedModal) return;
+            completedModal.hidden = true;
+        };
+
         const closeModal = () => {
             modal.hidden = true;
+            closeCompletedModal();
         };
 
         openButtons.forEach((button) => {
             button.addEventListener('click', () => openModal(button));
         });
         closeEls.forEach((el) => el.addEventListener('click', closeModal));
+        if (openCompletedBtn) {
+            openCompletedBtn.addEventListener('click', openCompletedModal);
+        }
+        closeCompletedEls.forEach((el) => el.addEventListener('click', closeCompletedModal));
+        if (completedSearchInput) {
+            completedSearchInput.addEventListener('input', renderCompletedCurrent);
+        }
 
         if (createForm && createInput) {
             createForm.addEventListener('submit', async (event) => {
@@ -2192,7 +2266,7 @@
                     }
                     upsertItem(currentAttendantId, data.item || {});
                     createInput.value = '';
-                    renderCurrent();
+                    renderAll();
                     createInput.focus();
                 } catch (_) {
                     alert('Falha de rede ao cadastrar pendencia.');
