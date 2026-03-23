@@ -168,6 +168,12 @@
                                             >
                                                 -
                                             </button>
+                                            <form method="post" onsubmit="return confirm('Apagar este item do estoque?');" style="margin: 0;">
+                                                {% csrf_token %}
+                                                <input type="hidden" name="mode" value="stock_delete" />
+                                                <input type="hidden" name="stock_item" value="{{ estoque.item }}" />
+                                                <button type="submit" title="Apagar item do estoque">Apagar</button>
+                                            </form>
                                         </div>
                                     </td>
                                 </tr>

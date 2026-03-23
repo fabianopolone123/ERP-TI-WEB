@@ -1490,15 +1490,26 @@ class SoftwaresView(LoginRequiredMixin, TemplateView):
 
 class InsumosView(LoginRequiredMixin, TemplateView):
     template_name = 'core/insumos.html'
+    STOCK_CREATE_DEPARTMENT = 'Cadastro de estoque'
+    STOCK_IN_PREFIX = 'Entrada:'
+    STOCK_OUT_PREFIX = 'Saida:'
 
     @staticmethod
     def _normalize_item_name(raw_value: str) -> str:
         return re.sub(r'\s+', ' ', (raw_value or '').strip())
 
     @classmethod
+    def _stock_movements_queryset(cls):
+        return Insumo.objects.filter(
+            Q(department=cls.STOCK_CREATE_DEPARTMENT)
+            | Q(department__startswith=cls.STOCK_IN_PREFIX)
+            | Q(department__startswith=cls.STOCK_OUT_PREFIX)
+        )
+
+    @classmethod
     def _stock_snapshot(cls) -> dict[str, dict[str, Decimal | str]]:
         snapshot: dict[str, dict[str, Decimal | str]] = {}
-        for row in Insumo.objects.only('item', 'quantity').order_by('item', 'id'):
+        for row in cls._stock_movements_queryset().only('item', 'quantity').order_by('item', 'id'):
             item_name = cls._normalize_item_name(row.item)
             if not item_name:
                 continue
@@ -1556,9 +1567,29 @@ class InsumosView(LoginRequiredMixin, TemplateView):
                 date=timezone.localdate(),
                 quantity=stock_quantity,
                 name='Estoque',
-                department='Cadastro de estoque',
+                department=self.STOCK_CREATE_DEPARTMENT,
             )
             messages.success(request, f'Estoque de "{stock_item}" cadastrado com sucesso.')
+            return redirect('insumos')
+
+        if mode == 'stock_delete':
+            stock_item = self._normalize_item_name(request.POST.get('stock_item') or request.POST.get('item'))
+            if not stock_item:
+                messages.error(request, 'Informe o insumo para apagar do estoque.')
+                return redirect('insumos')
+            normalized_key = stock_item.casefold()
+            ids_to_delete = []
+            for row in self._stock_movements_queryset().only('id', 'item'):
+                if self._normalize_item_name(row.item).casefold() == normalized_key:
+                    ids_to_delete.append(row.id)
+            if not ids_to_delete:
+                messages.error(request, f'Item "{stock_item}" nao encontrado no estoque.')
+                return redirect('insumos')
+            deleted_count, _ = Insumo.objects.filter(id__in=ids_to_delete).delete()
+            if deleted_count <= 0:
+                messages.error(request, f'Nao foi possivel apagar "{stock_item}" do estoque.')
+                return redirect('insumos')
+            messages.success(request, f'Estoque de "{stock_item}" apagado com sucesso.')
             return redirect('insumos')
 
         if mode == 'stock_adjust':
