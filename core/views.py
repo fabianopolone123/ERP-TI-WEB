@@ -1499,12 +1499,16 @@ class InsumosView(LoginRequiredMixin, TemplateView):
         return re.sub(r'\s+', ' ', (raw_value or '').strip())
 
     @classmethod
-    def _stock_movements_queryset(cls):
-        return Insumo.objects.filter(
+    def _stock_movement_q(cls):
+        return (
             Q(department=cls.STOCK_CREATE_DEPARTMENT)
             | Q(department__startswith=cls.STOCK_IN_PREFIX)
             | Q(department__startswith=cls.STOCK_OUT_PREFIX)
         )
+
+    @classmethod
+    def _stock_movements_queryset(cls):
+        return Insumo.objects.filter(cls._stock_movement_q())
 
     @classmethod
     def _stock_snapshot(cls) -> dict[str, dict[str, Decimal | str]]:
@@ -1636,6 +1640,15 @@ class InsumosView(LoginRequiredMixin, TemplateView):
                 name=stock_target[:200],
                 department=department_value[:120],
             )
+
+            if stock_direction == 'dec':
+                Insumo.objects.create(
+                    item=stock_item,
+                    date=timezone.localdate(),
+                    quantity=stock_quantity,
+                    name=stock_target[:200],
+                    department=stock_reason[:120],
+                )
             messages.success(request, 'Movimentacao de estoque registrada com sucesso.')
             return redirect('insumos')
 
@@ -1697,7 +1710,7 @@ class InsumosView(LoginRequiredMixin, TemplateView):
         is_ti = is_ti_user(self.request)
         context['is_ti_group'] = is_ti
         context['modules'] = build_modules('insumos') if is_ti else []
-        context['insumos'] = Insumo.objects.all().order_by('-date', '-id') if is_ti else []
+        context['insumos'] = Insumo.objects.exclude(self._stock_movement_q()).order_by('-date', '-id') if is_ti else []
         context['estoque_atual'] = self._stock_rows() if is_ti else []
         context['insumo_default_date'] = timezone.localdate().isoformat()
         return context
