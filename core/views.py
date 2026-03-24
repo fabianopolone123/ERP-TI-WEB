@@ -3829,6 +3829,8 @@ def move_ticket(request):
         saved_failure = _normalize_failure_type(ticket.last_failure_type or '')
         if saved_failure in valid_failures:
             failure_type = saved_failure
+        else:
+            failure_type = Ticket.FailureType.NA
     previous_status = ticket.status
     previous_assignee_id = ticket.assigned_to_id
     source_is_user = source_target.startswith('user_')
@@ -4237,7 +4239,8 @@ def ticket_timer_action(request):
     if not action_note:
         return JsonResponse({'ok': False, 'error': 'action_required'}, status=400)
     if failure_type not in valid_failures:
-        return JsonResponse({'ok': False, 'error': 'failure_required'}, status=400)
+        saved_failure = _normalize_failure_type(ticket.last_failure_type or '')
+        failure_type = saved_failure if saved_failure in valid_failures else Ticket.FailureType.NA
 
     closed_at = timezone.now()
     _create_ticket_work_log(

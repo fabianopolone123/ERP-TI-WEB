@@ -951,18 +951,6 @@
                 <button type="button" data-close-ticket-cancel>Fechar</button>
             </div>
             <form data-close-ticket-form>
-                <div class="form-row">
-                    <div>
-                        <label for="id_close_failure_type">Tipo de falha</label>
-                        <select id="id_close_failure_type" name="failure_type" required>
-                            <option value="">Selecione...</option>
-                            <option value="na">N/A</option>
-                            <option value="software">Software</option>
-                            <option value="equipamento">Equipamento</option>
-                            <option value="humana">Falha humana</option>
-                        </select>
-                    </div>
-                </div>
                 <div class="form-row" data-close-category-row>
                     <div style="flex: 1;">
                         <label for="id_close_category">Categoria do chamado</label>
@@ -1053,7 +1041,6 @@
         const closeTitle = document.querySelector('[data-close-ticket-title]');
         const closeTextLabel = document.querySelector('[data-close-ticket-text-label]');
         const closeSubmitBtn = document.querySelector('[data-close-ticket-submit]');
-        const closeFailureInput = document.querySelector('#id_close_failure_type');
         const closeCategoryRow = document.querySelector('[data-close-category-row]');
         const closeCategorySelect = document.querySelector('[data-close-category-select]');
         const closeCategoryNewInput = document.querySelector('[data-close-category-new]');
@@ -1063,9 +1050,20 @@
         const closeCategoryCreateApiUrl = '{% url "chamados_close_category_create_api" %}';
         let closeResolver = null;
         let closeModalMode = 'close';
+        let closeDefaultFailureType = 'na';
+
+        const normalizeFailureTypeValue = (rawValue) => {
+            const raw = (rawValue || '').trim().toLowerCase();
+            if (!raw) return '';
+            if (raw === 'n/s' || raw === 'ns' || raw === 'n-s' || raw === 'n/a' || raw === 'na' || raw === 'n-a') return 'na';
+            if (raw === 'equipamento' || raw === 'hardware') return 'equipamento';
+            if (raw === 'software') return 'software';
+            if (raw === 'humana' || raw === 'falha humana' || raw === 'falha_humana') return 'humana';
+            return '';
+        };
 
         const askClosePayload = (initialFailure, mode = 'close') => new Promise((resolve) => {
-            if (!closeModal || !closeForm || !closeFailureInput || !closeCategorySelect || !closeResolutionInput) {
+            if (!closeModal || !closeForm || !closeCategorySelect || !closeResolutionInput) {
                 resolve({ confirmed: false, failureType: '', closeCategoryId: '', text: '' });
                 return;
             }
@@ -1080,7 +1078,7 @@
                 ? 'Descreva a resolução...'
                 : 'Descreva a ação/correção realizada...';
             closeResolver = resolve;
-            closeFailureInput.value = initialFailure || '';
+            closeDefaultFailureType = normalizeFailureTypeValue(initialFailure) || 'na';
             closeCategorySelect.value = '';
             closeResolutionInput.value = '';
             closeModal.hidden = false;
@@ -1098,12 +1096,11 @@
         if (closeForm) {
             closeForm.addEventListener('submit', (event) => {
                 event.preventDefault();
-                const failureType = (closeFailureInput?.value || '').trim();
                 const closeCategoryId = (closeCategorySelect?.value || '').trim();
                 const text = (closeResolutionInput?.value || '').trim();
-                if (!failureType || !text) return;
+                if (!text) return;
                 if (closeModalMode === 'close' && !closeCategoryId) return;
-                closeCloseModal({ confirmed: true, failureType, closeCategoryId: closeModalMode === 'close' ? closeCategoryId : '', text });
+                closeCloseModal({ confirmed: true, failureType: closeDefaultFailureType, closeCategoryId: closeModalMode === 'close' ? closeCategoryId : '', text });
             });
         }
         if (closeCategoryAddBtn && closeCategoryNewInput && closeCategorySelect) {
@@ -1276,28 +1273,9 @@
                 let resolutionText = '';
                 let closeCategoryId = '';
                 let progressNote = '';
-                let failureType = '';
+                let failureType = 'na';
                 let actionCapturedByModal = false;
-                const normalizeFailureType = (rawValue) => {
-                    const raw = (rawValue || '').trim().toLowerCase();
-                    if (!raw) return '';
-                    if (raw === 'n/s' || raw === 'ns' || raw === 'n-s' || raw === 'n/a' || raw === 'na' || raw === 'n-a') return 'na';
-                    if (raw === 'equipamento' || raw === 'hardware') return 'equipamento';
-                    if (raw === 'software') return 'software';
-                    if (raw === 'humana' || raw === 'falha humana' || raw === 'falha_humana') return 'humana';
-                    return '';
-                };
-                const currentSavedFailure = normalizeFailureType(draggingCard.dataset.failureType || '');
-
-                const askFailureType = () => {
-                    const raw = (prompt('Tipo de falha (N/A, Equipamento, Software ou Falha humana):') || '').trim().toLowerCase();
-                    if (!raw) return '';
-                    if (raw === 'n/s' || raw === 'ns' || raw === 'n-s' || raw === 'n/a' || raw === 'na' || raw === 'n-a') return 'na';
-                    if (raw === 'equipamento' || raw === 'hardware') return 'equipamento';
-                    if (raw === 'software') return 'software';
-                    if (raw === 'humana' || raw === 'falha humana' || raw === 'falha_humana') return 'humana';
-                    return '';
-                };
+                const currentSavedFailure = normalizeFailureTypeValue(draggingCard.dataset.failureType || '') || 'na';
 
                 if (isClosing) {
                     if (!isUserSource) {
@@ -1312,7 +1290,7 @@
                     }
                     resolutionText = (closePayload.text || '').trim();
                     closeCategoryId = String(closePayload.closeCategoryId || '').trim();
-                    failureType = normalizeFailureType(closePayload.failureType || currentSavedFailure);
+                    failureType = normalizeFailureTypeValue(closePayload.failureType || currentSavedFailure || 'na') || 'na';
                 }
                 if (!isClosing && isUserSource && isQueue) {
                     const actionPayload = await askClosePayload(currentSavedFailure, 'action');
@@ -1321,7 +1299,7 @@
                         return;
                     }
                     progressNote = (actionPayload.text || '').trim();
-                    failureType = normalizeFailureType(actionPayload.failureType || currentSavedFailure);
+                    failureType = normalizeFailureTypeValue(actionPayload.failureType || currentSavedFailure || 'na') || 'na';
                     actionCapturedByModal = true;
                 }
                 if (isUserSource && (isQueue || (isUserTarget && !shouldClone))) {
@@ -1332,18 +1310,8 @@
                             return;
                         }
                         progressNote = (actionPayload.text || '').trim();
-                        failureType = normalizeFailureType(actionPayload.failureType || currentSavedFailure);
+                        failureType = normalizeFailureTypeValue(actionPayload.failureType || currentSavedFailure || 'na') || 'na';
                         actionCapturedByModal = true;
-                    }
-                }
-                if (!isClosing && isUserSource && (isQueue || (isUserTarget && !shouldClone))) {
-                    if (!actionCapturedByModal) {
-                        failureType = currentSavedFailure || askFailureType();
-                    }
-                    if (!failureType) {
-                        alert('Informe um tipo de falha válido: N/A, Equipamento, Software ou Falha humana.');
-                        draggingId = null;
-                        return;
                     }
                 }
 
@@ -1354,12 +1322,7 @@
                         return;
                     }
                     progressNote = (actionPayload.text || '').trim();
-                    failureType = normalizeFailureType(actionPayload.failureType || currentSavedFailure);
-                    if (!failureType) {
-                        alert('Informe um tipo de falha válido: N/A, Equipamento, Software ou Falha humana.');
-                        draggingId = null;
-                        return;
-                    }
+                    failureType = normalizeFailureTypeValue(actionPayload.failureType || currentSavedFailure || 'na') || 'na';
 
                     moveInFlight = true;
                     window.__ticketMoveInFlight = true;
@@ -1382,9 +1345,7 @@
                         });
                         const responseData = await response.json().catch(() => ({}));
                         if (!response.ok) {
-                            if (responseData.error === 'failure_required') {
-                                alert('Informe o tipo de falha: N/A, Equipamento, Software ou Falha humana.');
-                            } else if (responseData.error === 'action_required') {
+                            if (responseData.error === 'action_required') {
                                 alert('Informe a ação/correção ao sair do atendimento.');
                             } else {
                                 alert('Não foi possível atualizar o compartilhamento deste chamado.');
@@ -1454,8 +1415,6 @@
                             alert('Só é permitido finalizar chamado quando ele sai da coluna de um atendente.');
                         } else if (responseData.error === 'play_required') {
                             alert('Para finalizar, inicie o atendimento com Play e depois finalize.');
-                        } else if (responseData.error === 'failure_required') {
-                            alert('Informe o tipo de falha: N/A, Equipamento, Software ou Falha humana.');
                         } else if (responseData.error === 'action_required') {
                             alert('Informe a ação/correção ao mover o chamado.');
                         }
@@ -1561,11 +1520,11 @@
             let failureType = '';
 
             if (action === 'pause') {
-                const currentSavedFailure = (card.dataset.failureType || '').trim().toLowerCase();
+                const currentSavedFailure = normalizeFailureTypeValue(card.dataset.failureType || '') || 'na';
                 const payload = await askClosePayload(currentSavedFailure, 'action');
                 if (!payload.confirmed) return;
                 actionNote = (payload.text || '').trim();
-                failureType = (payload.failureType || '').trim();
+                failureType = normalizeFailureTypeValue(payload.failureType || currentSavedFailure || 'na') || 'na';
             }
 
             const response = await fetch('{% url "chamados_timer" %}', {
@@ -1586,8 +1545,6 @@
             if (!response.ok) {
                 if (data.error === 'action_required') {
                     alert('Informe a ação/correção ao pausar.');
-                } else if (data.error === 'failure_required') {
-                    alert('Informe o tipo de falha ao pausar.');
                 } else if (data.error === 'not_running') {
                     alert('Este chamado não está em execução.');
                 } else {
