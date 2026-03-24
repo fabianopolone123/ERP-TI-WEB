@@ -4575,20 +4575,32 @@ def ticket_reopen(request):
         return JsonResponse({'ok': False, 'error': 'forbidden'}, status=403)
 
     if ticket.status == Ticket.Status.FECHADO:
+        previous_assigned_to_id = ticket.assigned_to_id
+        had_collaborators = ticket.collaborators.exists()
+        TicketAttendantCycle.objects.filter(ticket=ticket).exclude(current_cycle_started_at__isnull=True).update(
+            current_cycle_started_at=None,
+            updated_at=timezone.now(),
+        )
         ticket.status = Ticket.Status.PENDENTE
         ticket.resolution = ''
         ticket.close_category = None
+        ticket.assigned_to = None
         ticket.current_cycle_started_at = None
-        ticket.save(update_fields=['status', 'resolution', 'close_category', 'current_cycle_started_at', 'updated_at'])
+        ticket.save(update_fields=['status', 'resolution', 'close_category', 'assigned_to', 'current_cycle_started_at', 'updated_at'])
+        if had_collaborators:
+            ticket.collaborators.clear()
         _notify_whatsapp(ticket, event_type="status_pending", event_label="Status atualizado", extra_line="Status atual: Pendente")
         _notify_ticket_email(ticket, event_label="Status atualizado", extra_line="Status atual: Pendente")
+        reopen_note = 'Chamado reaberto para a coluna Pendente.'
+        if previous_assigned_to_id or had_collaborators:
+            reopen_note = 'Chamado reaberto para a coluna Pendente e removido do atendimento atual.'
         _log_ticket_timeline(
             ticket=ticket,
             event_type=TicketTimelineEvent.EventType.REOPENED,
             request_user=request.user,
             from_status=Ticket.Status.FECHADO,
             to_status=Ticket.Status.PENDENTE,
-            note='Chamado reaberto para a coluna Pendente.',
+            note=reopen_note,
         )
     return JsonResponse({'ok': True})
 
