@@ -1732,6 +1732,18 @@ class ProtocolosView(LoginRequiredMixin, TemplateView):
             dt_value = timezone.make_aware(dt_value, timezone.get_current_timezone())
         return dt_value
 
+    @staticmethod
+    def _validate_recording_upload(file_obj) -> str:
+        if not file_obj:
+            return ''
+        ext = Path(file_obj.name or '').suffix.lower()
+        if ext != '.wav':
+            return 'Apenas arquivos no formato .wav sao permitidos.'
+        if int(getattr(file_obj, 'size', 0) or 0) > _upload_max_bytes():
+            max_mb = int(getattr(settings, 'UPLOAD_MAX_FILE_MB', 10) or 10)
+            return f'Arquivo excede o limite de {max_mb}MB.'
+        return ''
+
     def post(self, request, *args, **kwargs):
         if not is_ti_user(request):
             messages.error(request, 'Apenas usuários do departamento TI podem cadastrar protocolos.')
@@ -1744,6 +1756,8 @@ class ProtocolosView(LoginRequiredMixin, TemplateView):
         os_value = (request.POST.get('os') or '').strip()
         observacao = (request.POST.get('observacao') or '').strip()
         created_at_raw = (request.POST.get('created_at') or '').strip()
+        gravacao_file = request.FILES.get('recording_file')
+        remove_gravacao = bool(request.POST.get('remove_recording'))
         created_at_dt = self._parse_created_at(created_at_raw)
 
         if not nome:
@@ -1758,6 +1772,10 @@ class ProtocolosView(LoginRequiredMixin, TemplateView):
         if created_at_dt is None:
             messages.error(request, 'Informe uma data/hora válida.')
             return redirect(request.get_full_path())
+        attachment_error = self._validate_recording_upload(gravacao_file)
+        if attachment_error:
+            messages.error(request, attachment_error)
+            return redirect(request.get_full_path())
 
         if mode == 'update':
             protocolo_obj = Protocolo.objects.filter(id=protocolo_id).first()
@@ -1769,7 +1787,18 @@ class ProtocolosView(LoginRequiredMixin, TemplateView):
             protocolo_obj.os = os_value
             protocolo_obj.observacao = observacao
             protocolo_obj.created_at = created_at_dt
-            protocolo_obj.save(update_fields=['nome', 'protocolo', 'os', 'observacao', 'created_at', 'updated_at'])
+            update_fields = ['nome', 'protocolo', 'os', 'observacao', 'created_at', 'updated_at']
+            if remove_gravacao and protocolo_obj.gravacao:
+                protocolo_obj.gravacao.delete(save=False)
+                protocolo_obj.gravacao = None
+                update_fields.append('gravacao')
+            if gravacao_file:
+                if protocolo_obj.gravacao:
+                    protocolo_obj.gravacao.delete(save=False)
+                protocolo_obj.gravacao = gravacao_file
+                if 'gravacao' not in update_fields:
+                    update_fields.append('gravacao')
+            protocolo_obj.save(update_fields=update_fields)
             messages.success(request, 'Protocolo atualizado com sucesso.')
             return redirect('protocolos')
 
@@ -1778,6 +1807,7 @@ class ProtocolosView(LoginRequiredMixin, TemplateView):
             protocolo=protocolo,
             os=os_value,
             observacao=observacao,
+            gravacao=gravacao_file,
         )
         Protocolo.objects.filter(id=protocolo_obj.id).update(created_at=created_at_dt)
         messages.success(request, 'Protocolo cadastrado com sucesso.')

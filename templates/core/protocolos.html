@@ -45,6 +45,7 @@
                         <th>OS</th>
                         <th>Observacao</th>
                         <th>Data/Hora</th>
+                        <th>Gravacao</th>
                         <th>Acoes</th>
                     </tr>
                 </thead>
@@ -58,6 +59,18 @@
                             <td title="{{ item.observacao|default:'' }}">{{ item.observacao|default:'-' }}</td>
                             <td data-sort-value="{{ item.created_at|date:'YmdHis' }}">{{ item.created_at|date:'d/m/Y H:i' }}</td>
                             <td>
+                                {% if item.gravacao %}
+                                    <audio controls preload="none" style="max-width: 220px;">
+                                        <source src="{{ item.gravacao.url }}" type="audio/wav" />
+                                    </audio>
+                                    <div style="margin-top: 4px;">
+                                        <a href="{{ item.gravacao.url }}" target="_blank" rel="noopener">Abrir audio</a>
+                                    </div>
+                                {% else %}
+                                    <span class="muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td>
                                 <button
                                     type="button"
                                     data-edit-protocolo
@@ -67,6 +80,7 @@
                                     data-protocolo-os="{{ item.os|escape }}"
                                     data-protocolo-observacao="{{ item.observacao|default:''|escape }}"
                                     data-protocolo-created-at="{{ item.created_at|date:'Y-m-d\\TH:i' }}"
+                                    data-protocolo-recording-url="{% if item.gravacao %}{{ item.gravacao.url }}{% endif %}"
                                 >
                                     Editar
                                 </button>
@@ -74,7 +88,7 @@
                         </tr>
                     {% empty %}
                         <tr>
-                            <td colspan="7" class="muted">Nenhum protocolo cadastrado.</td>
+                            <td colspan="8" class="muted">Nenhum protocolo cadastrado.</td>
                         </tr>
                     {% endfor %}
                 </tbody>
@@ -88,7 +102,7 @@
                     <h3 data-protocolo-modal-title style="margin: 0;">Novo protocolo</h3>
                     <button type="button" data-close-protocolo-modal>Fechar</button>
                 </div>
-                <form method="post" data-protocolo-form>
+                <form method="post" data-protocolo-form enctype="multipart/form-data">
                     {% csrf_token %}
                     <input type="hidden" name="mode" value="create" data-protocolo-mode />
                     <input type="hidden" name="protocolo_id" value="" data-protocolo-id-input />
@@ -120,6 +134,26 @@
                             />
                         </div>
                     </div>
+                    <div class="form-row">
+                        <div style="flex: 1;">
+                            <label for="id_protocolo_recording">Gravacao da ligacao (.wav)</label>
+                            <input
+                                id="id_protocolo_recording"
+                                name="recording_file"
+                                type="file"
+                                accept=".wav,audio/wav,audio/x-wav"
+                                data-protocolo-recording-input
+                            />
+                            <div class="muted" data-protocolo-recording-current hidden style="margin-top: 4px;">
+                                Arquivo atual:
+                                <a href="#" target="_blank" rel="noopener" data-protocolo-recording-current-link>ouvir/baixar</a>
+                            </div>
+                            <label data-protocolo-remove-recording-wrap hidden style="display: block; margin-top: 6px;">
+                                <input type="checkbox" name="remove_recording" value="1" data-protocolo-remove-recording-input />
+                                Remover gravacao atual
+                            </label>
+                        </div>
+                    </div>
                     <button type="submit">Salvar</button>
                 </form>
             </div>
@@ -138,8 +172,13 @@
                 const osInput = document.querySelector('[data-protocolo-os-input]');
                 const observacaoInput = document.querySelector('[data-protocolo-observacao-input]');
                 const dataHoraInput = document.querySelector('[data-protocolo-data-hora-input]');
+                const recordingInput = document.querySelector('[data-protocolo-recording-input]');
+                const recordingCurrent = document.querySelector('[data-protocolo-recording-current]');
+                const recordingCurrentLink = document.querySelector('[data-protocolo-recording-current-link]');
+                const removeRecordingWrap = document.querySelector('[data-protocolo-remove-recording-wrap]');
+                const removeRecordingInput = document.querySelector('[data-protocolo-remove-recording-input]');
 
-                if (!modal || !openBtn || !modeInput || !idInput || !nomeInput || !codigoInput || !osInput || !observacaoInput || !dataHoraInput) return;
+                if (!modal || !openBtn || !modeInput || !idInput || !nomeInput || !codigoInput || !osInput || !observacaoInput || !dataHoraInput || !recordingInput || !recordingCurrent || !recordingCurrentLink || !removeRecordingWrap || !removeRecordingInput) return;
 
                 const formatNow = () => {
                     const now = new Date();
@@ -156,6 +195,11 @@
                     osInput.value = '';
                     observacaoInput.value = '';
                     dataHoraInput.value = formatNow();
+                    recordingInput.value = '';
+                    recordingCurrent.hidden = true;
+                    recordingCurrentLink.setAttribute('href', '#');
+                    removeRecordingWrap.hidden = true;
+                    removeRecordingInput.checked = false;
                     modal.hidden = false;
                 };
 
@@ -168,6 +212,18 @@
                     osInput.value = btn.getAttribute('data-protocolo-os') || '';
                     observacaoInput.value = btn.getAttribute('data-protocolo-observacao') || '';
                     dataHoraInput.value = btn.getAttribute('data-protocolo-created-at') || formatNow();
+                    recordingInput.value = '';
+                    const recordingUrl = btn.getAttribute('data-protocolo-recording-url') || '';
+                    if (recordingUrl) {
+                        recordingCurrent.hidden = false;
+                        recordingCurrentLink.setAttribute('href', recordingUrl);
+                        removeRecordingWrap.hidden = false;
+                    } else {
+                        recordingCurrent.hidden = true;
+                        recordingCurrentLink.setAttribute('href', '#');
+                        removeRecordingWrap.hidden = true;
+                    }
+                    removeRecordingInput.checked = false;
                     modal.hidden = false;
                 };
 

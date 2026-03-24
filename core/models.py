@@ -218,6 +218,7 @@ class Protocolo(models.Model):
     protocolo = models.CharField(max_length=120)
     os = models.CharField(max_length=120)
     observacao = models.TextField(blank=True, default='')
+    gravacao = models.FileField(upload_to='protocolos/gravacoes/', null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
