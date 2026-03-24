@@ -1744,6 +1744,19 @@ class ProtocolosView(LoginRequiredMixin, TemplateView):
             return f'Arquivo excede o limite de {max_mb}MB.'
         return ''
 
+    @staticmethod
+    def _incoming_recording_file(request):
+        return request.FILES.get('recording_file') or request.FILES.get('gravacao')
+
+    @staticmethod
+    def _apply_recording_file(protocolo_obj: Protocolo, file_obj):
+        if not protocolo_obj or not file_obj:
+            return
+        if protocolo_obj.gravacao:
+            protocolo_obj.gravacao.delete(save=False)
+        safe_name = Path(file_obj.name or 'gravacao.wav').name
+        protocolo_obj.gravacao.save(safe_name, file_obj, save=False)
+
     def post(self, request, *args, **kwargs):
         if not is_ti_user(request):
             messages.error(request, 'Apenas usuários do departamento TI podem cadastrar protocolos.')
@@ -1756,7 +1769,7 @@ class ProtocolosView(LoginRequiredMixin, TemplateView):
         os_value = (request.POST.get('os') or '').strip()
         observacao = (request.POST.get('observacao') or '').strip()
         created_at_raw = (request.POST.get('created_at') or '').strip()
-        gravacao_file = request.FILES.get('recording_file')
+        gravacao_file = self._incoming_recording_file(request)
         remove_gravacao = bool(request.POST.get('remove_recording'))
         created_at_dt = self._parse_created_at(created_at_raw)
 
@@ -1793,22 +1806,22 @@ class ProtocolosView(LoginRequiredMixin, TemplateView):
                 protocolo_obj.gravacao = None
                 update_fields.append('gravacao')
             if gravacao_file:
-                if protocolo_obj.gravacao:
-                    protocolo_obj.gravacao.delete(save=False)
-                protocolo_obj.gravacao = gravacao_file
+                self._apply_recording_file(protocolo_obj, gravacao_file)
                 if 'gravacao' not in update_fields:
                     update_fields.append('gravacao')
             protocolo_obj.save(update_fields=update_fields)
             messages.success(request, 'Protocolo atualizado com sucesso.')
             return redirect('protocolos')
 
-        protocolo_obj = Protocolo.objects.create(
+        protocolo_obj = Protocolo(
             nome=nome,
             protocolo=protocolo,
             os=os_value,
             observacao=observacao,
-            gravacao=gravacao_file,
         )
+        if gravacao_file:
+            self._apply_recording_file(protocolo_obj, gravacao_file)
+        protocolo_obj.save()
         Protocolo.objects.filter(id=protocolo_obj.id).update(created_at=created_at_dt)
         messages.success(request, 'Protocolo cadastrado com sucesso.')
         return redirect('protocolos')
