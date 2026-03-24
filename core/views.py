@@ -1739,9 +1739,6 @@ class ProtocolosView(LoginRequiredMixin, TemplateView):
         ext = Path(file_obj.name or '').suffix.lower()
         if ext != '.wav':
             return 'Apenas arquivos no formato .wav sao permitidos.'
-        if int(getattr(file_obj, 'size', 0) or 0) > _upload_max_bytes():
-            max_mb = int(getattr(settings, 'UPLOAD_MAX_FILE_MB', 10) or 10)
-            return f'Arquivo excede o limite de {max_mb}MB.'
         return ''
 
     @staticmethod
