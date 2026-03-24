@@ -960,9 +960,8 @@
                                 <option value="{{ item.id }}">{{ item.name }}</option>
                             {% endfor %}
                         </select>
-                        <div style="display: flex; gap: 8px; margin-top: 6px;">
-                            <input type="text" placeholder="Cadastrar nova categoria..." data-close-category-new />
-                            <button type="button" data-close-category-add>Cadastrar categoria</button>
+                        <div style="display: flex; justify-content: flex-start; margin-top: 6px;">
+                            <button type="button" data-close-category-add style="padding: 5px 10px; font-size: 12px; width: auto;">Cadastrar categoria</button>
                         </div>
                     </div>
                 </div>
@@ -1043,7 +1042,6 @@
         const closeSubmitBtn = document.querySelector('[data-close-ticket-submit]');
         const closeCategoryRow = document.querySelector('[data-close-category-row]');
         const closeCategorySelect = document.querySelector('[data-close-category-select]');
-        const closeCategoryNewInput = document.querySelector('[data-close-category-new]');
         const closeCategoryAddBtn = document.querySelector('[data-close-category-add]');
         const closeResolutionInput = document.querySelector('#id_close_resolution_text');
         const closeCancelEls = document.querySelectorAll('[data-close-ticket-cancel]');
@@ -1103,11 +1101,10 @@
                 closeCloseModal({ confirmed: true, failureType: closeDefaultFailureType, closeCategoryId: closeModalMode === 'close' ? closeCategoryId : '', text });
             });
         }
-        if (closeCategoryAddBtn && closeCategoryNewInput && closeCategorySelect) {
+        if (closeCategoryAddBtn && closeCategorySelect) {
             closeCategoryAddBtn.addEventListener('click', async () => {
-                const name = (closeCategoryNewInput.value || '').trim();
+                const name = (prompt('Digite o nome da nova categoria:') || '').trim();
                 if (!name) {
-                    closeCategoryNewInput.focus();
                     return;
                 }
                 closeCategoryAddBtn.disabled = true;
@@ -1138,7 +1135,6 @@
                         option.textContent = categoryName;
                     }
                     closeCategorySelect.value = categoryId;
-                    closeCategoryNewInput.value = '';
                     closeCategorySelect.focus();
                 } catch (_) {
                     alert('Falha de rede ao cadastrar categoria.');
