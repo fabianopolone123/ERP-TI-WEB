@@ -57,6 +57,7 @@ from .models import (
     Dica,
     Responsibility,
     Pendencia,
+    TicketCloseCategory,
     Ticket,
     TicketMessage,
     TicketTimelineEvent,
@@ -3454,6 +3455,7 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
 
         ti_users = list(ERPUser.objects.filter(department__iexact='TI', is_active=True).order_by('full_name'))
         context['ti_users'] = ti_users
+        context['ticket_close_categories'] = list(TicketCloseCategory.objects.order_by('name', 'id'))
         ti_usernames_set = {(item.username or '').strip().lower() for item in ti_users if (item.username or '').strip()}
         attendant_pendencias_map: dict[int, dict[str, list[dict[str, str | int]]]] = {
             user.id: {'pending': [], 'completed': []}
@@ -3819,6 +3821,7 @@ def move_ticket(request):
     source_target = (request.POST.get('source_target') or '').strip()
     progress_note = (request.POST.get('progress_note') or '').strip()
     resolution_note = (request.POST.get('resolution') or '').strip()
+    close_category_id_raw = (request.POST.get('close_category_id') or '').strip()
     unassign_only = request.POST.get('unassign_only') == '1'
     failure_type = _normalize_failure_type(request.POST.get('failure_type') or '')
     valid_failures = {choice[0] for choice in Ticket.FailureType.choices}
@@ -3919,6 +3922,7 @@ def move_ticket(request):
         ticket.current_cycle_started_at = None
         if destination_status != Ticket.Status.FECHADO:
             ticket.resolution = ''
+            ticket.close_category = None
         ticket.save()
         ticket.collaborators.clear()
         if previous_status != destination_status:
@@ -3950,6 +3954,15 @@ def move_ticket(request):
             return JsonResponse({'ok': False, 'error': 'close_only_from_attendant'}, status=400)
         if not resolution_note:
             return JsonResponse({'ok': False, 'error': 'resolution_required'}, status=400)
+        if not close_category_id_raw:
+            return JsonResponse({'ok': False, 'error': 'close_category_required'}, status=400)
+        try:
+            close_category_id = int(close_category_id_raw)
+        except (TypeError, ValueError):
+            return JsonResponse({'ok': False, 'error': 'close_category_required'}, status=400)
+        close_category = TicketCloseCategory.objects.filter(id=close_category_id).first()
+        if not close_category:
+            return JsonResponse({'ok': False, 'error': 'close_category_invalid'}, status=400)
         if failure_type not in valid_failures:
             return JsonResponse({'ok': False, 'error': 'failure_required'}, status=400)
         if not source_cycle or not source_cycle.current_cycle_started_at:
@@ -3966,6 +3979,7 @@ def move_ticket(request):
         )
         ticket.status = Ticket.Status.FECHADO
         ticket.resolution = resolution_note
+        ticket.close_category = close_category
         ticket.last_failure_type = failure_type
         ticket.current_cycle_started_at = None
         ticket.save()
@@ -4071,6 +4085,7 @@ def move_ticket(request):
             ticket.assigned_to = assignee
             if was_closed:
                 ticket.resolution = ''
+                ticket.close_category = None
             ticket.current_cycle_started_at = None
             ticket.last_failure_type = failure_type if source_is_user else ticket.last_failure_type
             ticket.save()
@@ -4120,6 +4135,26 @@ def move_ticket(request):
         return JsonResponse({'ok': True})
 
     return JsonResponse({'ok': False, 'error': 'invalid_target'}, status=400)
+
+
+@login_required
+@require_POST
+def chamados_close_category_create_api(request):
+    if not is_ti_user(request):
+        return JsonResponse({'ok': False, 'error': 'forbidden'}, status=403)
+
+    name = (request.POST.get('name') or '').strip()
+    if not name:
+        return JsonResponse({'ok': False, 'error': 'name_required'}, status=400)
+    if len(name) > 120:
+        return JsonResponse({'ok': False, 'error': 'name_too_long'}, status=400)
+
+    existing = TicketCloseCategory.objects.filter(name__iexact=name).first()
+    if existing:
+        return JsonResponse({'ok': True, 'created': False, 'item': {'id': existing.id, 'name': existing.name}})
+
+    item = TicketCloseCategory.objects.create(name=name)
+    return JsonResponse({'ok': True, 'created': True, 'item': {'id': item.id, 'name': item.name}})
 
 
 @login_required
@@ -4270,7 +4305,7 @@ def _can_delete_ticket(request, ticket: Ticket) -> bool:
 def ticket_detail(request, ticket_id: int):
     ticket = (
         Ticket.objects.filter(id=ticket_id)
-        .select_related('assigned_to', 'created_by')
+        .select_related('assigned_to', 'created_by', 'close_category')
         .prefetch_related('collaborators', 'historical_attendants')
         .first()
     )
@@ -4353,6 +4388,7 @@ def ticket_detail(request, ticket_id: int):
             'status_code': ticket.status,
             'created_by': ticket.created_by.username if ticket.created_by else '-',
             'resolution': ticket.resolution,
+            'close_category': ticket.close_category.name if ticket.close_category else '',
             'assignees': ', '.join(historical_names) or '-',
             'attachment_url': ticket.attachment.url if ticket.attachment else '',
             'created_at': timezone.localtime(ticket.created_at).strftime('%d/%m/%Y %H:%M'),
@@ -4538,8 +4574,9 @@ def ticket_reopen(request):
     if ticket.status == Ticket.Status.FECHADO:
         ticket.status = Ticket.Status.PENDENTE
         ticket.resolution = ''
+        ticket.close_category = None
         ticket.current_cycle_started_at = None
-        ticket.save(update_fields=['status', 'resolution', 'current_cycle_started_at', 'updated_at'])
+        ticket.save(update_fields=['status', 'resolution', 'close_category', 'current_cycle_started_at', 'updated_at'])
         _notify_whatsapp(ticket, event_type="status_pending", event_label="Status atualizado", extra_line="Status atual: Pendente")
         _notify_ticket_email(ticket, event_label="Status atualizado", extra_line="Status atual: Pendente")
         _log_ticket_timeline(

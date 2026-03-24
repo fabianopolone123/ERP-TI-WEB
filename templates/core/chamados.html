@@ -578,6 +578,7 @@
             <div><strong>Solicitante:</strong> <span data-detail-created-by></span></div>
             <div><strong>Responsáveis:</strong> <span data-detail-assignees></span></div>
             <div><strong>Resolução:</strong> <span data-detail-resolution></span></div>
+            <div><strong>Categoria de fechamento:</strong> <span data-detail-close-category></span></div>
             <div>
                 <strong>Anexo:</strong>
                 <a href="#" data-detail-attachment target="_blank" rel="noreferrer">abrir</a>
@@ -962,6 +963,21 @@
                         </select>
                     </div>
                 </div>
+                <div class="form-row" data-close-category-row>
+                    <div style="flex: 1;">
+                        <label for="id_close_category">Categoria do chamado</label>
+                        <select id="id_close_category" name="close_category_id" data-close-category-select required>
+                            <option value="">Selecione...</option>
+                            {% for item in ticket_close_categories %}
+                                <option value="{{ item.id }}">{{ item.name }}</option>
+                            {% endfor %}
+                        </select>
+                        <div style="display: flex; gap: 8px; margin-top: 6px;">
+                            <input type="text" placeholder="Cadastrar nova categoria..." data-close-category-new />
+                            <button type="button" data-close-category-add>Cadastrar categoria</button>
+                        </div>
+                    </div>
+                </div>
                 <div class="form-row">
                     <div style="flex: 1;">
                         <label for="id_close_resolution_text" data-close-ticket-text-label>Resolução</label>
@@ -1038,24 +1054,34 @@
         const closeTextLabel = document.querySelector('[data-close-ticket-text-label]');
         const closeSubmitBtn = document.querySelector('[data-close-ticket-submit]');
         const closeFailureInput = document.querySelector('#id_close_failure_type');
+        const closeCategoryRow = document.querySelector('[data-close-category-row]');
+        const closeCategorySelect = document.querySelector('[data-close-category-select]');
+        const closeCategoryNewInput = document.querySelector('[data-close-category-new]');
+        const closeCategoryAddBtn = document.querySelector('[data-close-category-add]');
         const closeResolutionInput = document.querySelector('#id_close_resolution_text');
         const closeCancelEls = document.querySelectorAll('[data-close-ticket-cancel]');
+        const closeCategoryCreateApiUrl = '{% url "chamados_close_category_create_api" %}';
         let closeResolver = null;
+        let closeModalMode = 'close';
 
         const askClosePayload = (initialFailure, mode = 'close') => new Promise((resolve) => {
-            if (!closeModal || !closeForm || !closeFailureInput || !closeResolutionInput) {
-                resolve({ confirmed: false, failureType: '', text: '' });
+            if (!closeModal || !closeForm || !closeFailureInput || !closeCategorySelect || !closeResolutionInput) {
+                resolve({ confirmed: false, failureType: '', closeCategoryId: '', text: '' });
                 return;
             }
             const isCloseMode = mode === 'close';
             if (closeTitle) closeTitle.textContent = isCloseMode ? 'Finalizar chamado' : 'Registrar ação';
             if (closeTextLabel) closeTextLabel.textContent = isCloseMode ? 'Resolução' : 'Ação / Correção';
             if (closeSubmitBtn) closeSubmitBtn.textContent = isCloseMode ? 'Finalizar' : 'Salvar ação';
+            closeModalMode = isCloseMode ? 'close' : 'action';
+            if (closeCategoryRow) closeCategoryRow.style.display = isCloseMode ? '' : 'none';
+            if (closeCategorySelect) closeCategorySelect.required = isCloseMode;
             closeResolutionInput.placeholder = isCloseMode
                 ? 'Descreva a resolução...'
                 : 'Descreva a ação/correção realizada...';
             closeResolver = resolve;
             closeFailureInput.value = initialFailure || '';
+            closeCategorySelect.value = '';
             closeResolutionInput.value = '';
             closeModal.hidden = false;
             closeResolutionInput.focus();
@@ -1073,13 +1099,59 @@
             closeForm.addEventListener('submit', (event) => {
                 event.preventDefault();
                 const failureType = (closeFailureInput?.value || '').trim();
+                const closeCategoryId = (closeCategorySelect?.value || '').trim();
                 const text = (closeResolutionInput?.value || '').trim();
                 if (!failureType || !text) return;
-                closeCloseModal({ confirmed: true, failureType, text });
+                if (closeModalMode === 'close' && !closeCategoryId) return;
+                closeCloseModal({ confirmed: true, failureType, closeCategoryId: closeModalMode === 'close' ? closeCategoryId : '', text });
+            });
+        }
+        if (closeCategoryAddBtn && closeCategoryNewInput && closeCategorySelect) {
+            closeCategoryAddBtn.addEventListener('click', async () => {
+                const name = (closeCategoryNewInput.value || '').trim();
+                if (!name) {
+                    closeCategoryNewInput.focus();
+                    return;
+                }
+                closeCategoryAddBtn.disabled = true;
+                try {
+                    const response = await fetch(closeCategoryCreateApiUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                            'X-CSRFToken': getCookie('csrftoken'),
+                        },
+                        body: new URLSearchParams({ name }),
+                    });
+                    const data = await response.json().catch(() => ({}));
+                    if (!response.ok || !data.ok || !data.item) {
+                        alert('Nao foi possivel cadastrar a categoria.');
+                        return;
+                    }
+                    const categoryId = String(data.item.id || '').trim();
+                    const categoryName = String(data.item.name || '').trim();
+                    if (!categoryId || !categoryName) return;
+                    let option = closeCategorySelect.querySelector(`option[value="${categoryId}"]`);
+                    if (!option) {
+                        option = document.createElement('option');
+                        option.value = categoryId;
+                        option.textContent = categoryName;
+                        closeCategorySelect.appendChild(option);
+                    } else {
+                        option.textContent = categoryName;
+                    }
+                    closeCategorySelect.value = categoryId;
+                    closeCategoryNewInput.value = '';
+                    closeCategorySelect.focus();
+                } catch (_) {
+                    alert('Falha de rede ao cadastrar categoria.');
+                } finally {
+                    closeCategoryAddBtn.disabled = false;
+                }
             });
         }
         closeCancelEls.forEach((el) => {
-            el.addEventListener('click', () => closeCloseModal({ confirmed: false, failureType: '', text: '' }));
+            el.addEventListener('click', () => closeCloseModal({ confirmed: false, failureType: '', closeCategoryId: '', text: '' }));
         });
 
         const ensureTimerControls = (card) => {
@@ -1202,6 +1274,7 @@
                 const previousParent = dragCard.parentElement;
                 let movedCard = dragCard;
                 let resolutionText = '';
+                let closeCategoryId = '';
                 let progressNote = '';
                 let failureType = '';
                 let actionCapturedByModal = false;
@@ -1238,6 +1311,7 @@
                         return;
                     }
                     resolutionText = (closePayload.text || '').trim();
+                    closeCategoryId = String(closePayload.closeCategoryId || '').trim();
                     failureType = normalizeFailureType(closePayload.failureType || currentSavedFailure);
                 }
                 if (!isClosing && isUserSource && isQueue) {
@@ -1356,6 +1430,7 @@
                             source_target: dragSourceTarget,
                             multi: draggingMulti ? '1' : '0',
                             resolution: resolutionText,
+                            close_category_id: closeCategoryId,
                             progress_note: progressNote,
                             failure_type: failureType,
                         }),
@@ -1373,6 +1448,8 @@
                             alert('Informe o que foi feito antes de mover para Pendente.');
                         } else if (responseData.error === 'resolution_required') {
                             alert('Informe a resolução para finalizar o chamado.');
+                        } else if (responseData.error === 'close_category_required' || responseData.error === 'close_category_invalid') {
+                            alert('Selecione uma categoria válida para finalizar o chamado.');
                         } else if (responseData.error === 'close_only_from_attendant') {
                             alert('Só é permitido finalizar chamado quando ele sai da coluna de um atendente.');
                         } else if (responseData.error === 'play_required') {
@@ -1731,6 +1808,7 @@
             setText('[data-detail-created-by]', data.ticket.created_by);
             setText('[data-detail-assignees]', data.ticket.assignees);
             setText('[data-detail-resolution]', data.ticket.resolution);
+            setText('[data-detail-close-category]', data.ticket.close_category);
 
             const attachLink = detailsModal.querySelector('[data-detail-attachment]');
             const noAttach = detailsModal.querySelector('[data-detail-no-attachment]');

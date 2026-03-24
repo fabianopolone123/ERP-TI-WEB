@@ -418,6 +418,17 @@ class Pendencia(models.Model):
         return f'{self.attendant.full_name}: {self.description}'
 
 
+class TicketCloseCategory(models.Model):
+    name = models.CharField(max_length=120, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['name', 'id']
+
+    def __str__(self) -> str:
+        return self.name
+
+
 class Ticket(models.Model):
     class TicketType(models.TextChoices):
         NAO_CLASSIFICADO = 'nao_classificado', 'Não classificado'
@@ -485,6 +496,13 @@ class Ticket(models.Model):
         related_name='handled_tickets',
     )
     attachment = models.FileField(upload_to='tickets/', null=True, blank=True)
+    close_category = models.ForeignKey(
+        TicketCloseCategory,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='tickets',
+    )
     resolution = models.TextField(blank=True, default='')
     current_cycle_started_at = models.DateTimeField(null=True, blank=True)
     last_failure_type = models.CharField(max_length=20, choices=FailureType.choices, blank=True, default='')
