@@ -14,7 +14,7 @@ import requests
 from django.conf import settings
 from django.contrib import messages
 from django.core.mail import send_mail
-from django.db import transaction
+from django.db import transaction, DatabaseError
 from django.db.models import Count, Q, Case, When, Value, IntegerField, Exists, OuterRef, Sum, Max
 from django.db.models.functions import TruncDate
 from django.shortcuts import redirect
@@ -4231,7 +4231,7 @@ def ticket_detail(request, ticket_id: int):
     ticket = (
         Ticket.objects.filter(id=ticket_id)
         .select_related('assigned_to', 'created_by')
-        .prefetch_related('collaborators', 'historical_attendants', 'timeline_events__actor_user', 'timeline_events__actor_ti')
+        .prefetch_related('collaborators', 'historical_attendants')
         .first()
     )
     if not ticket:
@@ -4261,23 +4261,27 @@ def ticket_detail(request, ticket_id: int):
             public_messages.append(payload)
 
     timeline_rows = []
-    for row in ticket.timeline_events.select_related('actor_user', 'actor_ti').order_by('created_at'):
-        actor_name = '-'
-        if row.actor_ti and row.actor_ti.full_name:
-            actor_name = row.actor_ti.full_name
-        elif row.actor_user:
-            actor_name = row.actor_user.get_full_name() or row.actor_user.username
-        timeline_rows.append(
-            {
-                'id': row.id,
-                'event_type': row.get_event_type_display(),
-                'from_status': _timeline_status_label(row.from_status),
-                'to_status': _timeline_status_label(row.to_status),
-                'note': row.note,
-                'actor': actor_name,
-                'created_at': timezone.localtime(row.created_at).strftime('%d/%m/%Y %H:%M'),
-            }
-        )
+    try:
+        for row in ticket.timeline_events.select_related('actor_user', 'actor_ti').order_by('created_at'):
+            actor_name = '-'
+            if row.actor_ti and row.actor_ti.full_name:
+                actor_name = row.actor_ti.full_name
+            elif row.actor_user:
+                actor_name = row.actor_user.get_full_name() or row.actor_user.username
+            timeline_rows.append(
+                {
+                    'id': row.id,
+                    'event_type': row.get_event_type_display(),
+                    'from_status': _timeline_status_label(row.from_status),
+                    'to_status': _timeline_status_label(row.to_status),
+                    'note': row.note,
+                    'actor': actor_name,
+                    'created_at': timezone.localtime(row.created_at).strftime('%d/%m/%Y %H:%M'),
+                }
+            )
+    except DatabaseError:
+        logger.exception('Falha ao carregar eventos de timeline do chamado #%s.', ticket_id)
+        timeline_rows = []
 
     historical_names: list[str] = []
     seen_names: set[str] = set()
@@ -4742,27 +4746,33 @@ class AuditoriaView(LoginRequiredMixin, TemplateView):
         is_ti = is_ti_user(self.request)
         context['is_ti_group'] = is_ti
         context['modules'] = build_modules('auditoria') if is_ti else []
-
-        logs = AuditLog.objects.all()
         q = (self.request.GET.get('q') or '').strip()
         event_type = (self.request.GET.get('tipo') or '').strip()
-        if q:
-            logs = logs.filter(
-                Q(description__icontains=q)
-                | Q(details__icontains=q)
-                | Q(username__icontains=q)
-                | Q(full_name__icontains=q)
-                | Q(path__icontains=q)
-                | Q(route_name__icontains=q)
-            )
-        if event_type in {AuditLog.EventType.ACCESS, AuditLog.EventType.ACTION, AuditLog.EventType.SYSTEM}:
-            logs = logs.filter(event_type=event_type)
-
-        context['audit_logs'] = logs.order_by('-created_at', '-id')[:500]
-        context['audit_total_count'] = logs.count()
+        context['audit_logs'] = []
+        context['audit_total_count'] = 0
         context['audit_q'] = q
         context['audit_tipo'] = event_type
         context['audit_event_types'] = AuditLog.EventType.choices
+
+        try:
+            logs = AuditLog.objects.all()
+            if q:
+                logs = logs.filter(
+                    Q(description__icontains=q)
+                    | Q(details__icontains=q)
+                    | Q(username__icontains=q)
+                    | Q(full_name__icontains=q)
+                    | Q(path__icontains=q)
+                    | Q(route_name__icontains=q)
+                )
+            if event_type in {AuditLog.EventType.ACCESS, AuditLog.EventType.ACTION, AuditLog.EventType.SYSTEM}:
+                logs = logs.filter(event_type=event_type)
+
+            context['audit_logs'] = logs.order_by('-created_at', '-id')[:500]
+            context['audit_total_count'] = logs.count()
+        except DatabaseError:
+            logger.exception('Falha ao carregar eventos de auditoria.')
+            messages.error(self.request, 'Nao foi possivel carregar os eventos agora. Tente novamente em instantes.')
         return context
 
 
