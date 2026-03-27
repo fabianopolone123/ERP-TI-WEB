@@ -155,13 +155,11 @@ def _vault_allowed_usernames() -> set[str]:
 def _is_vault_allowed_user(auth_user) -> bool:
     if not _is_ti_auth_user(auth_user):
         return False
-    username = (getattr(auth_user, 'username', '') or '').strip().lower()
-    if not username:
-        return False
     allowed = _vault_allowed_usernames()
     if not allowed:
         return False
-    return username in allowed
+    candidates = [candidate.lower() for candidate in _username_candidates(getattr(auth_user, 'username', ''))]
+    return any(candidate in allowed for candidate in candidates)
 
 
 def _login_rate_limit_config() -> tuple[int, int, int]:
