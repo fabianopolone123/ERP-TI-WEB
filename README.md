@@ -7,6 +7,13 @@ Veja `COFRE_SEGURANCA_OPERACAO.md` para:
 - hardening do Ubuntu e AppArmor
 - troubleshooting, rollback e riscos residuais
 
+## Estado atual do Ubuntu server
+Veja `UBUNTU_SERVER_ESTADO_ATUAL.md` para:
+- topologia dos servicos e portas
+- unit do ERP e hardening aplicado
+- AppArmor, deploy e comandos de verificacao
+- riscos residuais e rollback operacional
+
 ## HTTPS para rede interna
 Veja HTTPS_SETUP.md para configurar acesso HTTPS em outros PCs.
 
