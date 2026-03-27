@@ -3282,6 +3282,9 @@ class CofreView(LoginRequiredMixin, TemplateView):
         account_url = (request.POST.get('account_url') or '').strip()
         notes_plain = (request.POST.get('notes') or '').strip()
         password_plain = request.POST.get('password') or ''
+        current_password_plain = request.POST.get('current_password') or ''
+        new_password_plain = request.POST.get('new_password') or ''
+        new_password_confirm_plain = request.POST.get('new_password_confirm') or ''
 
         if not service_name:
             messages.error(request, 'Informe o nome do servico/sistema.')
@@ -3327,6 +3330,29 @@ class CofreView(LoginRequiredMixin, TemplateView):
                 return redirect('cofre')
 
             clear_notes = bool(request.POST.get('clear_notes'))
+            requested_password_change = bool(current_password_plain or new_password_plain or new_password_confirm_plain)
+            if password_plain and requested_password_change:
+                messages.error(request, 'Use apenas o fluxo de troca com senha atual, nova senha e confirmacao.')
+                return redirect('cofre')
+            if requested_password_change:
+                if not current_password_plain:
+                    messages.error(request, 'Informe a senha atual para trocar a credencial.')
+                    return redirect('cofre')
+                if not new_password_plain:
+                    messages.error(request, 'Informe a nova senha da credencial.')
+                    return redirect('cofre')
+                if new_password_plain != new_password_confirm_plain:
+                    messages.error(request, 'A confirmacao da nova senha nao confere.')
+                    return redirect('cofre')
+                try:
+                    current_password_saved = decrypt_vault_text(item.password_encrypted)
+                except VaultCryptoError as exc:
+                    messages.error(request, f'Falha ao validar a senha atual: {exc}')
+                    return redirect('cofre')
+                if not secrets.compare_digest(current_password_plain, current_password_saved):
+                    messages.error(request, 'A senha atual informada nao confere.')
+                    return redirect('cofre')
+
             item.service_name = service_name
             item.updated_by = request.user
             try:
@@ -3334,6 +3360,8 @@ class CofreView(LoginRequiredMixin, TemplateView):
                 item.account_url_encrypted = encrypt_vault_text(account_url)
                 if password_plain:
                     item.password_encrypted = encrypt_vault_text(password_plain)
+                elif requested_password_change:
+                    item.password_encrypted = encrypt_vault_text(new_password_plain)
                 if notes_plain:
                     item.notes_encrypted = encrypt_vault_text(notes_plain)
                 elif clear_notes:

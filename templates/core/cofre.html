@@ -171,7 +171,7 @@
                                 </label>
                             </div>
                         </div>
-                        <div class="form-row">
+                        <div class="form-row" data-vault-create-password-wrap>
                             <div style="flex:1;">
                                 <label for="id_vault_password" data-vault-password-label>Senha</label>
                                 <input
@@ -185,6 +185,40 @@
                                 <div class="muted" data-vault-password-help style="margin-top:-6px; margin-bottom: 12px;">
                                     A senha nunca aparece na listagem e fica criptografada no banco.
                                 </div>
+                            </div>
+                        </div>
+                        <div class="form-row" data-vault-change-password-wrap hidden>
+                            <div style="flex:1;">
+                                <label for="id_vault_current_password">Senha atual</label>
+                                <input
+                                    id="id_vault_current_password"
+                                    name="current_password"
+                                    type="password"
+                                    autocomplete="current-password"
+                                    data-vault-current-password
+                                />
+                            </div>
+                        </div>
+                        <div class="form-row" data-vault-change-password-wrap hidden>
+                            <div style="flex:1;">
+                                <label for="id_vault_new_password">Nova senha</label>
+                                <input
+                                    id="id_vault_new_password"
+                                    name="new_password"
+                                    type="password"
+                                    autocomplete="new-password"
+                                    data-vault-new-password
+                                />
+                            </div>
+                            <div style="flex:1;">
+                                <label for="id_vault_new_password_confirm">Repita a nova senha</label>
+                                <input
+                                    id="id_vault_new_password_confirm"
+                                    name="new_password_confirm"
+                                    type="password"
+                                    autocomplete="new-password"
+                                    data-vault-new-password-confirm
+                                />
                             </div>
                         </div>
                         <div style="display:flex; justify-content:flex-end; gap:8px;">
@@ -238,9 +272,14 @@
                     const notesInput = document.querySelector('[data-vault-notes]');
                     const clearNotesWrap = document.querySelector('[data-vault-clear-notes-wrap]');
                     const clearNotesInput = document.querySelector('[data-vault-clear-notes]');
+                    const createPasswordWrap = document.querySelector('[data-vault-create-password-wrap]');
                     const passwordInput = document.querySelector('[data-vault-password]');
                     const passwordLabel = document.querySelector('[data-vault-password-label]');
                     const passwordHelp = document.querySelector('[data-vault-password-help]');
+                    const changePasswordWrapEls = document.querySelectorAll('[data-vault-change-password-wrap]');
+                    const currentPasswordInput = document.querySelector('[data-vault-current-password]');
+                    const newPasswordInput = document.querySelector('[data-vault-new-password]');
+                    const newPasswordConfirmInput = document.querySelector('[data-vault-new-password-confirm]');
 
                     const revealModal = document.querySelector('[data-vault-reveal-modal]');
                     const revealCloseEls = document.querySelectorAll('[data-vault-reveal-close]');
@@ -250,7 +289,7 @@
                     const revealApiUrl = '{% url "cofre_reveal_api" %}';
                     let clearTimer = null;
 
-                    if (!modal || !openBtn || !form || !modalTitle || !actionInput || !itemIdInput || !serviceInput || !usernameInput || !urlInput || !notesInput || !clearNotesWrap || !clearNotesInput || !passwordInput || !passwordLabel || !passwordHelp || !revealModal || !revealTitle || !revealSecretInput || !copySecretBtn) return;
+                    if (!modal || !openBtn || !form || !modalTitle || !actionInput || !itemIdInput || !serviceInput || !usernameInput || !urlInput || !notesInput || !clearNotesWrap || !clearNotesInput || !createPasswordWrap || !passwordInput || !passwordLabel || !passwordHelp || !changePasswordWrapEls.length || !currentPasswordInput || !newPasswordInput || !newPasswordConfirmInput || !revealModal || !revealTitle || !revealSecretInput || !copySecretBtn) return;
 
                     const openCreate = () => {
                         actionInput.value = 'create';
@@ -266,6 +305,11 @@
                         passwordInput.required = true;
                         passwordLabel.textContent = 'Senha';
                         passwordHelp.textContent = 'A senha nunca aparece na listagem e fica criptografada no banco.';
+                        createPasswordWrap.hidden = false;
+                        changePasswordWrapEls.forEach((el) => { el.hidden = true; });
+                        currentPasswordInput.value = '';
+                        newPasswordInput.value = '';
+                        newPasswordConfirmInput.value = '';
                         modal.hidden = false;
                         serviceInput.focus();
                     };
@@ -282,8 +326,11 @@
                         clearNotesInput.checked = false;
                         passwordInput.value = '';
                         passwordInput.required = false;
-                        passwordLabel.textContent = 'Nova senha (opcional)';
-                        passwordHelp.textContent = 'Se ficar em branco, a senha atual sera mantida.';
+                        createPasswordWrap.hidden = true;
+                        changePasswordWrapEls.forEach((el) => { el.hidden = false; });
+                        currentPasswordInput.value = '';
+                        newPasswordInput.value = '';
+                        newPasswordConfirmInput.value = '';
                         modal.hidden = false;
                         serviceInput.focus();
                     };
