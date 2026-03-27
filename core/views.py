@@ -3592,32 +3592,6 @@ def cofre_reveal_api(request):
     if not _is_vault_unlocked_session(request):
         return JsonResponse({'ok': False, 'error': 'vault_locked'}, status=423)
 
-    blocked, failed_count, wait_seconds = _vault_reveal_block_status(request)
-    if blocked:
-        log_audit_event(
-            request=request,
-            event_type=AuditLog.EventType.ACTION,
-            description='Cofre: revelacao bloqueada por excesso de tentativas',
-            details=f'falhas_recentes={failed_count} aguarde={wait_seconds}s',
-            status_code=429,
-        )
-        return JsonResponse({'ok': False, 'error': 'reauth_blocked', 'wait_seconds': wait_seconds}, status=429)
-
-    gate_password = request.POST.get('vault_access_password') or ''
-    if not gate_password:
-        return JsonResponse({'ok': False, 'error': 'reauth_required'}, status=401)
-    if not _vault_password_matches(gate_password):
-        next_fail_count = failed_count + 1
-        max_attempts, block_window_minutes = _vault_reveal_limit_config()
-        log_audit_event(
-            request=request,
-            event_type=AuditLog.EventType.ACTION,
-            description='Cofre: reautenticacao de revelacao falhou',
-            details=f'falhas_recentes={next_fail_count} limite={max_attempts} janela={block_window_minutes}min',
-            status_code=401,
-        )
-        return JsonResponse({'ok': False, 'error': 'reauth_failed'}, status=401)
-
     item_id_raw = (request.POST.get('item_id') or '').strip()
     try:
         item_id = int(item_id_raw)
