@@ -400,6 +400,45 @@ def _vault_unlock_block_status(request) -> tuple[bool, int, int]:
     return remaining > 0, failed_count, max(0, remaining)
 
 
+def _vault_reveal_limit_config() -> tuple[int, int]:
+    max_attempts_raw = getattr(settings, 'VAULT_REVEAL_MAX_ATTEMPTS', 5)
+    block_window_raw = getattr(settings, 'VAULT_REVEAL_BLOCK_WINDOW_MINUTES', 10)
+    try:
+        max_attempts = int(max_attempts_raw or 5)
+    except (TypeError, ValueError):
+        max_attempts = 5
+    try:
+        block_window_minutes = int(block_window_raw or 10)
+    except (TypeError, ValueError):
+        block_window_minutes = 10
+    max_attempts = max(1, min(max_attempts, 20))
+    block_window_minutes = max(1, min(block_window_minutes, 1440))
+    return max_attempts, block_window_minutes
+
+
+def _vault_reveal_block_status(request) -> tuple[bool, int, int]:
+    if not getattr(request, 'user', None) or not getattr(request.user, 'is_authenticated', False):
+        return False, 0, 0
+    max_attempts, block_window_minutes = _vault_reveal_limit_config()
+    cutoff = timezone.now() - timedelta(minutes=block_window_minutes)
+    ip = _request_client_ip(request)
+    failed_qs = AuditLog.objects.filter(
+        event_type=AuditLog.EventType.ACTION,
+        description='Cofre: reautenticacao de revelacao falhou',
+        username=(request.user.username or '').strip(),
+        ip_address=ip,
+        created_at__gte=cutoff,
+    ).order_by('-created_at')
+    failed_count = failed_qs.count()
+    if failed_count < max_attempts:
+        return False, failed_count, 0
+    last_failed = failed_qs.first()
+    if not last_failed or not last_failed.created_at:
+        return False, failed_count, 0
+    remaining = int(((last_failed.created_at + timedelta(minutes=block_window_minutes)) - timezone.now()).total_seconds())
+    return remaining > 0, failed_count, max(0, remaining)
+
+
 def _decrypt_vault_optional(value: str) -> str:
     token = (value or '').strip()
     if not token:
@@ -3540,14 +3579,28 @@ def cofre_reveal_api(request):
     if not _is_vault_unlocked_session(request):
         return JsonResponse({'ok': False, 'error': 'vault_locked'}, status=423)
 
+    blocked, failed_count, wait_seconds = _vault_reveal_block_status(request)
+    if blocked:
+        log_audit_event(
+            request=request,
+            event_type=AuditLog.EventType.ACTION,
+            description='Cofre: revelacao bloqueada por excesso de tentativas',
+            details=f'falhas_recentes={failed_count} aguarde={wait_seconds}s',
+            status_code=429,
+        )
+        return JsonResponse({'ok': False, 'error': 'reauth_blocked', 'wait_seconds': wait_seconds}, status=429)
+
     gate_password = request.POST.get('vault_access_password') or ''
     if not gate_password:
         return JsonResponse({'ok': False, 'error': 'reauth_required'}, status=401)
     if not _vault_password_matches(gate_password):
+        next_fail_count = failed_count + 1
+        max_attempts, block_window_minutes = _vault_reveal_limit_config()
         log_audit_event(
             request=request,
             event_type=AuditLog.EventType.ACTION,
             description='Cofre: reautenticacao de revelacao falhou',
+            details=f'falhas_recentes={next_fail_count} limite={max_attempts} janela={block_window_minutes}min',
             status_code=401,
         )
         return JsonResponse({'ok': False, 'error': 'reauth_failed'}, status=401)

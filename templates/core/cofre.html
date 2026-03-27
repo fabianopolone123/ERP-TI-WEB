@@ -385,6 +385,10 @@
                                 if (!response.ok || !data.ok) {
                                     if (data.error === 'vault_locked') {
                                         alert('Cofre bloqueado. Desbloqueie novamente para revelar a senha.');
+                                    } else if (data.error === 'reauth_blocked') {
+                                        const waitSeconds = Number(data.wait_seconds || 0);
+                                        const waitMinutes = Math.max(1, Math.ceil(waitSeconds / 60));
+                                        alert(`Muitas tentativas invalidas para revelar senhas. Aguarde cerca de ${waitMinutes} minuto(s) e tente novamente.`);
                                     } else if (data.error === 'reauth_required' || data.error === 'reauth_failed') {
                                         alert('Senha adicional do cofre invalida.');
                                     } else {
