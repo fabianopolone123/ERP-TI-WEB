@@ -1,4 +1,11 @@
-﻿# ERP-TI-WEB
+# ERP-TI-WEB
+
+## Seguranca do cofre e hardening
+Veja `COFRE_SEGURANCA_OPERACAO.md` para:
+- arquitetura e controles atuais do cofre
+- ordem segura de deploy em producao
+- hardening do Ubuntu e AppArmor
+- troubleshooting, rollback e riscos residuais
 
 ## HTTPS para rede interna
 Veja HTTPS_SETUP.md para configurar acesso HTTPS em outros PCs.
