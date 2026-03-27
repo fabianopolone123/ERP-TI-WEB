@@ -11,6 +11,29 @@ from .audit import describe_request, log_audit_event
 from .models import ERPUser
 
 
+def _username_candidates(raw_username: str) -> list[str]:
+    raw = (raw_username or '').strip()
+    if not raw:
+        return []
+    candidates: list[str] = [raw]
+    if '\\' in raw:
+        tail = raw.rsplit('\\', 1)[-1].strip()
+        if tail:
+            candidates.append(tail)
+    if '@' in raw:
+        local = raw.split('@', 1)[0].strip()
+        if local:
+            candidates.append(local)
+    uniq: list[str] = []
+    seen: set[str] = set()
+    for item in candidates:
+        key = item.lower()
+        if key and key not in seen:
+            seen.add(key)
+            uniq.append(item)
+    return uniq
+
+
 def _is_ti_authenticated_request(request) -> bool:
     user = getattr(request, 'user', None)
     if not (user and getattr(user, 'is_authenticated', False)):
@@ -28,11 +51,16 @@ def _is_ti_authenticated_request(request) -> bool:
     if cached_username == username and isinstance(cached_is_ti, bool):
         return cached_is_ti
 
-    is_ti = ERPUser.objects.filter(
-        username__iexact=username,
-        department__iexact='TI',
-        is_active=True,
-    ).exists()
+    candidates = _username_candidates(username)
+    is_ti = False
+    for candidate in candidates:
+        if ERPUser.objects.filter(
+            username__iexact=candidate,
+            department__iexact='TI',
+            is_active=True,
+        ).exists():
+            is_ti = True
+            break
     session['ti_cache_username'] = username
     session['ti_cache_is_ti'] = bool(is_ti)
     return bool(is_ti)

@@ -133,11 +133,14 @@ def _request_client_ip(request) -> str:
 
 
 def _is_ti_auth_user(auth_user) -> bool:
-    username = (getattr(auth_user, 'username', '') or '').strip()
-    if not username:
+    candidates = _username_candidates(getattr(auth_user, 'username', ''))
+    if not candidates:
         return False
+    query = Q()
+    for candidate in candidates:
+        query |= Q(username__iexact=candidate)
     return ERPUser.objects.filter(
-        username__iexact=username,
+        query,
         department__iexact='TI',
         is_active=True,
     ).exists()
