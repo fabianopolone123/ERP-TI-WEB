@@ -13,6 +13,7 @@ from pathlib import Path
 import requests
 from django.conf import settings
 from django.contrib import messages
+from django.contrib.auth.hashers import check_password
 from django.core.mail import send_mail
 from django.db import transaction, DatabaseError
 from django.db.models import Count, Q, Case, When, Value, IntegerField, Exists, OuterRef, Sum, Max
@@ -55,6 +56,7 @@ from .models import (
     AccessMember,
     AuditLog,
     Dica,
+    PasswordVaultItem,
     Responsibility,
     Pendencia,
     TicketCloseCategory,
@@ -70,6 +72,13 @@ from .models import (
 )
 from .wapi import find_whatsapp_groups_by_name, send_whatsapp_message
 from .access_importer import refresh_access_snapshot
+from .vault_crypto import (
+    VaultCryptoError,
+    decrypt_vault_text,
+    encrypt_vault_text,
+    get_vault_status,
+    is_vault_feature_enabled,
+)
 from .network_inventory import (
     parse_hosts_text,
     sync_network_inventory,
@@ -92,11 +101,13 @@ DEFAULT_WA_TEMPLATES = {
     'status_update': 'Chamado #{id} atualizado: {status} | Responsável: {responsavel} | Solicitante: {solicitante}',
     'new_message': 'Nova mensagem no chamado #{id}: {message} | Solicitante: {solicitante}',
 }
+VAULT_UNLOCK_SESSION_KEY = 'vault_unlocked_until_ts'
 
 ERP_MODULES = [
     {'slug': 'chamados', 'label': 'Chamados', 'url_name': 'chamados'},
     {'slug': 'usuarios', 'label': 'Usuários', 'url_name': 'usuarios'},
     {'slug': 'atribuicoes', 'label': 'Atribuições', 'url_name': 'atribuicoes'},
+    {'slug': 'cofre', 'label': 'Cofre', 'url_name': 'cofre'},
     {'slug': 'acessos', 'label': 'Acessos', 'url_name': 'acessos'},
     {'slug': 'equipamentos', 'label': 'Equipamentos', 'url_name': 'equipamentos'},
     {'slug': 'ips', 'label': 'IPs', 'url_name': None},
@@ -111,6 +122,211 @@ ERP_MODULES = [
     {'slug': 'relatorios', 'label': 'Relatórios', 'url_name': 'relatorios'},
     {'slug': 'auditoria', 'label': 'Auditoria', 'url_name': 'auditoria'},
 ]
+
+
+def _request_client_ip(request) -> str:
+    xff = (request.META.get('HTTP_X_FORWARDED_FOR') or '').strip()
+    if xff:
+        return xff.split(',')[0].strip()
+    return (request.META.get('REMOTE_ADDR') or '').strip()
+
+
+def _is_ti_auth_user(auth_user) -> bool:
+    username = (getattr(auth_user, 'username', '') or '').strip()
+    if not username:
+        return False
+    return ERPUser.objects.filter(
+        username__iexact=username,
+        department__iexact='TI',
+        is_active=True,
+    ).exists()
+
+
+def _login_rate_limit_config() -> tuple[int, int, int]:
+    window_raw = getattr(settings, 'LOGIN_RATE_LIMIT_WINDOW_MINUTES', 15)
+    per_user_ip_raw = getattr(settings, 'LOGIN_RATE_LIMIT_MAX_FAILURES_PER_USER_IP', 5)
+    per_ip_raw = getattr(settings, 'LOGIN_RATE_LIMIT_MAX_FAILURES_PER_IP', 20)
+    try:
+        window_minutes = int(window_raw or 15)
+    except (TypeError, ValueError):
+        window_minutes = 15
+    try:
+        max_per_user_ip = int(per_user_ip_raw or 5)
+    except (TypeError, ValueError):
+        max_per_user_ip = 5
+    try:
+        max_per_ip = int(per_ip_raw or 20)
+    except (TypeError, ValueError):
+        max_per_ip = 20
+    window_minutes = max(1, min(window_minutes, 1440))
+    max_per_user_ip = max(1, min(max_per_user_ip, 100))
+    max_per_ip = max(1, min(max_per_ip, 2000))
+    return window_minutes, max_per_user_ip, max_per_ip
+
+
+def _login_block_status(username: str, ip: str) -> tuple[bool, int, int, int, int, int]:
+    username_clean = (username or '').strip()
+    ip_clean = (ip or '').strip()
+    if not ip_clean:
+        return False, 0, 0, 0, 0, 0
+
+    window_minutes, max_per_user_ip, max_per_ip = _login_rate_limit_config()
+    cutoff = timezone.now() - timedelta(minutes=window_minutes)
+    failed_logs = AuditLog.objects.filter(
+        event_type=AuditLog.EventType.ACTION,
+        description='Login: tentativa falhou',
+        created_at__gte=cutoff,
+        ip_address=ip_clean,
+    )
+
+    per_ip_count = failed_logs.count()
+    per_user_ip_count = 0
+    if username_clean:
+        per_user_ip_count = failed_logs.filter(username__iexact=username_clean).count()
+
+    blocked_by_ip = per_ip_count >= max_per_ip
+    blocked_by_user_ip = bool(username_clean) and per_user_ip_count >= max_per_user_ip
+    if not blocked_by_ip and not blocked_by_user_ip:
+        return False, 0, per_user_ip_count, per_ip_count, max_per_user_ip, max_per_ip
+
+    latest_event = failed_logs.order_by('-created_at').first()
+    wait_seconds = 0
+    if latest_event and latest_event.created_at:
+        wait_seconds = int(((latest_event.created_at + timedelta(minutes=window_minutes)) - timezone.now()).total_seconds())
+    return True, max(0, wait_seconds), per_user_ip_count, per_ip_count, max_per_user_ip, max_per_ip
+
+
+def _record_login_audit_event(request, *, description: str, status_code: int, username: str = '', details: str = '') -> None:
+    try:
+        AuditLog.objects.create(
+            user=None,
+            username=(username or '').strip()[:150],
+            full_name='',
+            event_type=AuditLog.EventType.ACTION,
+            method=(getattr(request, 'method', '') or '')[:10],
+            path=(getattr(request, 'path', '') or '')[:300],
+            route_name=(getattr(getattr(request, 'resolver_match', None), 'url_name', '') or 'login')[:120],
+            status_code=int(status_code or 0),
+            description=(description or 'Login')[:300],
+            details=details or '',
+            ip_address=_request_client_ip(request)[:64],
+        )
+    except Exception:
+        pass
+
+
+def _vault_access_password_required() -> bool:
+    plain = (getattr(settings, 'VAULT_ACCESS_PASSWORD', '') or '').strip()
+    hashed = (getattr(settings, 'VAULT_ACCESS_PASSWORD_HASH', '') or '').strip()
+    return bool(plain or hashed)
+
+
+def _vault_unlock_minutes() -> int:
+    raw = getattr(settings, 'VAULT_UNLOCK_SESSION_MINUTES', 15)
+    try:
+        minutes = int(raw or 15)
+    except (TypeError, ValueError):
+        minutes = 15
+    return max(1, min(minutes, 1440))
+
+
+def _vault_password_matches(candidate: str) -> bool:
+    raw_value = candidate or ''
+    if not raw_value:
+        return False
+    hashed = (getattr(settings, 'VAULT_ACCESS_PASSWORD_HASH', '') or '').strip()
+    if hashed:
+        try:
+            return bool(check_password(raw_value, hashed))
+        except Exception:
+            return False
+    plain = (getattr(settings, 'VAULT_ACCESS_PASSWORD', '') or '').strip()
+    if plain:
+        try:
+            return bool(secrets.compare_digest(raw_value, plain))
+        except Exception:
+            return False
+    return False
+
+
+def _is_vault_unlocked_session(request) -> bool:
+    if not _vault_access_password_required():
+        return False
+    raw = request.session.get(VAULT_UNLOCK_SESSION_KEY)
+    try:
+        unlocked_until = int(raw or 0)
+    except (TypeError, ValueError):
+        unlocked_until = 0
+    now_ts = int(timezone.now().timestamp())
+    if unlocked_until <= now_ts:
+        if VAULT_UNLOCK_SESSION_KEY in request.session:
+            request.session.pop(VAULT_UNLOCK_SESSION_KEY, None)
+            request.session.modified = True
+        return False
+    return True
+
+
+def _set_vault_unlocked_session(request) -> int:
+    minutes = _vault_unlock_minutes()
+    unlocked_until = int((timezone.now() + timedelta(minutes=minutes)).timestamp())
+    request.session[VAULT_UNLOCK_SESSION_KEY] = unlocked_until
+    request.session.modified = True
+    return minutes
+
+
+def _clear_vault_unlocked_session(request) -> None:
+    if VAULT_UNLOCK_SESSION_KEY in request.session:
+        request.session.pop(VAULT_UNLOCK_SESSION_KEY, None)
+        request.session.modified = True
+
+
+def _vault_unlock_limit_config() -> tuple[int, int]:
+    max_attempts_raw = getattr(settings, 'VAULT_UNLOCK_MAX_ATTEMPTS', 5)
+    block_window_raw = getattr(settings, 'VAULT_UNLOCK_BLOCK_WINDOW_MINUTES', 15)
+    try:
+        max_attempts = int(max_attempts_raw or 5)
+    except (TypeError, ValueError):
+        max_attempts = 5
+    try:
+        block_window_minutes = int(block_window_raw or 15)
+    except (TypeError, ValueError):
+        block_window_minutes = 15
+    max_attempts = max(1, min(max_attempts, 20))
+    block_window_minutes = max(1, min(block_window_minutes, 1440))
+    return max_attempts, block_window_minutes
+
+
+def _vault_unlock_block_status(request) -> tuple[bool, int, int]:
+    if not getattr(request, 'user', None) or not getattr(request.user, 'is_authenticated', False):
+        return False, 0, 0
+    max_attempts, block_window_minutes = _vault_unlock_limit_config()
+    cutoff = timezone.now() - timedelta(minutes=block_window_minutes)
+    ip = _request_client_ip(request)
+    failed_qs = AuditLog.objects.filter(
+        event_type=AuditLog.EventType.ACTION,
+        description='Cofre: tentativa de desbloqueio falhou',
+        username=(request.user.username or '').strip(),
+        ip_address=ip,
+        created_at__gte=cutoff,
+    ).order_by('-created_at')
+    failed_count = failed_qs.count()
+    if failed_count < max_attempts:
+        return False, failed_count, 0
+    last_failed = failed_qs.first()
+    if not last_failed or not last_failed.created_at:
+        return False, failed_count, 0
+    remaining = int(((last_failed.created_at + timedelta(minutes=block_window_minutes)) - timezone.now()).total_seconds())
+    return remaining > 0, failed_count, max(0, remaining)
+
+
+def _decrypt_vault_optional(value: str) -> str:
+    token = (value or '').strip()
+    if not token:
+        return ''
+    try:
+        return decrypt_vault_text(token)
+    except Exception:
+        return ''
 
 
 def _normalize_failure_type(raw_value: str) -> str:
@@ -130,6 +346,8 @@ def build_modules(active_slug: str | None, allowed_slugs: set[str] | None = None
     allowed = set(allowed_slugs or [])
     modules = []
     for module in ERP_MODULES:
+        if module['slug'] == 'cofre' and not is_vault_feature_enabled():
+            continue
         if allowed and module['slug'] not in allowed:
             continue
         url_name = module.get('url_name')
@@ -873,12 +1091,56 @@ class CustomLoginView(auth_views.LoginView):
     template_name = 'auth/login.html'
 
     def post(self, request, *args, **kwargs):
+        username = (request.POST.get('username') or '').strip()
+        ip = _request_client_ip(request)
+        is_blocked, wait_seconds, per_user_ip_count, per_ip_count, max_user_ip, max_ip = _login_block_status(username, ip)
+        if is_blocked:
+            wait_minutes = max(1, int((wait_seconds + 59) // 60))
+            _record_login_audit_event(
+                request,
+                description='Login: bloqueado por rate limit',
+                status_code=429,
+                username=username,
+                details=(
+                    f'falhas_usuario_ip={per_user_ip_count}/{max_user_ip} '
+                    f'falhas_ip={per_ip_count}/{max_ip} '
+                    f'aguarde={wait_minutes}min'
+                ),
+            )
+            messages.error(request, f'Muitas tentativas de login. Aguarde cerca de {wait_minutes} minuto(s).')
+            return redirect(request.get_full_path())
         try:
             return super().post(request, *args, **kwargs)
         except Exception:
             logger.exception('Falha inesperada no login para usuario=%s', (request.POST.get('username') or '').strip())
             messages.error(request, 'Falha temporaria ao entrar no sistema. Tente novamente em alguns segundos.')
             return redirect(request.get_full_path())
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        auth_user = form.get_user()
+        username = (getattr(auth_user, 'username', '') or '').strip()
+        _record_login_audit_event(
+            self.request,
+            description='Login: sucesso',
+            status_code=200,
+            username=username,
+        )
+        if _is_ti_auth_user(auth_user):
+            self.request.session['ti_last_activity_ts'] = int(timezone.now().timestamp())
+            self.request.session['ti_cache_username'] = username
+            self.request.session['ti_cache_is_ti'] = True
+        return response
+
+    def form_invalid(self, form):
+        username = (self.request.POST.get('username') or '').strip()
+        _record_login_audit_event(
+            self.request,
+            description='Login: tentativa falhou',
+            status_code=401,
+            username=username,
+        )
+        return super().form_invalid(form)
 
     def get_success_url(self):
         if is_ti_user(self.request):
@@ -2901,6 +3163,278 @@ class AtribuicoesReportView(LoginRequiredMixin, TemplateView):
         context['ti_profiles_report'] = ti_profiles_report
         context['generated_at'] = timezone.localtime(timezone.now())
         return context
+
+
+class CofreView(LoginRequiredMixin, TemplateView):
+    template_name = 'core/cofre.html'
+
+    def dispatch(self, request, *args, **kwargs):
+        if not is_vault_feature_enabled():
+            messages.info(request, 'Cofre desabilitado nesta instalacao.')
+            return redirect('chamados')
+        return super().dispatch(request, *args, **kwargs)
+
+    def render_to_response(self, context, **response_kwargs):
+        response = super().render_to_response(context, **response_kwargs)
+        response['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        response['Pragma'] = 'no-cache'
+        return response
+
+    def post(self, request, *args, **kwargs):
+        if not is_ti_user(request):
+            messages.error(request, 'Apenas usuarios do departamento TI podem usar o cofre.')
+            return redirect(request.get_full_path())
+
+        vault_ready, vault_status_message = get_vault_status()
+        action = (request.POST.get('action') or 'create').strip().lower()
+
+        if action == 'unlock':
+            if not vault_ready:
+                messages.error(request, vault_status_message or 'Cofre indisponivel.')
+                return redirect('cofre')
+            if not _vault_access_password_required():
+                messages.error(
+                    request,
+                    'Configure VAULT_ACCESS_PASSWORD ou VAULT_ACCESS_PASSWORD_HASH para habilitar o bloqueio adicional.',
+                )
+                return redirect('cofre')
+            blocked, failed_count, wait_seconds = _vault_unlock_block_status(request)
+            if blocked:
+                wait_minutes = max(1, int((wait_seconds + 59) // 60))
+                messages.error(
+                    request,
+                    f'Muitas tentativas invalidas no cofre. Tente novamente em cerca de {wait_minutes} minuto(s).',
+                )
+                return redirect('cofre')
+            gate_password = request.POST.get('vault_access_password') or ''
+            if not _vault_password_matches(gate_password):
+                next_fail_count = failed_count + 1
+                max_attempts, block_window_minutes = _vault_unlock_limit_config()
+                log_audit_event(
+                    request=request,
+                    event_type=AuditLog.EventType.ACTION,
+                    description='Cofre: tentativa de desbloqueio falhou',
+                    details=f'falhas_recentes={next_fail_count} limite={max_attempts} janela={block_window_minutes}min',
+                    status_code=401,
+                )
+                messages.error(request, 'Senha adicional do cofre invalida.')
+                return redirect('cofre')
+            unlocked_minutes = _set_vault_unlocked_session(request)
+            log_audit_event(
+                request=request,
+                event_type=AuditLog.EventType.ACTION,
+                description='Cofre: desbloqueado',
+                details=f'sessao_liberada_por={unlocked_minutes}min',
+                status_code=200,
+            )
+            messages.success(request, f'Cofre desbloqueado por {unlocked_minutes} minuto(s).')
+            return redirect('cofre')
+
+        if action == 'lock':
+            _clear_vault_unlocked_session(request)
+            log_audit_event(
+                request=request,
+                event_type=AuditLog.EventType.ACTION,
+                description='Cofre: bloqueado manualmente',
+                status_code=200,
+            )
+            messages.info(request, 'Cofre bloqueado.')
+            return redirect('cofre')
+
+        if not vault_ready:
+            messages.error(request, vault_status_message or 'Cofre indisponivel.')
+            return redirect('cofre')
+        if not _vault_access_password_required():
+            messages.error(
+                request,
+                'Configure VAULT_ACCESS_PASSWORD ou VAULT_ACCESS_PASSWORD_HASH para liberar o uso do cofre.',
+            )
+            return redirect('cofre')
+        if not _is_vault_unlocked_session(request):
+            messages.error(request, 'Desbloqueie o cofre com a senha adicional para continuar.')
+            return redirect('cofre')
+
+        if action == 'delete':
+            item_id_raw = (request.POST.get('item_id') or '').strip()
+            try:
+                item_id = int(item_id_raw)
+            except (TypeError, ValueError):
+                messages.error(request, 'Credencial invalida para exclusao.')
+                return redirect('cofre')
+            item = PasswordVaultItem.objects.filter(id=item_id).first()
+            if not item:
+                messages.error(request, 'Credencial nao encontrada.')
+                return redirect('cofre')
+            service_name = item.service_name
+            item.delete()
+            log_audit_event(
+                request=request,
+                event_type=AuditLog.EventType.ACTION,
+                description='Cofre: credencial removida',
+                details=f'item_id={item_id} service={service_name}',
+                status_code=200,
+            )
+            messages.success(request, 'Credencial removida com sucesso.')
+            return redirect('cofre')
+
+        service_name = (request.POST.get('service_name') or '').strip()
+        account_username = (request.POST.get('account_username') or '').strip()
+        account_url = (request.POST.get('account_url') or '').strip()
+        notes_plain = (request.POST.get('notes') or '').strip()
+        password_plain = request.POST.get('password') or ''
+
+        if not service_name:
+            messages.error(request, 'Informe o nome do servico/sistema.')
+            return redirect('cofre')
+
+        if action == 'create':
+            if not password_plain:
+                messages.error(request, 'Informe a senha para cadastrar.')
+                return redirect('cofre')
+            try:
+                item = PasswordVaultItem.objects.create(
+                    service_name=service_name,
+                    account_username_encrypted=encrypt_vault_text(account_username),
+                    account_url_encrypted=encrypt_vault_text(account_url),
+                    password_encrypted=encrypt_vault_text(password_plain),
+                    notes_encrypted=encrypt_vault_text(notes_plain),
+                    created_by=request.user,
+                    updated_by=request.user,
+                )
+            except VaultCryptoError as exc:
+                messages.error(request, f'Falha de criptografia no cofre: {exc}')
+                return redirect('cofre')
+            log_audit_event(
+                request=request,
+                event_type=AuditLog.EventType.ACTION,
+                description='Cofre: credencial cadastrada',
+                details=f'item_id={item.id} service={item.service_name}',
+                status_code=200,
+            )
+            messages.success(request, 'Credencial cadastrada com sucesso.')
+            return redirect('cofre')
+
+        if action == 'update':
+            item_id_raw = (request.POST.get('item_id') or '').strip()
+            try:
+                item_id = int(item_id_raw)
+            except (TypeError, ValueError):
+                messages.error(request, 'Credencial invalida para edicao.')
+                return redirect('cofre')
+            item = PasswordVaultItem.objects.filter(id=item_id).first()
+            if not item:
+                messages.error(request, 'Credencial nao encontrada.')
+                return redirect('cofre')
+
+            clear_notes = bool(request.POST.get('clear_notes'))
+            item.service_name = service_name
+            item.updated_by = request.user
+            try:
+                item.account_username_encrypted = encrypt_vault_text(account_username)
+                item.account_url_encrypted = encrypt_vault_text(account_url)
+                if password_plain:
+                    item.password_encrypted = encrypt_vault_text(password_plain)
+                if notes_plain:
+                    item.notes_encrypted = encrypt_vault_text(notes_plain)
+                elif clear_notes:
+                    item.notes_encrypted = ''
+                item.save()
+            except VaultCryptoError as exc:
+                messages.error(request, f'Falha de criptografia no cofre: {exc}')
+                return redirect('cofre')
+
+            log_audit_event(
+                request=request,
+                event_type=AuditLog.EventType.ACTION,
+                description='Cofre: credencial editada',
+                details=f'item_id={item.id} service={item.service_name}',
+                status_code=200,
+            )
+            messages.success(request, 'Credencial atualizada com sucesso.')
+            return redirect('cofre')
+
+        messages.error(request, 'Acao invalida para o cofre.')
+        return redirect('cofre')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        is_ti = is_ti_user(self.request)
+        vault_ready, vault_status_message = get_vault_status()
+        context['is_ti_group'] = is_ti
+        context['modules'] = build_modules('cofre') if is_ti else []
+        context['vault_configured'] = vault_ready
+        context['vault_status_message'] = vault_status_message
+        context['vault_access_password_required'] = _vault_access_password_required()
+        context['vault_unlock_minutes'] = _vault_unlock_minutes()
+        context['vault_unlocked'] = _is_vault_unlocked_session(self.request) if is_ti else False
+        is_blocked, failed_count, wait_seconds = _vault_unlock_block_status(self.request) if is_ti else (False, 0, 0)
+        context['vault_unlock_blocked'] = is_blocked
+        context['vault_failed_attempts_recent'] = failed_count
+        context['vault_unlock_wait_seconds'] = wait_seconds
+        context['vault_items'] = []
+        if is_ti and vault_ready and context['vault_access_password_required'] and context['vault_unlocked']:
+            items = list(PasswordVaultItem.objects.select_related('created_by', 'updated_by').order_by('service_name', 'id'))
+            for item in items:
+                item.account_username_plain = _decrypt_vault_optional(item.account_username_encrypted)
+                item.account_url_plain = _decrypt_vault_optional(item.account_url_encrypted)
+            context['vault_items'] = items
+        return context
+
+
+@login_required
+@require_POST
+def cofre_reveal_api(request):
+    if not is_vault_feature_enabled():
+        return JsonResponse({'ok': False, 'error': 'vault_disabled'}, status=404)
+    if not is_ti_user(request):
+        return JsonResponse({'ok': False, 'error': 'forbidden'}, status=403)
+    vault_ready, _vault_status_message = get_vault_status()
+    if not vault_ready:
+        return JsonResponse({'ok': False, 'error': 'vault_not_configured'}, status=503)
+    if not _vault_access_password_required():
+        return JsonResponse({'ok': False, 'error': 'vault_access_not_configured'}, status=503)
+    if not _is_vault_unlocked_session(request):
+        return JsonResponse({'ok': False, 'error': 'vault_locked'}, status=423)
+
+    gate_password = request.POST.get('vault_access_password') or ''
+    if not gate_password:
+        return JsonResponse({'ok': False, 'error': 'reauth_required'}, status=401)
+    if not _vault_password_matches(gate_password):
+        log_audit_event(
+            request=request,
+            event_type=AuditLog.EventType.ACTION,
+            description='Cofre: reautenticacao de revelacao falhou',
+            status_code=401,
+        )
+        return JsonResponse({'ok': False, 'error': 'reauth_failed'}, status=401)
+
+    item_id_raw = (request.POST.get('item_id') or '').strip()
+    try:
+        item_id = int(item_id_raw)
+    except (TypeError, ValueError):
+        return JsonResponse({'ok': False, 'error': 'invalid_item_id'}, status=400)
+
+    item = PasswordVaultItem.objects.filter(id=item_id).first()
+    if not item:
+        return JsonResponse({'ok': False, 'error': 'item_not_found'}, status=404)
+
+    try:
+        secret = decrypt_vault_text(item.password_encrypted)
+    except VaultCryptoError:
+        return JsonResponse({'ok': False, 'error': 'decrypt_error'}, status=500)
+
+    log_audit_event(
+        request=request,
+        event_type=AuditLog.EventType.ACTION,
+        description='Cofre: senha visualizada',
+        details=f'item_id={item.id} service={item.service_name}',
+        status_code=200,
+    )
+
+    response = JsonResponse({'ok': True, 'secret': secret, 'service_name': item.service_name})
+    response['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    response['Pragma'] = 'no-cache'
+    return response
 
 
 class PendenciasView(LoginRequiredMixin, TemplateView):

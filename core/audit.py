@@ -48,6 +48,7 @@ def describe_request(request, response=None) -> tuple[str, str, str]:
         'chamados': 'Chamados',
         'usuarios': 'Usuarios',
         'atribuicoes': 'Atribuicoes',
+        'cofre': 'Cofre',
         'pendencias': 'Pendencias',
         'acessos': 'Acessos',
         'equipamentos': 'Equipamentos',
@@ -85,6 +86,8 @@ def describe_request(request, response=None) -> tuple[str, str, str]:
             return ('action', f'Executou acao em {labels[route_name]}', f'action={action}' if action else '')
         if route_name and route_name.startswith('chamados_'):
             return ('action', f'Acao em chamados ({route_name})', f'action={action}' if action else '')
+        if route_name and route_name.startswith('cofre_'):
+            return ('action', f'Acao em cofre ({route_name})', f'action={action}' if action else '')
         if route_name == 'logout':
             return ('action', 'Saiu do sistema', '')
         return ('action', f'POST {path or route_name}', f'action={action}' if action else '')

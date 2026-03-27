@@ -13,7 +13,9 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 from pathlib import Path
 import os
 import secrets
+import shlex
 import socket
+import subprocess
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -41,6 +43,68 @@ def _env_bool(name: str, default: bool = False) -> bool:
 def _env_csv(name: str, default: str = '') -> list[str]:
     raw = os.environ.get(name, default)
     return [item.strip() for item in (raw or '').split(',') if item.strip()]
+
+
+def _read_secret_from_file(path_raw: str) -> str:
+    path_text = (path_raw or '').strip()
+    if not path_text:
+        return ''
+    try:
+        secret_path = Path(path_text).expanduser()
+        if not secret_path.is_absolute():
+            secret_path = (BASE_DIR / secret_path).resolve()
+        if not secret_path.exists() or not secret_path.is_file():
+            return ''
+        return secret_path.read_text(encoding='utf-8-sig').strip()
+    except Exception:
+        return ''
+
+
+def _read_secret_from_command(command_raw: str) -> str:
+    command = (command_raw or '').strip()
+    if not command:
+        return ''
+    try:
+        command_parts = shlex.split(command)
+    except Exception:
+        return ''
+    if not command_parts:
+        return ''
+    try:
+        result = subprocess.run(
+            command_parts,
+            shell=False,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=20,
+        )
+    except Exception:
+        return ''
+    if result.returncode != 0:
+        return ''
+    return (result.stdout or '').strip()
+
+
+def _env_secret_with_source(name: str, default: str = '') -> tuple[str, str]:
+    direct = os.environ.get(name)
+    if direct is not None and direct.strip():
+        return direct.strip(), 'env'
+
+    from_file = _read_secret_from_file(os.environ.get(f'{name}_FILE', ''))
+    if from_file:
+        return from_file, 'file'
+
+    from_cmd = _read_secret_from_command(os.environ.get(f'{name}_CMD', ''))
+    if from_cmd:
+        return from_cmd, 'cmd'
+
+    return default, 'default'
+
+
+def _env_secret(name: str, default: str = '') -> str:
+    value, _ = _env_secret_with_source(name, default=default)
+    return value
 
 
 # Quick-start development settings - unsuitable for production
@@ -87,6 +151,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'core.middleware.TISessionHardeningMiddleware',
     'core.middleware.AuditTrailMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
@@ -180,8 +245,19 @@ SECURE_HSTS_PRELOAD = _env_bool('SECURE_HSTS_PRELOAD', False)
 SECURE_SSL_REDIRECT = _env_bool('SECURE_SSL_REDIRECT', False)
 SESSION_COOKIE_SECURE = _env_bool('SESSION_COOKIE_SECURE', False)
 CSRF_COOKIE_SECURE = _env_bool('CSRF_COOKIE_SECURE', False)
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = os.environ.get('SESSION_COOKIE_SAMESITE', 'Lax')
+CSRF_COOKIE_SAMESITE = os.environ.get('CSRF_COOKIE_SAMESITE', 'Lax')
+SECURE_CONTENT_TYPE_NOSNIFF = _env_bool('SECURE_CONTENT_TYPE_NOSNIFF', True)
+X_FRAME_OPTIONS = os.environ.get('X_FRAME_OPTIONS', 'DENY')
+SECURE_REFERRER_POLICY = os.environ.get('SECURE_REFERRER_POLICY', 'same-origin')
 if _env_bool('SECURE_PROXY_SSL_HEADER_ENABLED', False):
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+TI_SESSION_IDLE_MINUTES = int(os.environ.get('TI_SESSION_IDLE_MINUTES', '20'))
+TI_SESSION_ACTIVITY_GRACE_SECONDS = int(os.environ.get('TI_SESSION_ACTIVITY_GRACE_SECONDS', '15'))
+LOGIN_RATE_LIMIT_WINDOW_MINUTES = int(os.environ.get('LOGIN_RATE_LIMIT_WINDOW_MINUTES', '15'))
+LOGIN_RATE_LIMIT_MAX_FAILURES_PER_USER_IP = int(os.environ.get('LOGIN_RATE_LIMIT_MAX_FAILURES_PER_USER_IP', '5'))
+LOGIN_RATE_LIMIT_MAX_FAILURES_PER_IP = int(os.environ.get('LOGIN_RATE_LIMIT_MAX_FAILURES_PER_IP', '20'))
 
 # LDAP / Active Directory (SIDERTEC) - via ldap3
 AUTHENTICATION_BACKENDS = [
@@ -192,7 +268,7 @@ AUTHENTICATION_BACKENDS = [
 AD_LDAP_SERVER_URI = os.environ.get('AD_LDAP_SERVER_URI', 'ldaps://192.168.22.8:636')
 AD_LDAP_BASE_DN = os.environ.get('AD_LDAP_BASE_DN', 'dc=sidertec,dc=intra,dc=net')
 AD_LDAP_BIND_DN = os.environ.get('AD_LDAP_BIND_DN', 'glpi_ldap@sidertec.intra.net')
-AD_LDAP_BIND_PASSWORD = os.environ.get('ERP_LDAP_BIND_PASSWORD', '')
+AD_LDAP_BIND_PASSWORD = _env_secret('ERP_LDAP_BIND_PASSWORD', '')
 AD_LDAP_USER_FILTER = '(&(objectCategory=person)(objectclass=user)(sAMAccountName=%(user)s))'
 
 AD_LDAP_USER_ATTR_MAP = {
@@ -220,13 +296,23 @@ EMAIL_HOST = os.environ.get('EMAIL_HOST', '')
 EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '587'))
 EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True').lower() in ('true', '1')
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
-EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
+EMAIL_HOST_PASSWORD = _env_secret('EMAIL_HOST_PASSWORD', '')
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'Chamados Sidertec <no-reply@sidertec>')
 EMAIL_NOTIFY_NEW_TICKET_USERNAMES = [
     item.strip().lower()
     for item in os.environ.get('EMAIL_NOTIFY_NEW_TICKET_USERNAMES', 'fabiano.polone').split(',')
     if item.strip()
 ]
+
+# Cofre de senhas (falha isolada: nunca derruba o boot do ERP)
+FEATURE_VAULT_ENABLED = _env_bool('FEATURE_VAULT_ENABLED', False)
+VAULT_MASTER_KEY, VAULT_MASTER_KEY_SOURCE = _env_secret_with_source('VAULT_MASTER_KEY', '')
+VAULT_KEY_SALT = (os.environ.get('VAULT_KEY_SALT', 'erp-ti-vault-v1') or 'erp-ti-vault-v1').strip()
+VAULT_ACCESS_PASSWORD = _env_secret('VAULT_ACCESS_PASSWORD', '')
+VAULT_ACCESS_PASSWORD_HASH = _env_secret('VAULT_ACCESS_PASSWORD_HASH', '')
+VAULT_UNLOCK_SESSION_MINUTES = int(os.environ.get('VAULT_UNLOCK_SESSION_MINUTES', '15'))
+VAULT_UNLOCK_MAX_ATTEMPTS = int(os.environ.get('VAULT_UNLOCK_MAX_ATTEMPTS', '5'))
+VAULT_UNLOCK_BLOCK_WINDOW_MINUTES = int(os.environ.get('VAULT_UNLOCK_BLOCK_WINDOW_MINUTES', '15'))
 
 # WhatsApp (WAPI)
 WAPI_DEFAULT_GROUP_JID = os.environ.get('WAPI_DEFAULT_GROUP_JID', '')
@@ -237,7 +323,7 @@ ACCESS_ROOT_PATH = os.environ.get('ACCESS_ROOT_PATH', r'\\SRV-FS\\Sidertec')
 # Inventario de rede (equipamentos e softwares)
 INVENTORY_DEFAULT_HOSTS = os.environ.get('INVENTORY_DEFAULT_HOSTS', '')
 INVENTORY_POWERSHELL_TIMEOUT = int(os.environ.get('INVENTORY_POWERSHELL_TIMEOUT', '120'))
-INVENTORY_AGENT_TOKEN = os.environ.get('INVENTORY_AGENT_TOKEN', '')
+INVENTORY_AGENT_TOKEN = _env_secret('INVENTORY_AGENT_TOKEN', '')
 INVENTORY_AGENT_MAX_PAYLOAD_BYTES = int(os.environ.get('INVENTORY_AGENT_MAX_PAYLOAD_BYTES', str(2 * 1024 * 1024)))
 INVENTORY_AGENT_MAX_CONCURRENT_RUNNING = int(os.environ.get('INVENTORY_AGENT_MAX_CONCURRENT_RUNNING', '8'))
 INVENTORY_REFRESH_RUNNING_TIMEOUT_MINUTES = int(os.environ.get('INVENTORY_REFRESH_RUNNING_TIMEOUT_MINUTES', '30'))
