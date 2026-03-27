@@ -238,16 +238,34 @@ def _record_login_audit_event(request, *, description: str, status_code: int, us
         pass
 
 
-def _vault_access_password_required() -> bool:
+def _latest_vault_access_config():
     try:
-        config = PasswordVaultAccessConfig.objects.order_by('-updated_at', '-id').only('password_hash').first()
+        return PasswordVaultAccessConfig.objects.order_by('-updated_at', '-id').only('password_hash').first()
     except Exception:
-        config = None
+        return None
+
+
+def _vault_access_password_source() -> str:
+    config = _latest_vault_access_config()
     if config and (config.password_hash or '').strip():
-        return True
+        return 'database'
+    hashed = (getattr(settings, 'VAULT_ACCESS_PASSWORD_HASH', '') or '').strip()
+    if hashed:
+        return 'env_hash'
+    plain = (getattr(settings, 'VAULT_ACCESS_PASSWORD', '') or '').strip()
+    if plain:
+        return 'env_plain'
+    return 'none'
+
+
+def _vault_access_password_env_configured() -> bool:
     plain = (getattr(settings, 'VAULT_ACCESS_PASSWORD', '') or '').strip()
     hashed = (getattr(settings, 'VAULT_ACCESS_PASSWORD_HASH', '') or '').strip()
     return bool(plain or hashed)
+
+
+def _vault_access_password_required() -> bool:
+    return _vault_access_password_source() != 'none'
 
 
 def _vault_unlock_minutes() -> int:
@@ -263,10 +281,7 @@ def _vault_password_matches(candidate: str) -> bool:
     raw_value = candidate or ''
     if not raw_value:
         return False
-    try:
-        config = PasswordVaultAccessConfig.objects.order_by('-updated_at', '-id').only('password_hash').first()
-    except Exception:
-        config = None
+    config = _latest_vault_access_config()
     if config and (config.password_hash or '').strip():
         try:
             return bool(check_password(raw_value, config.password_hash))
@@ -3487,6 +3502,12 @@ class CofreView(LoginRequiredMixin, TemplateView):
         context['vault_configured'] = vault_ready
         context['vault_status_message'] = vault_status_message
         context['vault_access_password_required'] = _vault_access_password_required()
+        vault_access_password_source = _vault_access_password_source()
+        context['vault_access_password_source'] = vault_access_password_source
+        context['vault_access_password_stored_in_database'] = vault_access_password_source == 'database'
+        context['vault_access_password_uses_env_fallback'] = vault_access_password_source in {'env_hash', 'env_plain'}
+        context['vault_access_password_uses_plain_env'] = vault_access_password_source == 'env_plain'
+        context['vault_access_password_env_present'] = _vault_access_password_env_configured()
         context['vault_unlock_minutes'] = _vault_unlock_minutes()
         context['vault_unlocked'] = _is_vault_unlocked_session(self.request) if is_vault_allowed else False
         is_blocked, failed_count, wait_seconds = _vault_unlock_block_status(self.request) if is_vault_allowed else (False, 0, 0)

@@ -28,7 +28,7 @@
             </div>
         {% elif not vault_access_password_required %}
             <div class="message error" style="margin-top: 16px;">
-                Bloqueio adicional obrigatorio: configure <code>VAULT_ACCESS_PASSWORD</code> ou <code>VAULT_ACCESS_PASSWORD_HASH</code> no <code>.env</code>.
+                Bloqueio adicional obrigatorio: configure temporariamente <code>VAULT_ACCESS_PASSWORD</code> ou <code>VAULT_ACCESS_PASSWORD_HASH</code> no <code>.env</code> para inicializar a senha adicional do cofre.
             </div>
         {% elif not vault_unlocked %}
             <div style="max-width: 460px; margin-top: 16px;">
@@ -78,6 +78,19 @@
                 Sessao do cofre liberada por tempo limitado.
                 Bloqueio automatico em <strong data-vault-countdown>{{ vault_unlock_remaining_seconds }}</strong> segundo(s).
             </div>
+
+            {% if vault_access_password_uses_env_fallback %}
+            <div class="message error" style="margin-bottom: 16px;">
+                A senha adicional ainda esta em modo legado e depende do <code>.env</code>.
+                Depois da primeira migration/bootstrap e da validacao funcional, remova
+                <code>VAULT_ACCESS_PASSWORD</code> e <code>VAULT_ACCESS_PASSWORD_HASH</code> do servidor.
+            </div>
+            {% elif vault_access_password_stored_in_database and vault_access_password_env_present %}
+            <div class="message" style="margin-bottom: 16px;">
+                A senha adicional ja esta protegida no banco, mas ainda existem variaveis legadas no <code>.env</code>.
+                Quando terminarmos a validacao em producao, remova <code>VAULT_ACCESS_PASSWORD</code> e <code>VAULT_ACCESS_PASSWORD_HASH</code>.
+            </div>
+            {% endif %}
 
             <div class="card" style="margin-bottom: 16px; padding: 16px;">
                 <h3 style="margin-top:0;">Trocar senha adicional do cofre</h3>
