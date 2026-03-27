@@ -74,6 +74,34 @@
                 </div>
             </div>
 
+            <div class="card" style="margin-bottom: 16px; padding: 16px;">
+                <h3 style="margin-top:0;">Trocar senha adicional do cofre</h3>
+                <p class="muted" style="margin-top: 0;">
+                    Essa senha e usada para desbloquear o cofre e para reautenticar a exibicao das credenciais.
+                </p>
+                <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="change_access_password" />
+                    <div class="form-row">
+                        <div>
+                            <label for="id_current_access_password">Senha adicional atual</label>
+                            <input id="id_current_access_password" name="current_access_password" type="password" autocomplete="current-password" required />
+                        </div>
+                        <div>
+                            <label for="id_new_access_password">Nova senha adicional</label>
+                            <input id="id_new_access_password" name="new_access_password" type="password" autocomplete="new-password" required />
+                        </div>
+                        <div>
+                            <label for="id_new_access_password_confirm">Repita a nova senha adicional</label>
+                            <input id="id_new_access_password_confirm" name="new_access_password_confirm" type="password" autocomplete="new-password" required />
+                        </div>
+                    </div>
+                    <div style="display:flex; justify-content:flex-end;">
+                        <button type="submit">Trocar senha adicional</button>
+                    </div>
+                </form>
+            </div>
+
             <div style="overflow-x: auto;">
                 <table class="data-table" data-table-name="cofre">
                     <thead>
@@ -187,40 +215,6 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="form-row" data-vault-change-password-wrap hidden>
-                            <div style="flex:1;">
-                                <label for="id_vault_current_password">Senha atual</label>
-                                <input
-                                    id="id_vault_current_password"
-                                    name="current_password"
-                                    type="password"
-                                    autocomplete="current-password"
-                                    data-vault-current-password
-                                />
-                            </div>
-                        </div>
-                        <div class="form-row" data-vault-change-password-wrap hidden>
-                            <div style="flex:1;">
-                                <label for="id_vault_new_password">Nova senha</label>
-                                <input
-                                    id="id_vault_new_password"
-                                    name="new_password"
-                                    type="password"
-                                    autocomplete="new-password"
-                                    data-vault-new-password
-                                />
-                            </div>
-                            <div style="flex:1;">
-                                <label for="id_vault_new_password_confirm">Repita a nova senha</label>
-                                <input
-                                    id="id_vault_new_password_confirm"
-                                    name="new_password_confirm"
-                                    type="password"
-                                    autocomplete="new-password"
-                                    data-vault-new-password-confirm
-                                />
-                            </div>
-                        </div>
                         <div style="display:flex; justify-content:flex-end; gap:8px;">
                             <button type="button" data-vault-close>Cancelar</button>
                             <button type="submit">Salvar</button>
@@ -276,10 +270,6 @@
                     const passwordInput = document.querySelector('[data-vault-password]');
                     const passwordLabel = document.querySelector('[data-vault-password-label]');
                     const passwordHelp = document.querySelector('[data-vault-password-help]');
-                    const changePasswordWrapEls = document.querySelectorAll('[data-vault-change-password-wrap]');
-                    const currentPasswordInput = document.querySelector('[data-vault-current-password]');
-                    const newPasswordInput = document.querySelector('[data-vault-new-password]');
-                    const newPasswordConfirmInput = document.querySelector('[data-vault-new-password-confirm]');
 
                     const revealModal = document.querySelector('[data-vault-reveal-modal]');
                     const revealCloseEls = document.querySelectorAll('[data-vault-reveal-close]');
@@ -289,7 +279,7 @@
                     const revealApiUrl = '{% url "cofre_reveal_api" %}';
                     let clearTimer = null;
 
-                    if (!modal || !openBtn || !form || !modalTitle || !actionInput || !itemIdInput || !serviceInput || !usernameInput || !urlInput || !notesInput || !clearNotesWrap || !clearNotesInput || !createPasswordWrap || !passwordInput || !passwordLabel || !passwordHelp || !changePasswordWrapEls.length || !currentPasswordInput || !newPasswordInput || !newPasswordConfirmInput || !revealModal || !revealTitle || !revealSecretInput || !copySecretBtn) return;
+                    if (!modal || !openBtn || !form || !modalTitle || !actionInput || !itemIdInput || !serviceInput || !usernameInput || !urlInput || !notesInput || !clearNotesWrap || !clearNotesInput || !createPasswordWrap || !passwordInput || !passwordLabel || !passwordHelp || !revealModal || !revealTitle || !revealSecretInput || !copySecretBtn) return;
 
                     const openCreate = () => {
                         actionInput.value = 'create';
@@ -306,10 +296,6 @@
                         passwordLabel.textContent = 'Senha';
                         passwordHelp.textContent = 'A senha nunca aparece na listagem e fica criptografada no banco.';
                         createPasswordWrap.hidden = false;
-                        changePasswordWrapEls.forEach((el) => { el.hidden = true; });
-                        currentPasswordInput.value = '';
-                        newPasswordInput.value = '';
-                        newPasswordConfirmInput.value = '';
                         modal.hidden = false;
                         serviceInput.focus();
                     };
@@ -327,10 +313,6 @@
                         passwordInput.value = '';
                         passwordInput.required = false;
                         createPasswordWrap.hidden = true;
-                        changePasswordWrapEls.forEach((el) => { el.hidden = false; });
-                        currentPasswordInput.value = '';
-                        newPasswordInput.value = '';
-                        newPasswordConfirmInput.value = '';
                         modal.hidden = false;
                         serviceInput.focus();
                     };

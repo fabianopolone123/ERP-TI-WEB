@@ -13,7 +13,7 @@ from pathlib import Path
 import requests
 from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth.hashers import check_password
+from django.contrib.auth.hashers import check_password, make_password
 from django.core.mail import send_mail
 from django.db import transaction, DatabaseError
 from django.db.models import Count, Q, Case, When, Value, IntegerField, Exists, OuterRef, Sum, Max
@@ -55,6 +55,7 @@ from .models import (
     AccessFolder,
     AccessMember,
     AuditLog,
+    PasswordVaultAccessConfig,
     Dica,
     PasswordVaultItem,
     Responsibility,
@@ -216,6 +217,12 @@ def _record_login_audit_event(request, *, description: str, status_code: int, us
 
 
 def _vault_access_password_required() -> bool:
+    try:
+        config = PasswordVaultAccessConfig.objects.order_by('-updated_at', '-id').only('password_hash').first()
+    except Exception:
+        config = None
+    if config and (config.password_hash or '').strip():
+        return True
     plain = (getattr(settings, 'VAULT_ACCESS_PASSWORD', '') or '').strip()
     hashed = (getattr(settings, 'VAULT_ACCESS_PASSWORD_HASH', '') or '').strip()
     return bool(plain or hashed)
@@ -234,6 +241,15 @@ def _vault_password_matches(candidate: str) -> bool:
     raw_value = candidate or ''
     if not raw_value:
         return False
+    try:
+        config = PasswordVaultAccessConfig.objects.order_by('-updated_at', '-id').only('password_hash').first()
+    except Exception:
+        config = None
+    if config and (config.password_hash or '').strip():
+        try:
+            return bool(check_password(raw_value, config.password_hash))
+        except Exception:
+            return False
     hashed = (getattr(settings, 'VAULT_ACCESS_PASSWORD_HASH', '') or '').strip()
     if hashed:
         try:
@@ -247,6 +263,20 @@ def _vault_password_matches(candidate: str) -> bool:
         except Exception:
             return False
     return False
+
+
+def _upsert_vault_access_password(password_plain: str, actor_user) -> None:
+    hashed_value = make_password(password_plain or '')
+    config = PasswordVaultAccessConfig.objects.order_by('-updated_at', '-id').first()
+    if config is None:
+        PasswordVaultAccessConfig.objects.create(
+            password_hash=hashed_value,
+            updated_by=actor_user if getattr(actor_user, 'is_authenticated', False) else None,
+        )
+        return
+    config.password_hash = hashed_value
+    config.updated_by = actor_user if getattr(actor_user, 'is_authenticated', False) else None
+    config.save(update_fields=['password_hash', 'updated_by', 'updated_at'])
 
 
 def _is_vault_unlocked_session(request) -> bool:
@@ -3241,6 +3271,51 @@ class CofreView(LoginRequiredMixin, TemplateView):
             messages.info(request, 'Cofre bloqueado.')
             return redirect('cofre')
 
+        if action == 'change_access_password':
+            current_access_password = request.POST.get('current_access_password') or ''
+            new_access_password = request.POST.get('new_access_password') or ''
+            new_access_password_confirm = request.POST.get('new_access_password_confirm') or ''
+
+            if not _vault_access_password_required():
+                messages.error(request, 'A senha adicional do cofre ainda nao esta configurada.')
+                return redirect('cofre')
+            if not _is_vault_unlocked_session(request):
+                messages.error(request, 'Desbloqueie o cofre antes de trocar a senha adicional.')
+                return redirect('cofre')
+            if not current_access_password:
+                messages.error(request, 'Informe a senha adicional atual do cofre.')
+                return redirect('cofre')
+            if not _vault_password_matches(current_access_password):
+                log_audit_event(
+                    request=request,
+                    event_type=AuditLog.EventType.ACTION,
+                    description='Cofre: troca da senha adicional falhou',
+                    details='motivo=senha_atual_invalida',
+                    status_code=401,
+                )
+                messages.error(request, 'A senha adicional atual nao confere.')
+                return redirect('cofre')
+            if not new_access_password:
+                messages.error(request, 'Informe a nova senha adicional do cofre.')
+                return redirect('cofre')
+            if new_access_password != new_access_password_confirm:
+                messages.error(request, 'A confirmacao da nova senha adicional nao confere.')
+                return redirect('cofre')
+            if secrets.compare_digest(current_access_password, new_access_password):
+                messages.error(request, 'A nova senha adicional deve ser diferente da atual.')
+                return redirect('cofre')
+
+            _upsert_vault_access_password(new_access_password, request.user)
+            _clear_vault_unlocked_session(request)
+            log_audit_event(
+                request=request,
+                event_type=AuditLog.EventType.ACTION,
+                description='Cofre: senha adicional alterada',
+                status_code=200,
+            )
+            messages.success(request, 'Senha adicional do cofre alterada. Desbloqueie novamente com a nova senha.')
+            return redirect('cofre')
+
         if not vault_ready:
             messages.error(request, vault_status_message or 'Cofre indisponivel.')
             return redirect('cofre')
@@ -3282,9 +3357,6 @@ class CofreView(LoginRequiredMixin, TemplateView):
         account_url = (request.POST.get('account_url') or '').strip()
         notes_plain = (request.POST.get('notes') or '').strip()
         password_plain = request.POST.get('password') or ''
-        current_password_plain = request.POST.get('current_password') or ''
-        new_password_plain = request.POST.get('new_password') or ''
-        new_password_confirm_plain = request.POST.get('new_password_confirm') or ''
 
         if not service_name:
             messages.error(request, 'Informe o nome do servico/sistema.')
@@ -3330,29 +3402,6 @@ class CofreView(LoginRequiredMixin, TemplateView):
                 return redirect('cofre')
 
             clear_notes = bool(request.POST.get('clear_notes'))
-            requested_password_change = bool(current_password_plain or new_password_plain or new_password_confirm_plain)
-            if password_plain and requested_password_change:
-                messages.error(request, 'Use apenas o fluxo de troca com senha atual, nova senha e confirmacao.')
-                return redirect('cofre')
-            if requested_password_change:
-                if not current_password_plain:
-                    messages.error(request, 'Informe a senha atual para trocar a credencial.')
-                    return redirect('cofre')
-                if not new_password_plain:
-                    messages.error(request, 'Informe a nova senha da credencial.')
-                    return redirect('cofre')
-                if new_password_plain != new_password_confirm_plain:
-                    messages.error(request, 'A confirmacao da nova senha nao confere.')
-                    return redirect('cofre')
-                try:
-                    current_password_saved = decrypt_vault_text(item.password_encrypted)
-                except VaultCryptoError as exc:
-                    messages.error(request, f'Falha ao validar a senha atual: {exc}')
-                    return redirect('cofre')
-                if not secrets.compare_digest(current_password_plain, current_password_saved):
-                    messages.error(request, 'A senha atual informada nao confere.')
-                    return redirect('cofre')
-
             item.service_name = service_name
             item.updated_by = request.user
             try:
@@ -3360,8 +3409,6 @@ class CofreView(LoginRequiredMixin, TemplateView):
                 item.account_url_encrypted = encrypt_vault_text(account_url)
                 if password_plain:
                     item.password_encrypted = encrypt_vault_text(password_plain)
-                elif requested_password_change:
-                    item.password_encrypted = encrypt_vault_text(new_password_plain)
                 if notes_plain:
                     item.notes_encrypted = encrypt_vault_text(notes_plain)
                 elif clear_notes:
