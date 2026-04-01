@@ -678,26 +678,6 @@ class PasswordVaultItem(models.Model):
         return self.service_name
 
 
-class PasswordVaultAccessConfig(models.Model):
-    password_hash = models.CharField(max_length=255, blank=True, default='')
-    updated_by = models.ForeignKey(
-        'auth.User',
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name='vault_access_configs_updated',
-    )
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        verbose_name = 'Configuracao de acesso do cofre'
-        verbose_name_plural = 'Configuracoes de acesso do cofre'
-
-    def __str__(self) -> str:
-        return f'VaultAccessConfig #{self.id}'
-
-
 class AuditLog(models.Model):
     class EventType(models.TextChoices):
         ACCESS = 'access', 'Acesso'
