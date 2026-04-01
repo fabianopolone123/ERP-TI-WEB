@@ -2742,7 +2742,7 @@ class EmprestimosView(LoginRequiredMixin, TemplateView):
 
         nome = (request.POST.get('nome') or '').strip()
         equipamento = (request.POST.get('equipamento') or '').strip()
-        serial_number = (request.POST.get('serial_number') or '').strip()
+        serial_number = (request.POST.get('serial_number') or '').strip().upper()
         attachment = request.FILES.get('attachment')
         attachment_error = _validate_upload(attachment, image_only=False)
         if attachment_error:

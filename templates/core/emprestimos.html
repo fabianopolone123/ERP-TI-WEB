@@ -94,7 +94,7 @@
                         </div>
                         <div>
                             <label for="id_emprestimo_serial">Serie / Serial</label>
-                            <input id="id_emprestimo_serial" name="serial_number" type="text" required />
+                            <input id="id_emprestimo_serial" name="serial_number" type="text" required style="text-transform: uppercase;" />
                         </div>
                     </div>
                     <div class="form-row">
@@ -135,6 +135,15 @@
                 const close = () => {
                     modal.hidden = true;
                 };
+
+                serialInput.addEventListener('input', () => {
+                    const start = serialInput.selectionStart;
+                    const end = serialInput.selectionEnd;
+                    serialInput.value = (serialInput.value || '').toUpperCase();
+                    if (start !== null && end !== null) {
+                        serialInput.setSelectionRange(start, end);
+                    }
+                });
 
                 openBtn.addEventListener('click', open);
                 closeEls.forEach((el) => el.addEventListener('click', close));
