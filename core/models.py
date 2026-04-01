@@ -418,6 +418,28 @@ class Pendencia(models.Model):
         return f'{self.attendant.full_name}: {self.description}'
 
 
+class Emprestimo(models.Model):
+    nome = models.CharField(max_length=200)
+    equipamento = models.CharField(max_length=200)
+    serial_number = models.CharField(max_length=160)
+    attachment = models.FileField(upload_to='emprestimos/', null=True, blank=True)
+    created_by = models.ForeignKey(
+        'auth.User',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='emprestimos_criados',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-updated_at', '-id']
+
+    def __str__(self) -> str:
+        return f'{self.nome} - {self.equipamento}'
+
+
 class TicketCloseCategory(models.Model):
     name = models.CharField(max_length=120, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)

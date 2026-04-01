@@ -57,6 +57,7 @@ from .models import (
     Dica,
     Responsibility,
     Pendencia,
+    Emprestimo,
     TicketCloseCategory,
     Ticket,
     TicketMessage,
@@ -107,7 +108,7 @@ ERP_MODULES = [
     {'slug': 'protocolos', 'label': 'Protocolos', 'url_name': 'protocolos'},
     {'slug': 'requisicoes', 'label': 'Requisições', 'url_name': 'requisicoes'},
     {'slug': 'dicas', 'label': 'Dicas', 'url_name': 'dicas'},
-    {'slug': 'emprestimos', 'label': 'Empréstimos', 'url_name': None},
+    {'slug': 'emprestimos', 'label': 'Empréstimos', 'url_name': 'emprestimos'},
     {'slug': 'relatorios', 'label': 'Relatórios', 'url_name': 'relatorios'},
     {'slug': 'auditoria', 'label': 'Auditoria', 'url_name': 'auditoria'},
 ]
@@ -2728,6 +2729,52 @@ class DicasView(LoginRequiredMixin, TemplateView):
         context['modules'] = build_modules('dicas') if is_ti else []
         context['dicas'] = Dica.objects.select_related('created_by').order_by('-updated_at', '-id') if is_ti else []
         context['dica_categories'] = Dica.Category.choices
+        return context
+
+
+class EmprestimosView(LoginRequiredMixin, TemplateView):
+    template_name = 'core/emprestimos.html'
+
+    def post(self, request, *args, **kwargs):
+        if not is_ti_user(request):
+            messages.error(request, 'Apenas usuarios do departamento TI podem cadastrar emprestimos.')
+            return redirect(request.get_full_path())
+
+        nome = (request.POST.get('nome') or '').strip()
+        equipamento = (request.POST.get('equipamento') or '').strip()
+        serial_number = (request.POST.get('serial_number') or '').strip()
+        attachment = request.FILES.get('attachment')
+        attachment_error = _validate_upload(attachment, image_only=False)
+        if attachment_error:
+            messages.error(request, attachment_error)
+            return redirect(request.get_full_path())
+
+        if not nome:
+            messages.error(request, 'Informe o nome.')
+            return redirect('emprestimos')
+        if not equipamento:
+            messages.error(request, 'Informe o equipamento.')
+            return redirect('emprestimos')
+        if not serial_number:
+            messages.error(request, 'Informe a serie/serial.')
+            return redirect('emprestimos')
+
+        Emprestimo.objects.create(
+            nome=nome,
+            equipamento=equipamento,
+            serial_number=serial_number,
+            attachment=attachment,
+            created_by=request.user,
+        )
+        messages.success(request, 'Emprestimo cadastrado com sucesso.')
+        return redirect('emprestimos')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        is_ti = is_ti_user(self.request)
+        context['is_ti_group'] = is_ti
+        context['modules'] = build_modules('emprestimos') if is_ti else []
+        context['emprestimos'] = Emprestimo.objects.select_related('created_by').all() if is_ti else []
         return context
 
 
