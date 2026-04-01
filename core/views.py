@@ -296,20 +296,6 @@ def _is_vault_unlocked_session(request) -> bool:
     return True
 
 
-def _vault_unlock_remaining_seconds(request) -> int:
-    if not _vault_access_password_required():
-        return 0
-    raw = request.session.get(VAULT_UNLOCK_SESSION_KEY)
-    try:
-        unlocked_until = int(raw or 0)
-    except (TypeError, ValueError):
-        unlocked_until = 0
-    if unlocked_until <= 0:
-        return 0
-    now_ts = int(timezone.now().timestamp())
-    return max(0, unlocked_until - now_ts)
-
-
 def _set_vault_unlocked_session(request) -> int:
     minutes = _vault_unlock_minutes()
     unlocked_until = int((timezone.now() + timedelta(minutes=minutes)).timestamp())
@@ -3460,7 +3446,6 @@ class CofreView(LoginRequiredMixin, TemplateView):
         context['vault_unlock_blocked'] = is_blocked
         context['vault_failed_attempts_recent'] = failed_count
         context['vault_unlock_wait_seconds'] = wait_seconds
-        context['vault_unlock_remaining_seconds'] = _vault_unlock_remaining_seconds(self.request) if is_ti else 0
         context['vault_items'] = []
         if is_ti and vault_ready and context['vault_access_password_required'] and context['vault_unlocked']:
             items = list(PasswordVaultItem.objects.select_related('created_by', 'updated_by').order_by('service_name', 'id'))

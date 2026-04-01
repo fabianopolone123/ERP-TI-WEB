@@ -74,11 +74,6 @@
                 </div>
             </div>
 
-            <div class="message" style="margin-bottom: 16px;">
-                Sessao do cofre liberada por tempo limitado.
-                Bloqueio automatico em <strong data-vault-countdown>{{ vault_unlock_remaining_seconds }}</strong> segundo(s).
-            </div>
-
             <div class="card" style="margin-bottom: 16px; padding: 16px;">
                 <h3 style="margin-top:0;">Trocar senha adicional do cofre</h3>
                 <p class="muted" style="margin-top: 0;">
@@ -281,12 +276,10 @@
                     const revealTitle = document.querySelector('[data-vault-reveal-title]');
                     const revealSecretInput = document.querySelector('[data-vault-reveal-secret]');
                     const copySecretBtn = document.querySelector('[data-vault-copy-secret]');
-                    const countdownEl = document.querySelector('[data-vault-countdown]');
                     const revealApiUrl = '{% url "cofre_reveal_api" %}';
                     let clearTimer = null;
-                    let reloadTimer = null;
 
-                    if (!modal || !openBtn || !form || !modalTitle || !actionInput || !itemIdInput || !serviceInput || !usernameInput || !urlInput || !notesInput || !clearNotesWrap || !clearNotesInput || !createPasswordWrap || !passwordInput || !passwordLabel || !passwordHelp || !revealModal || !revealTitle || !revealSecretInput || !copySecretBtn || !countdownEl) return;
+                    if (!modal || !openBtn || !form || !modalTitle || !actionInput || !itemIdInput || !serviceInput || !usernameInput || !urlInput || !notesInput || !clearNotesWrap || !clearNotesInput || !createPasswordWrap || !passwordInput || !passwordLabel || !passwordHelp || !revealModal || !revealTitle || !revealSecretInput || !copySecretBtn) return;
 
                     const openCreate = () => {
                         actionInput.value = 'create';
@@ -405,28 +398,6 @@
                             alert('Nao foi possivel copiar automaticamente.');
                         }
                     });
-
-                    let remainingSeconds = parseInt(countdownEl.textContent || '0', 10);
-                    if (!Number.isFinite(remainingSeconds) || remainingSeconds < 0) {
-                        remainingSeconds = 0;
-                    }
-                    const renderCountdown = () => {
-                        countdownEl.textContent = String(Math.max(0, remainingSeconds));
-                    };
-                    renderCountdown();
-                    if (remainingSeconds > 0) {
-                        reloadTimer = window.setInterval(() => {
-                            remainingSeconds -= 1;
-                            renderCountdown();
-                            if (remainingSeconds <= 0) {
-                                if (reloadTimer) {
-                                    window.clearInterval(reloadTimer);
-                                    reloadTimer = null;
-                                }
-                                window.location.reload();
-                            }
-                        }, 1000);
-                    }
                 })();
             </script>
         {% endif %}
