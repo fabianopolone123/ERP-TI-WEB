@@ -1,13 +1,10 @@
 from __future__ import annotations
 
-import logging
 from typing import Any
 
 from django.utils import timezone
 
 from .models import AuditLog
-
-logger = logging.getLogger(__name__)
 
 
 def _client_ip(request) -> str:
@@ -26,23 +23,19 @@ def log_audit_event(*, request=None, user=None, event_type: str = 'action', desc
         user_obj = actor
         username = (getattr(actor, 'username', '') or '').strip()
         full_name = (getattr(actor, 'get_full_name', lambda: '')() or '').strip()
-    try:
-        return AuditLog.objects.create(
-            user=user_obj,
-            username=username,
-            full_name=full_name,
-            event_type=event_type or AuditLog.EventType.ACTION,
-            method=(method or getattr(request, 'method', '') or '')[:10],
-            path=(path or getattr(request, 'path', '') or '')[:300],
-            route_name=(route_name or getattr(getattr(request, 'resolver_match', None), 'url_name', '') or '')[:120],
-            status_code=int(status_code or 0),
-            description=(description or 'Evento')[:300],
-            details=details or '',
-            ip_address=(_client_ip(request) if request is not None else '')[:64],
-        )
-    except Exception:
-        logger.exception('Falha ao registrar auditoria: %s', description or 'Evento')
-        return None
+    return AuditLog.objects.create(
+        user=user_obj,
+        username=username,
+        full_name=full_name,
+        event_type=event_type or AuditLog.EventType.ACTION,
+        method=(method or getattr(request, 'method', '') or '')[:10],
+        path=(path or getattr(request, 'path', '') or '')[:300],
+        route_name=(route_name or getattr(getattr(request, 'resolver_match', None), 'url_name', '') or '')[:120],
+        status_code=int(status_code or 0),
+        description=(description or 'Evento')[:300],
+        details=details or '',
+        ip_address=(_client_ip(request) if request is not None else '')[:64],
+    )
 
 
 def describe_request(request, response=None) -> tuple[str, str, str]:

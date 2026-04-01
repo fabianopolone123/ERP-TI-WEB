@@ -3434,12 +3434,7 @@ class CofreView(LoginRequiredMixin, TemplateView):
                 messages.error(request, 'Credencial nao encontrada.')
                 return redirect('cofre')
             service_name = item.service_name
-            try:
-                item.delete()
-            except DatabaseError:
-                logger.exception('Falha de banco ao remover credencial do cofre.')
-                messages.error(request, 'Falha ao remover a credencial do cofre.')
-                return redirect('cofre')
+            item.delete()
             log_audit_event(
                 request=request,
                 event_type=AuditLog.EventType.ACTION,
@@ -3476,10 +3471,6 @@ class CofreView(LoginRequiredMixin, TemplateView):
                 )
             except VaultCryptoError as exc:
                 messages.error(request, f'Falha de criptografia no cofre: {exc}')
-                return redirect('cofre')
-            except DatabaseError:
-                logger.exception('Falha de banco ao cadastrar credencial no cofre.')
-                messages.error(request, 'Falha ao salvar a nova credencial do cofre.')
                 return redirect('cofre')
             log_audit_event(
                 request=request,
@@ -3518,10 +3509,6 @@ class CofreView(LoginRequiredMixin, TemplateView):
                 item.save()
             except VaultCryptoError as exc:
                 messages.error(request, f'Falha de criptografia no cofre: {exc}')
-                return redirect('cofre')
-            except DatabaseError:
-                logger.exception('Falha de banco ao editar credencial do cofre.')
-                messages.error(request, 'Falha ao atualizar a credencial do cofre.')
                 return redirect('cofre')
 
             log_audit_event(
