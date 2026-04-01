@@ -239,7 +239,7 @@
                         </div>
                     </div>
                     <div class="form-row">
-                        <div>
+                        <div data-stock-target-field>
                             <label for="id_stock_target">Para quem foi o insumo</label>
                             <input id="id_stock_target" name="stock_target" type="text" required placeholder="Ex.: Joao Silva" data-stock-target-input />
                         </div>
@@ -288,6 +288,7 @@
                 const stockItemInput = document.querySelector('[data-stock-item-input]');
                 const stockItemLabel = document.querySelector('[data-stock-item-label]');
                 const stockMoveQuantity = document.querySelector('[data-stock-move-quantity]');
+                const stockTargetField = document.querySelector('[data-stock-target-field]');
                 const stockTargetInput = document.querySelector('[data-stock-target-input]');
                 const stockReasonInput = document.querySelector('[data-stock-reason-input]');
 
@@ -357,9 +358,20 @@
                     stockItemInput &&
                     stockItemLabel &&
                     stockMoveQuantity &&
+                    stockTargetField &&
                     stockTargetInput &&
                     stockReasonInput
                 ) {
+                    const syncStockMoveFields = (direction) => {
+                        const isOutput = direction === 'dec';
+                        stockTargetField.hidden = !isOutput;
+                        stockTargetInput.required = isOutput;
+                        stockTargetInput.disabled = !isOutput;
+                        if (!isOutput) {
+                            stockTargetInput.value = '';
+                        }
+                    };
+
                     const openStockMove = (direction, itemName) => {
                         stockModeInput.value = 'stock_adjust';
                         stockDirectionInput.value = direction;
@@ -367,11 +379,15 @@
                         stockItemLabel.value = itemName;
                         stockMoveTitle.textContent = direction === 'inc' ? `Entrada de estoque: ${itemName}` : `Saida de estoque: ${itemName}`;
                         stockMoveQuantity.value = '1,00';
-                        stockTargetInput.value = '';
+                        syncStockMoveFields(direction);
                         stockReasonInput.value = '';
                         closeModal(stockModal);
                         openModal(stockMoveModal);
-                        stockTargetInput.focus();
+                        if (direction === 'dec') {
+                            stockTargetInput.focus();
+                        } else {
+                            stockReasonInput.focus();
+                        }
                     };
 
                     document.querySelectorAll('[data-open-stock-move]').forEach((btn) => {

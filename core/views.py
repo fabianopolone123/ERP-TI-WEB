@@ -1632,12 +1632,14 @@ class InsumosView(LoginRequiredMixin, TemplateView):
             if stock_direction not in {'inc', 'dec'}:
                 messages.error(request, 'Movimentacao invalida.')
                 return redirect('insumos')
-            if not stock_target:
+            if stock_direction == 'dec' and not stock_target:
                 messages.error(request, 'Informe para quem foi o insumo.')
                 return redirect('insumos')
             if not stock_reason:
                 messages.error(request, 'Informe o motivo da movimentacao.')
                 return redirect('insumos')
+            if stock_direction == 'inc':
+                stock_target = 'Estoque'
 
             try:
                 stock_quantity = self._parse_decimal_br(stock_quantity_raw)
