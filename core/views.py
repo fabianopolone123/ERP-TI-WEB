@@ -3658,36 +3658,9 @@ class PendenciasView(LoginRequiredMixin, TemplateView):
                 messages.success(request, 'Pendencia retornou para pendente.')
             return redirect('pendencias')
 
-        if action == 'set_urgent_status':
-            pendency_id_raw = (request.POST.get('pendency_id') or '').strip()
-            try:
-                pendency_id = int(pendency_id_raw)
-            except (TypeError, ValueError):
-                messages.error(request, 'Pendencia invalida para atualizacao.')
-                return redirect('pendencias')
-
-            pendency = Pendencia.objects.select_related('attendant').filter(id=pendency_id).first()
-            if not pendency:
-                messages.error(request, 'Pendencia nao encontrada.')
-                return redirect('pendencias')
-
-            new_urgent = bool(request.POST.get('is_urgent'))
-            if new_urgent == bool(pendency.is_urgent):
-                messages.info(request, 'Nenhuma alteracao foi identificada para essa pendencia.')
-                return redirect('pendencias')
-
-            pendency.is_urgent = new_urgent
-            pendency.save(update_fields=['is_urgent', 'updated_at'])
-            if new_urgent:
-                messages.success(request, 'Pendencia marcada como urgente.')
-            else:
-                messages.success(request, 'Pendencia deixou de ser urgente.')
-            return redirect('pendencias')
-
         if action == 'create_pendency':
             attendant_id_raw = (request.POST.get('attendant_id') or '').strip()
             description = (request.POST.get('description') or '').strip()
-            is_urgent = bool(request.POST.get('is_urgent'))
 
             if not description:
                 messages.error(request, 'Informe a pendencia.')
@@ -3711,7 +3684,6 @@ class PendenciasView(LoginRequiredMixin, TemplateView):
             Pendencia.objects.create(
                 attendant=attendant,
                 description=description,
-                is_urgent=is_urgent,
                 is_done=False,
             )
             messages.success(request, 'Pendencia cadastrada com sucesso.')
@@ -3739,12 +3711,12 @@ class PendenciasView(LoginRequiredMixin, TemplateView):
         context['pending_items'] = (
             Pendencia.objects.select_related('attendant')
             .filter(is_done=False)
-            .order_by('-is_urgent', '-created_at', '-id')
+            .order_by('-created_at', '-id')
         )
         context['completed_items'] = (
             Pendencia.objects.select_related('attendant')
             .filter(is_done=True)
-            .order_by('-is_urgent', '-done_at', '-updated_at', '-id')
+            .order_by('-done_at', '-updated_at', '-id')
         )
         return context
 
@@ -3782,47 +3754,6 @@ def pendencias_toggle_status_api(request):
                 'id': pendency.id,
                 'attendant_id': pendency.attendant_id,
                 'description': pendency.description,
-                'is_urgent': bool(pendency.is_urgent),
-                'is_done': bool(pendency.is_done),
-                'when_text': when_text,
-            },
-        }
-    )
-
-
-@login_required
-@require_POST
-def pendencias_toggle_urgent_api(request):
-    if not is_ti_user(request):
-        return JsonResponse({'ok': False, 'error': 'forbidden'}, status=403)
-
-    pendency_id_raw = (request.POST.get('pendency_id') or '').strip()
-    try:
-        pendency_id = int(pendency_id_raw)
-    except (TypeError, ValueError):
-        return JsonResponse({'ok': False, 'error': 'invalid_pendency_id'}, status=400)
-
-    pendency = Pendencia.objects.select_related('attendant').filter(id=pendency_id).first()
-    if not pendency:
-        return JsonResponse({'ok': False, 'error': 'pendency_not_found'}, status=404)
-
-    new_urgent = bool(request.POST.get('is_urgent'))
-    changed = bool(pendency.is_urgent) != new_urgent
-    if changed:
-        pendency.is_urgent = new_urgent
-        pendency.save(update_fields=['is_urgent', 'updated_at'])
-
-    when_dt = pendency.done_at if pendency.is_done else pendency.created_at
-    when_text = timezone.localtime(when_dt).strftime('%d/%m/%Y %H:%M') if when_dt else ''
-    return JsonResponse(
-        {
-            'ok': True,
-            'changed': changed,
-            'item': {
-                'id': pendency.id,
-                'attendant_id': pendency.attendant_id,
-                'description': pendency.description,
-                'is_urgent': bool(pendency.is_urgent),
                 'is_done': bool(pendency.is_done),
                 'when_text': when_text,
             },
@@ -3838,7 +3769,6 @@ def pendencias_create_api(request):
 
     attendant_id_raw = (request.POST.get('attendant_id') or '').strip()
     description = (request.POST.get('description') or '').strip()
-    is_urgent = bool(request.POST.get('is_urgent'))
     if not description:
         return JsonResponse({'ok': False, 'error': 'description_required'}, status=400)
 
@@ -3858,7 +3788,6 @@ def pendencias_create_api(request):
     pendency = Pendencia.objects.create(
         attendant=attendant,
         description=description,
-        is_urgent=is_urgent,
         is_done=False,
     )
     when_text = timezone.localtime(pendency.created_at).strftime('%d/%m/%Y %H:%M') if pendency.created_at else ''
@@ -3869,7 +3798,6 @@ def pendencias_create_api(request):
                 'id': pendency.id,
                 'attendant_id': pendency.attendant_id,
                 'description': pendency.description,
-                'is_urgent': bool(pendency.is_urgent),
                 'is_done': False,
                 'when_text': when_text,
             },
@@ -3954,7 +3882,6 @@ def pendencias_create_ticket_api(request):
                 'id': pendency.id,
                 'attendant_id': pendency.attendant_id,
                 'description': pendency.description,
-                'is_urgent': bool(pendency.is_urgent),
                 'is_done': True,
                 'when_text': when_text,
             },
@@ -4257,8 +4184,8 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
         if ti_ids:
             pend_rows = (
                 Pendencia.objects.filter(attendant_id__in=ti_ids)
-                .order_by('-is_urgent', '-created_at', '-id')
-                .values('id', 'attendant_id', 'description', 'is_done', 'is_urgent', 'created_at', 'done_at')
+                .order_by('-created_at', '-id')
+                .values('id', 'attendant_id', 'description', 'is_done', 'created_at', 'done_at')
             )
             for row in pend_rows:
                 attendant_id = int(row.get('attendant_id') or 0)
@@ -4269,7 +4196,6 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
                 payload = {
                     'id': int(row.get('id') or 0),
                     'description': description,
-                    'is_urgent': bool(row.get('is_urgent')),
                     'when_text': '',
                 }
                 if row.get('is_done'):

@@ -4,32 +4,6 @@
 
 {% block content %}
 <div class="card">
-    <style>
-        .pendency-row-urgent td {
-            background: rgba(185, 28, 28, 0.18) !important;
-        }
-
-        .pendency-row-urgent:hover td {
-            background: rgba(220, 38, 38, 0.22) !important;
-        }
-
-        .pendency-urgent-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            padding: 3px 8px;
-            margin-left: 8px;
-            border-radius: 999px;
-            background: rgba(248, 113, 113, 0.18);
-            border: 1px solid rgba(248, 113, 113, 0.5);
-            color: #fecaca;
-            font-size: 0.72rem;
-            font-weight: 700;
-            letter-spacing: 0.02em;
-            text-transform: uppercase;
-            white-space: nowrap;
-        }
-    </style>
     <div class="topbar">
         <div>
             <h2>Pendencias</h2>
@@ -69,33 +43,16 @@
                         <th>Atendente TI</th>
                         <th>Pendencia</th>
                         <th>Criada em</th>
-                        <th>Urgente</th>
                         <th>OK</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for item in pending_items %}
-                        <tr class="{% if item.is_urgent %}pendency-row-urgent{% endif %}">
+                        <tr>
                             <td>{{ item.id }}</td>
                             <td>{{ item.attendant.full_name }}</td>
-                            <td>
-                                {{ item.description }}
-                                {% if item.is_urgent %}
-                                    <span class="pendency-urgent-badge">Urgente</span>
-                                {% endif %}
-                            </td>
+                            <td>{{ item.description }}</td>
                             <td>{{ item.created_at|date:"d/m/Y H:i" }}</td>
-                            <td>
-                                <form method="post" class="inline-form" data-pendency-urgent-form>
-                                    {% csrf_token %}
-                                    <input type="hidden" name="action" value="set_urgent_status" />
-                                    <input type="hidden" name="pendency_id" value="{{ item.id }}" />
-                                    <label style="display:inline-flex; align-items:center; gap:6px; cursor:pointer;">
-                                        <input type="checkbox" name="is_urgent" value="1" {% if item.is_urgent %}checked{% endif %} onchange="this.form.submit()" />
-                                        Urgente
-                                    </label>
-                                </form>
-                            </td>
                             <td>
                                 <form method="post" class="inline-form" data-pendency-status-form>
                                     {% csrf_token %}
@@ -110,7 +67,7 @@
                         </tr>
                     {% empty %}
                         <tr>
-                            <td colspan="6" class="muted">Nenhuma pendencia pendente.</td>
+                            <td colspan="5" class="muted">Nenhuma pendencia pendente.</td>
                         </tr>
                     {% endfor %}
                 </tbody>
@@ -152,10 +109,6 @@
                     />
                 </div>
             </div>
-            <label style="display:inline-flex; align-items:center; gap:8px; cursor:pointer; margin-bottom: 14px;">
-                <input id="id_pendency_is_urgent" name="is_urgent" type="checkbox" value="1" />
-                Marcar como urgente
-            </label>
             <button type="submit">Cadastrar pendencia</button>
         </form>
     </div>
@@ -184,33 +137,16 @@
                         <th>Atendente TI</th>
                         <th>Pendencia</th>
                         <th>Concluida em</th>
-                        <th>Urgente</th>
                         <th>OK</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for item in completed_items %}
-                        <tr class="{% if item.is_urgent %}pendency-row-urgent{% endif %}">
+                        <tr>
                             <td>{{ item.id }}</td>
                             <td>{{ item.attendant.full_name }}</td>
-                            <td>
-                                {{ item.description }}
-                                {% if item.is_urgent %}
-                                    <span class="pendency-urgent-badge">Urgente</span>
-                                {% endif %}
-                            </td>
+                            <td>{{ item.description }}</td>
                             <td>{{ item.done_at|date:"d/m/Y H:i" }}</td>
-                            <td>
-                                <form method="post" class="inline-form" data-pendency-urgent-form>
-                                    {% csrf_token %}
-                                    <input type="hidden" name="action" value="set_urgent_status" />
-                                    <input type="hidden" name="pendency_id" value="{{ item.id }}" />
-                                    <label style="display:inline-flex; align-items:center; gap:6px; cursor:pointer;">
-                                        <input type="checkbox" name="is_urgent" value="1" {% if item.is_urgent %}checked{% endif %} onchange="this.form.submit()" />
-                                        Urgente
-                                    </label>
-                                </form>
-                            </td>
                             <td>
                                 <form method="post" class="inline-form" data-pendency-status-form>
                                     {% csrf_token %}
@@ -225,7 +161,7 @@
                         </tr>
                     {% empty %}
                         <tr>
-                            <td colspan="6" class="muted">Nenhuma pendencia concluida.</td>
+                            <td colspan="5" class="muted">Nenhuma pendencia concluida.</td>
                         </tr>
                     {% endfor %}
                 </tbody>
@@ -240,7 +176,6 @@
         const createCloseEls = document.querySelectorAll('[data-close-pendency-create-modal]');
         const createAttendantSelect = document.querySelector('#id_pendency_attendant');
         const createDescriptionInput = document.querySelector('#id_pendency_description');
-        const createUrgentInput = document.querySelector('#id_pendency_is_urgent');
         if (createModal && createOpenBtn) {
             const open = () => {
                 if (createAttendantSelect) {
@@ -251,9 +186,6 @@
                 }
                 if (createDescriptionInput) {
                     createDescriptionInput.value = '';
-                }
-                if (createUrgentInput) {
-                    createUrgentInput.checked = false;
                 }
                 createModal.hidden = false;
                 if (createDescriptionInput) {
@@ -276,7 +208,7 @@
         }
 
         const key = 'pendencias_scroll_y';
-        document.querySelectorAll('[data-pendency-status-form], [data-pendency-urgent-form]').forEach((form) => {
+        document.querySelectorAll('[data-pendency-status-form]').forEach((form) => {
             form.addEventListener('submit', () => {
                 sessionStorage.setItem(key, String(window.scrollY || 0));
             });

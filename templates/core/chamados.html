@@ -697,10 +697,6 @@
                     </div>
                 </div>
             </div>
-            <label style="display:inline-flex; align-items:center; gap:8px; cursor:pointer;">
-                <input id="id_attendant_pendency_new_urgent" type="checkbox" value="1" />
-                Marcar como urgente
-            </label>
         </form>
         <div style="margin-top: 8px;">
             <h4 style="margin: 0 0 8px 0;">Pendentes</h4>
@@ -2021,9 +2017,7 @@
         const completedSearchInput = completedModal ? completedModal.querySelector('[data-attendant-concluidas-search]') : null;
         const createForm = modal.querySelector('[data-attendant-pendencias-create-form]');
         const createInput = modal.querySelector('#id_attendant_pendency_new');
-        const createUrgentInput = modal.querySelector('#id_attendant_pendency_new_urgent');
         const toggleApiUrl = '{% url "pendencias_toggle_status_api" %}';
-        const toggleUrgentApiUrl = '{% url "pendencias_toggle_urgent_api" %}';
         const createApiUrl = '{% url "pendencias_create_api" %}';
         const createTicketApiUrl = '{% url "pendencias_create_ticket_api" %}';
         let currentAttendantId = '';
@@ -2036,7 +2030,6 @@
                     {
                         id: {{ item.id }},
                         description: "{{ item.description|escapejs }}",
-                        is_urgent: {% if item.is_urgent %}true{% else %}false{% endif %},
                         when: "{{ item.when_text|escapejs }}",
                     },
                     {% endfor %}
@@ -2046,7 +2039,6 @@
                     {
                         id: {{ item.id }},
                         description: "{{ item.description|escapejs }}",
-                        is_urgent: {% if item.is_urgent %}true{% else %}false{% endif %},
                         when: "{{ item.when_text|escapejs }}",
                     },
                     {% endfor %}
@@ -2063,13 +2055,6 @@
         };
 
         const normalizeSearch = (value) => String(value || '').trim().toLowerCase();
-        const sortPendencies = (items) => {
-            return [...(Array.isArray(items) ? items : [])].sort((a, b) => {
-                const urgentDiff = Number(!!b.is_urgent) - Number(!!a.is_urgent);
-                if (urgentDiff) return urgentDiff;
-                return Number(b.id || 0) - Number(a.id || 0);
-            });
-        };
 
         const upsertItem = (attendantId, payload) => {
             const key = String(attendantId || '').trim();
@@ -2086,15 +2071,12 @@
             const normalized = {
                 id,
                 description: String(payload.description || '').trim() || '-',
-                is_urgent: !!payload.is_urgent,
                 when: String(payload.when_text || '').trim(),
             };
             if (payload.is_done) {
                 bucket.completed.unshift(normalized);
-                bucket.completed = sortPendencies(bucket.completed);
             } else {
                 bucket.pending.unshift(normalized);
-                bucket.pending = sortPendencies(bucket.pending);
             }
         };
 
@@ -2115,14 +2097,9 @@
                 row.style.alignItems = 'center';
                 row.style.justifyContent = 'space-between';
                 row.style.gap = '10px';
-                if (item.is_urgent) {
-                    row.style.background = 'rgba(185, 28, 28, 0.18)';
-                    row.style.border = '1px solid rgba(248, 113, 113, 0.45)';
-                }
 
                 const text = document.createElement('span');
-                const urgentPrefix = item.is_urgent ? '[Urgente] ' : '';
-                const base = `#${item.id} - ${urgentPrefix}${item.description || '-'}`;
+                const base = `#${item.id} - ${item.description || '-'}`;
                 const when = (item.when || '').trim();
                 text.textContent = when ? `${base} | ${whenLabel}: ${when}` : base;
                 row.appendChild(text);
@@ -2131,59 +2108,6 @@
                 actions.style.display = 'flex';
                 actions.style.alignItems = 'center';
                 actions.style.gap = '8px';
-
-                const urgentLabel = document.createElement('label');
-                urgentLabel.style.display = 'inline-flex';
-                urgentLabel.style.alignItems = 'center';
-                urgentLabel.style.gap = '4px';
-                urgentLabel.style.cursor = 'pointer';
-                urgentLabel.title = item.is_urgent ? 'Remover urgencia' : 'Marcar como urgente';
-
-                const urgentToggle = document.createElement('input');
-                urgentToggle.type = 'checkbox';
-                urgentToggle.checked = !!item.is_urgent;
-                urgentToggle.title = urgentToggle.checked ? 'Remover urgencia' : 'Marcar como urgente';
-                urgentToggle.addEventListener('change', async () => {
-                    const pendencyId = Number(item.id || 0);
-                    if (!pendencyId || !currentAttendantId) return;
-                    urgentToggle.disabled = true;
-                    try {
-                        const response = await fetch(toggleUrgentApiUrl, {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/x-www-form-urlencoded',
-                                'X-CSRFToken': getCookie('csrftoken'),
-                            },
-                            body: new URLSearchParams({
-                                pendency_id: String(pendencyId),
-                                is_urgent: urgentToggle.checked ? '1' : '',
-                            }),
-                        });
-                        const data = await response.json().catch(() => ({}));
-                        if (!response.ok || !data.ok) {
-                            alert('Nao foi possivel atualizar a urgencia da pendencia.');
-                            urgentToggle.checked = !urgentToggle.checked;
-                            return;
-                        }
-                        upsertItem(currentAttendantId, data.item || {});
-                        renderAll();
-                    } catch (_) {
-                        alert('Falha de rede ao atualizar a urgencia da pendencia.');
-                        urgentToggle.checked = !urgentToggle.checked;
-                    } finally {
-                        urgentToggle.disabled = false;
-                    }
-                });
-                urgentLabel.appendChild(urgentToggle);
-                urgentLabel.appendChild(document.createTextNode('Urg'));
-                actions.appendChild(urgentLabel);
-
-                const doneLabel = document.createElement('label');
-                doneLabel.style.display = 'inline-flex';
-                doneLabel.style.alignItems = 'center';
-                doneLabel.style.gap = '4px';
-                doneLabel.style.cursor = 'pointer';
-                doneLabel.title = doneValue ? 'Marcar como pendente' : 'Marcar como concluida';
 
                 const toggle = document.createElement('input');
                 toggle.type = 'checkbox';
@@ -2220,9 +2144,7 @@
                         toggle.disabled = false;
                     }
                 });
-                doneLabel.appendChild(toggle);
-                doneLabel.appendChild(document.createTextNode('OK'));
-                actions.appendChild(doneLabel);
+                actions.appendChild(toggle);
 
                 if (!doneValue) {
                     const createTicketBtn = document.createElement('button');
@@ -2305,7 +2227,6 @@
             if (nameEl) nameEl.textContent = attendantName;
             if (completedNameEl) completedNameEl.textContent = attendantName;
             if (createInput) createInput.value = '';
-            if (createUrgentInput) createUrgentInput.checked = false;
             if (completedSearchInput) completedSearchInput.value = '';
             renderAll();
             modal.hidden = false;
@@ -2358,7 +2279,6 @@
                 const submitBtn = createForm.querySelector('button[type="submit"]');
                 if (submitBtn) submitBtn.disabled = true;
                 try {
-                    const isUrgent = createUrgentInput && createUrgentInput.checked ? '1' : '';
                     const response = await fetch(createApiUrl, {
                         method: 'POST',
                         headers: {
@@ -2368,7 +2288,6 @@
                         body: new URLSearchParams({
                             attendant_id: String(currentAttendantId),
                             description,
-                            is_urgent: isUrgent,
                         }),
                     });
                     const data = await response.json().catch(() => ({}));
@@ -2378,7 +2297,6 @@
                     }
                     upsertItem(currentAttendantId, data.item || {});
                     createInput.value = '';
-                    if (createUrgentInput) createUrgentInput.checked = false;
                     renderAll();
                     createInput.focus();
                 } catch (_) {

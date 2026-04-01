@@ -406,14 +406,13 @@ class Pendencia(models.Model):
         related_name='pendencias',
     )
     description = models.CharField(max_length=300)
-    is_urgent = models.BooleanField(default=False)
     is_done = models.BooleanField(default=False)
     done_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ['is_done', '-is_urgent', '-created_at', '-id']
+        ordering = ['is_done', '-created_at', '-id']
 
     def __str__(self) -> str:
         return f'{self.attendant.full_name}: {self.description}'
