@@ -143,27 +143,6 @@ def _is_ti_auth_user(auth_user) -> bool:
     ).exists()
 
 
-def _vault_allowed_usernames() -> set[str]:
-    raw_values = getattr(settings, 'VAULT_ALLOWED_USERNAMES', []) or []
-    return {
-        (value or '').strip().lower()
-        for value in raw_values
-        if (value or '').strip()
-    }
-
-
-def _is_vault_allowed_user(auth_user) -> bool:
-    if not _is_ti_auth_user(auth_user):
-        return False
-    username = (getattr(auth_user, 'username', '') or '').strip().lower()
-    if not username:
-        return False
-    allowed = _vault_allowed_usernames()
-    if not allowed:
-        return False
-    return username in allowed
-
-
 def _login_rate_limit_config() -> tuple[int, int, int]:
     window_raw = getattr(settings, 'LOGIN_RATE_LIMIT_WINDOW_MINUTES', 15)
     per_user_ip_raw = getattr(settings, 'LOGIN_RATE_LIMIT_MAX_FAILURES_PER_USER_IP', 5)
@@ -3237,9 +3216,6 @@ class CofreView(LoginRequiredMixin, TemplateView):
         if not is_vault_feature_enabled():
             messages.info(request, 'Cofre desabilitado nesta instalacao.')
             return redirect('chamados')
-        if not _is_vault_allowed_user(request.user):
-            messages.error(request, 'Cofre liberado apenas para os usuarios autorizados.')
-            return redirect('chamados')
         return super().dispatch(request, *args, **kwargs)
 
     def render_to_response(self, context, **response_kwargs):
@@ -3249,8 +3225,8 @@ class CofreView(LoginRequiredMixin, TemplateView):
         return response
 
     def post(self, request, *args, **kwargs):
-        if not _is_vault_allowed_user(request.user):
-            messages.error(request, 'Cofre liberado apenas para os usuarios autorizados.')
+        if not is_ti_user(request):
+            messages.error(request, 'Apenas usuarios do departamento TI podem usar o cofre.')
             return redirect(request.get_full_path())
 
         vault_ready, vault_status_message = get_vault_status()
@@ -3472,29 +3448,21 @@ class CofreView(LoginRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         is_ti = is_ti_user(self.request)
-        is_vault_allowed = _is_vault_allowed_user(getattr(self.request, 'user', None))
         vault_ready, vault_status_message = get_vault_status()
         context['is_ti_group'] = is_ti
-        if is_ti:
-            allowed_slugs = None
-            if not is_vault_allowed:
-                allowed_slugs = {module['slug'] for module in ERP_MODULES if module['slug'] != 'cofre'}
-            context['modules'] = build_modules('cofre', allowed_slugs=allowed_slugs)
-        else:
-            context['modules'] = []
-        context['is_vault_allowed_user'] = is_vault_allowed
+        context['modules'] = build_modules('cofre') if is_ti else []
         context['vault_configured'] = vault_ready
         context['vault_status_message'] = vault_status_message
         context['vault_access_password_required'] = _vault_access_password_required()
         context['vault_unlock_minutes'] = _vault_unlock_minutes()
-        context['vault_unlocked'] = _is_vault_unlocked_session(self.request) if is_vault_allowed else False
-        is_blocked, failed_count, wait_seconds = _vault_unlock_block_status(self.request) if is_vault_allowed else (False, 0, 0)
+        context['vault_unlocked'] = _is_vault_unlocked_session(self.request) if is_ti else False
+        is_blocked, failed_count, wait_seconds = _vault_unlock_block_status(self.request) if is_ti else (False, 0, 0)
         context['vault_unlock_blocked'] = is_blocked
         context['vault_failed_attempts_recent'] = failed_count
         context['vault_unlock_wait_seconds'] = wait_seconds
-        context['vault_unlock_remaining_seconds'] = _vault_unlock_remaining_seconds(self.request) if is_vault_allowed else 0
+        context['vault_unlock_remaining_seconds'] = _vault_unlock_remaining_seconds(self.request) if is_ti else 0
         context['vault_items'] = []
-        if is_vault_allowed and vault_ready and context['vault_access_password_required'] and context['vault_unlocked']:
+        if is_ti and vault_ready and context['vault_access_password_required'] and context['vault_unlocked']:
             items = list(PasswordVaultItem.objects.select_related('created_by', 'updated_by').order_by('service_name', 'id'))
             for item in items:
                 item.account_username_plain = _decrypt_vault_optional(item.account_username_encrypted)
@@ -3508,7 +3476,7 @@ class CofreView(LoginRequiredMixin, TemplateView):
 def cofre_reveal_api(request):
     if not is_vault_feature_enabled():
         return JsonResponse({'ok': False, 'error': 'vault_disabled'}, status=404)
-    if not _is_vault_allowed_user(request.user):
+    if not is_ti_user(request):
         return JsonResponse({'ok': False, 'error': 'forbidden'}, status=403)
     vault_ready, _vault_status_message = get_vault_status()
     if not vault_ready:

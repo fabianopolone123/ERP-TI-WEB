@@ -306,7 +306,6 @@ EMAIL_NOTIFY_NEW_TICKET_USERNAMES = [
 
 # Cofre de senhas (falha isolada: nunca derruba o boot do ERP)
 FEATURE_VAULT_ENABLED = _env_bool('FEATURE_VAULT_ENABLED', False)
-VAULT_ALLOWED_USERNAMES = _env_csv('VAULT_ALLOWED_USERNAMES', 'fabiano,fabio')
 VAULT_MASTER_KEY, VAULT_MASTER_KEY_SOURCE = _env_secret_with_source('VAULT_MASTER_KEY', '')
 VAULT_KEY_SALT = (os.environ.get('VAULT_KEY_SALT', 'erp-ti-vault-v1') or 'erp-ti-vault-v1').strip()
 VAULT_ACCESS_PASSWORD = _env_secret('VAULT_ACCESS_PASSWORD', '')
