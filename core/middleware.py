@@ -1,91 +1,9 @@
 from __future__ import annotations
 
 from time import time
-from django.conf import settings
-from django.contrib.auth import logout
-from django.shortcuts import redirect
-from django.urls import reverse
 from django.utils import timezone
 
 from .audit import describe_request, log_audit_event
-from .models import ERPUser
-
-
-def _is_ti_authenticated_request(request) -> bool:
-    user = getattr(request, 'user', None)
-    if not (user and getattr(user, 'is_authenticated', False)):
-        return False
-    username = (getattr(user, 'username', '') or '').strip()
-    if not username:
-        return False
-
-    session = getattr(request, 'session', None)
-    if session is None:
-        return False
-
-    cached_username = session.get('ti_cache_username')
-    cached_is_ti = session.get('ti_cache_is_ti')
-    if cached_username == username and isinstance(cached_is_ti, bool):
-        return cached_is_ti
-
-    is_ti = ERPUser.objects.filter(
-        username__iexact=username,
-        department__iexact='TI',
-        is_active=True,
-    ).exists()
-    session['ti_cache_username'] = username
-    session['ti_cache_is_ti'] = bool(is_ti)
-    return bool(is_ti)
-
-
-class TISessionHardeningMiddleware:
-    def __init__(self, get_response):
-        self.get_response = get_response
-
-    def __call__(self, request):
-        path = (getattr(request, 'path', '') or '')
-        if (
-            path.startswith('/static/')
-            or path.startswith('/media/')
-            or path.startswith('/login')
-            or path.startswith('/logout')
-        ):
-            return self.get_response(request)
-
-        if not _is_ti_authenticated_request(request):
-            return self.get_response(request)
-
-        raw_minutes = getattr(settings, 'TI_SESSION_IDLE_MINUTES', 20)
-        try:
-            idle_minutes = int(raw_minutes or 20)
-        except (TypeError, ValueError):
-            idle_minutes = 20
-        if idle_minutes <= 0:
-            return self.get_response(request)
-        idle_minutes = min(idle_minutes, 480)
-
-        raw_grace = getattr(settings, 'TI_SESSION_ACTIVITY_GRACE_SECONDS', 15)
-        try:
-            grace_seconds = int(raw_grace or 15)
-        except (TypeError, ValueError):
-            grace_seconds = 15
-        grace_seconds = max(5, min(grace_seconds, 120))
-
-        now_ts = int(time())
-        last_activity_raw = request.session.get('ti_last_activity_ts')
-        try:
-            last_activity_ts = int(last_activity_raw or 0)
-        except (TypeError, ValueError):
-            last_activity_ts = 0
-
-        if last_activity_ts and (now_ts - last_activity_ts) > (idle_minutes * 60):
-            logout(request)
-            return redirect(f"{reverse('login')}?session_expired=1")
-
-        if not last_activity_ts or (now_ts - last_activity_ts) >= grace_seconds:
-            request.session['ti_last_activity_ts'] = now_ts
-
-        return self.get_response(request)
 
 
 class AuditTrailMiddleware:

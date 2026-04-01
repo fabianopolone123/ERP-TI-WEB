@@ -7,7 +7,6 @@ from .views import (
     DashboardView,
     AtribuicoesView,
     AtribuicoesReportView,
-    CofreView,
     PendenciasView,
     AcessosView,
     EquipamentosView,
@@ -40,7 +39,6 @@ from .views import (
     pendencias_create_api,
     pendencias_create_ticket_api,
     chamados_close_category_create_api,
-    cofre_reveal_api,
 )
 
 urlpatterns = [
@@ -49,7 +47,6 @@ urlpatterns = [
     path('usuarios/', UsersListView.as_view(), name='usuarios'),
     path('atribuicoes/', AtribuicoesView.as_view(), name='atribuicoes'),
     path('atribuicoes/relatorio/', AtribuicoesReportView.as_view(), name='atribuicoes_relatorio'),
-    path('cofre/', CofreView.as_view(), name='cofre'),
     path('pendencias/', PendenciasView.as_view(), name='pendencias'),
     path('acessos/', AcessosView.as_view(), name='acessos'),
     path('equipamentos/', EquipamentosView.as_view(), name='equipamentos'),
@@ -78,7 +75,6 @@ urlpatterns = [
     path('api/app/version/', app_version_api, name='app_version_api'),
     path('api/chamados/novos/', chamados_new_alert_api, name='chamados_new_alert_api'),
     path('api/chamados/close-categories/create/', chamados_close_category_create_api, name='chamados_close_category_create_api'),
-    path('api/cofre/reveal/', cofre_reveal_api, name='cofre_reveal_api'),
     path('api/inventory/push/', inventory_push_api, name='inventory_push_api'),
     path('api/pendencias/toggle-status/', pendencias_toggle_status_api, name='pendencias_toggle_status_api'),
     path('api/pendencias/create/', pendencias_create_api, name='pendencias_create_api'),

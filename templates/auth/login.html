@@ -14,12 +14,6 @@
     <form method="post">
         {% csrf_token %}
 
-        {% if request.GET.session_expired == '1' %}
-            <div class="alert alert-error" style="margin-bottom: 10px;">
-                Sessão expirada por inatividade. Faça login novamente.
-            </div>
-        {% endif %}
-
         {{ form.non_field_errors }}
 
         <label for="id_username">Usuário</label>

@@ -648,36 +648,6 @@ class WhatsAppOptOut(models.Model):
         return f'WhatsAppOptOut {self.user_id}'
 
 
-class PasswordVaultItem(models.Model):
-    service_name = models.CharField(max_length=160)
-    account_username_encrypted = models.TextField(blank=True, default='')
-    account_url_encrypted = models.TextField(blank=True, default='')
-    password_encrypted = models.TextField()
-    notes_encrypted = models.TextField(blank=True, default='')
-    created_by = models.ForeignKey(
-        'auth.User',
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name='vault_items_created',
-    )
-    updated_by = models.ForeignKey(
-        'auth.User',
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name='vault_items_updated',
-    )
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        ordering = ['service_name', 'id']
-
-    def __str__(self) -> str:
-        return self.service_name
-
-
 class AuditLog(models.Model):
     class EventType(models.TextChoices):
         ACCESS = 'access', 'Acesso'
