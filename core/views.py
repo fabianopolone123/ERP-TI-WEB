@@ -58,6 +58,7 @@ from .models import (
     Responsibility,
     Pendencia,
     Emprestimo,
+    PlanoAtivo,
     TicketCloseCategory,
     Ticket,
     TicketMessage,
@@ -109,6 +110,7 @@ ERP_MODULES = [
     {'slug': 'requisicoes', 'label': 'Requisições', 'url_name': 'requisicoes'},
     {'slug': 'dicas', 'label': 'Dicas', 'url_name': 'dicas'},
     {'slug': 'emprestimos', 'label': 'Empréstimos', 'url_name': 'emprestimos'},
+    {'slug': 'planos_ativos', 'label': 'Planos Ativos', 'url_name': 'planos_ativos'},
     {'slug': 'relatorios', 'label': 'Relatórios', 'url_name': 'relatorios'},
     {'slug': 'auditoria', 'label': 'Auditoria', 'url_name': 'auditoria'},
 ]
@@ -328,6 +330,25 @@ def _validate_upload(file_obj, *, image_only: bool = False) -> str:
         max_mb = int(getattr(settings, 'UPLOAD_MAX_FILE_MB', 10) or 10)
         return f'Arquivo excede o limite de {max_mb}MB.'
     return ''
+
+
+def _parse_decimal_br_input(raw_value: str, *, allow_zero: bool = False) -> Decimal:
+    normalized_value = (raw_value or '').strip().replace(' ', '')
+    if ',' in normalized_value and '.' in normalized_value:
+        if normalized_value.rfind(',') > normalized_value.rfind('.'):
+            normalized_value = normalized_value.replace('.', '').replace(',', '.')
+        else:
+            normalized_value = normalized_value.replace(',', '')
+    elif ',' in normalized_value:
+        normalized_value = normalized_value.replace('.', '').replace(',', '.')
+    elif normalized_value.count('.') > 1:
+        normalized_value = normalized_value.replace('.', '')
+    value = Decimal(normalized_value or '0')
+    if value < 0:
+        raise InvalidOperation
+    if value == 0 and not allow_zero:
+        raise InvalidOperation
+    return value
 
 
 def _get_user_ad_groups(username: str) -> list[str]:
@@ -2775,6 +2796,92 @@ class EmprestimosView(LoginRequiredMixin, TemplateView):
         context['is_ti_group'] = is_ti
         context['modules'] = build_modules('emprestimos') if is_ti else []
         context['emprestimos'] = Emprestimo.objects.select_related('created_by').all() if is_ti else []
+        return context
+
+
+class PlanosAtivosView(LoginRequiredMixin, TemplateView):
+    template_name = 'core/planos_ativos.html'
+
+    def post(self, request, *args, **kwargs):
+        if not is_ti_user(request):
+            messages.error(request, 'Apenas usuarios do departamento TI podem cadastrar planos ativos.')
+            return redirect(request.get_full_path())
+
+        nome = (request.POST.get('nome') or '').strip()
+        data_inicio_raw = (request.POST.get('data_inicio') or '').strip()
+        data_fim_raw = (request.POST.get('data_fim') or '').strip()
+        valor_raw = (request.POST.get('valor') or '').strip()
+        documentacao = request.FILES.get('documentacao')
+        attachment_error = _validate_upload(documentacao, image_only=False)
+        if attachment_error:
+            messages.error(request, attachment_error)
+            return redirect(request.get_full_path())
+
+        if not nome:
+            messages.error(request, 'Informe o nome do plano.')
+            return redirect('planos_ativos')
+
+        data_inicio = parse_date(data_inicio_raw)
+        if data_inicio is None:
+            messages.error(request, 'Informe uma data de inicio valida.')
+            return redirect('planos_ativos')
+
+        data_fim = parse_date(data_fim_raw)
+        if data_fim is None:
+            messages.error(request, 'Informe uma data de fim valida.')
+            return redirect('planos_ativos')
+
+        if data_fim < data_inicio:
+            messages.error(request, 'A data de fim deve ser igual ou posterior a data de inicio.')
+            return redirect('planos_ativos')
+
+        try:
+            valor = _parse_decimal_br_input(valor_raw)
+        except (InvalidOperation, ValueError):
+            messages.error(request, 'Informe um valor valido.')
+            return redirect('planos_ativos')
+
+        PlanoAtivo.objects.create(
+            nome=nome,
+            data_inicio=data_inicio,
+            data_fim=data_fim,
+            valor=valor,
+            documentacao=documentacao,
+            created_by=request.user,
+        )
+        messages.success(request, 'Plano ativo cadastrado com sucesso.')
+        return redirect('planos_ativos')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        is_ti = is_ti_user(self.request)
+        context['is_ti_group'] = is_ti
+        context['modules'] = build_modules('planos_ativos') if is_ti else []
+        context['planos_ativos'] = []
+        if not is_ti:
+            return context
+
+        today = timezone.localdate()
+        planos = list(PlanoAtivo.objects.select_related('created_by').all())
+        for item in planos:
+            if item.data_inicio and item.data_inicio > today:
+                item.status_label = 'Agendado'
+                item.status_class = 'scheduled'
+            elif item.data_fim and item.data_fim < today:
+                item.status_label = 'Encerrado'
+                item.status_class = 'closed'
+            else:
+                item.status_label = 'Ativo'
+                item.status_class = 'active'
+        planos.sort(
+            key=lambda item: (
+                0 if getattr(item, 'status_class', '') == 'active' else 1 if getattr(item, 'status_class', '') == 'scheduled' else 2,
+                item.data_fim,
+                (item.nome or '').casefold(),
+                item.id,
+            )
+        )
+        context['planos_ativos'] = planos
         return context
 
 

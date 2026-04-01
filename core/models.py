@@ -440,6 +440,29 @@ class Emprestimo(models.Model):
         return f'{self.nome} - {self.equipamento}'
 
 
+class PlanoAtivo(models.Model):
+    nome = models.CharField(max_length=200)
+    data_inicio = models.DateField()
+    data_fim = models.DateField()
+    valor = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    documentacao = models.FileField(upload_to='planos_ativos/', null=True, blank=True)
+    created_by = models.ForeignKey(
+        'auth.User',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='planos_ativos_criados',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['data_fim', 'nome', 'id']
+
+    def __str__(self) -> str:
+        return self.nome
+
+
 class TicketCloseCategory(models.Model):
     name = models.CharField(max_length=120, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
