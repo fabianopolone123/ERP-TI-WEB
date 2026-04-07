@@ -159,17 +159,92 @@ def _translate_windows_drive_path(value: str) -> str:
     return str(translated)
 
 
-def _resolve_workbook_path(workbook_path: str) -> tuple[Path, list[str]]:
+class _SafeFormatDict(dict):
+    def __missing__(self, key):
+        return '{' + str(key) + '}'
+
+
+def _normalize_username(value: str) -> str:
+    raw = (value or '').strip()
+    if not raw:
+        return ''
+    if '\\' in raw:
+        raw = raw.split('\\', 1)[1]
+    if '@' in raw:
+        raw = raw.split('@', 1)[0]
+    return raw.strip()
+
+
+def _build_attendant_path_context(attendant: ERPUser) -> dict[str, str]:
+    full_name = (attendant.full_name or attendant.username or '').strip()
+    first_name = full_name.split()[0].strip() if full_name else ''
+    username = (attendant.username or '').strip()
+    username_local = _normalize_username(username)
+    year = timezone.localtime(timezone.now()).year
+    return {
+        'username': username,
+        'username_local': username_local,
+        'first_name': first_name,
+        'full_name': full_name,
+        'year': str(year),
+        'year_short': str(year)[-2:],
+    }
+
+
+def _render_attendant_path_template(template: str, attendant: ERPUser) -> str:
+    raw = (template or '').strip()
+    if not raw:
+        return ''
+    try:
+        return raw.format_map(_SafeFormatDict(_build_attendant_path_context(attendant))).strip()
+    except Exception:
+        logger.exception('Falha ao renderizar template de planilha para %s', attendant.full_name)
+        return raw
+
+
+def get_attendant_workbook_path_candidates(attendant: ERPUser) -> list[str]:
+    candidates = [
+        _render_attendant_path_template(getattr(settings, 'CHAMADOS_XLSX_SERVER_PATH_TEMPLATE', ''), attendant),
+        (getattr(settings, 'CHAMADOS_XLSX_SERVER_PATH', '') or '').strip(),
+        _render_attendant_path_template(getattr(settings, 'CHAMADOS_XLSX_PATH_TEMPLATE', ''), attendant),
+        (getattr(settings, 'CHAMADOS_XLSX_PATH', '') or '').strip(),
+    ]
+
+    unique_candidates: list[str] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        normalized = (candidate or '').strip()
+        if normalized and normalized not in seen:
+            seen.add(normalized)
+            unique_candidates.append(normalized)
+    return unique_candidates
+
+
+def get_attendant_default_workbook_path(attendant: ERPUser) -> str:
+    candidates = get_attendant_workbook_path_candidates(attendant)
+    return candidates[0] if candidates else ''
+
+
+def _resolve_workbook_path(*, attendant: ERPUser, workbook_path: str) -> tuple[Path, list[str]]:
     raw = (workbook_path or '').strip()
     configured_default = (getattr(settings, 'CHAMADOS_XLSX_PATH', '') or '').strip()
-    server_path = (getattr(settings, 'CHAMADOS_XLSX_SERVER_PATH', '') or '').strip()
+    configured_server_default = (getattr(settings, 'CHAMADOS_XLSX_SERVER_PATH', '') or '').strip()
+    attendant_candidates = get_attendant_workbook_path_candidates(attendant)
 
     candidates: list[str] = []
     if raw:
         candidates.append(raw)
 
-    if server_path and (not raw or raw == configured_default or _looks_like_windows_drive_path(raw)):
-        candidates.append(server_path)
+    if (
+        attendant_candidates
+        and (
+            not raw
+            or raw == configured_default
+            or raw == configured_server_default
+            or _looks_like_windows_drive_path(raw)
+        )
+    ):
+        candidates.extend(attendant_candidates)
 
     if raw and os.name != 'nt' and _looks_like_windows_drive_path(raw):
         translated = _translate_windows_drive_path(raw)
@@ -195,7 +270,7 @@ def _resolve_workbook_path(workbook_path: str) -> tuple[Path, list[str]]:
 
 
 def export_attendant_logs_to_excel(*, attendant: ERPUser, workbook_path: str) -> tuple[bool, int, str]:
-    path, tried_candidates = _resolve_workbook_path(workbook_path)
+    path, tried_candidates = _resolve_workbook_path(attendant=attendant, workbook_path=workbook_path)
     if not path.exists():
         tried_text = ', '.join(tried_candidates[:3]) if tried_candidates else str(path)
         return (
@@ -204,7 +279,7 @@ def export_attendant_logs_to_excel(*, attendant: ERPUser, workbook_path: str) ->
             'Arquivo nao encontrado. '
             f'Tentativas: {tried_text}. '
             'Se o ERP estiver no Ubuntu, use um caminho acessivel pelo servidor '
-            'ou configure CHAMADOS_XLSX_SERVER_PATH.',
+            'ou configure CHAMADOS_XLSX_SERVER_PATH/CHAMADOS_XLSX_SERVER_PATH_TEMPLATE.',
         )
 
     logs = list(

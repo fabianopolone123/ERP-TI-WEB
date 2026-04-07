@@ -922,7 +922,11 @@
                         <select id="id_planilha_atendente" name="attendant_id" required>
                             <option value="">Selecione...</option>
                             {% for user in ti_users %}
-                                <option value="{{ user.id }}" data-last-path="{{ attendant_last_workbook_paths|get_item:user.id|default:'' }}">{{ user.full_name }}</option>
+                                <option
+                                    value="{{ user.id }}"
+                                    data-last-path="{{ attendant_last_workbook_paths|get_item:user.id|default:'' }}"
+                                    data-default-path="{{ attendant_default_workbook_paths|get_item:user.id|default:'' }}"
+                                >{{ user.full_name }}</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -936,7 +940,7 @@
                             placeholder="S:\TI\Documentos\Chamados\Chamados 2026 - Fabiano.xlsx"
                         />
                         <div class="muted" style="margin-top: 6px;">
-                            Em servidor Ubuntu, use o caminho acessivel pelo proprio servidor.
+                            Em servidor Ubuntu, use o caminho acessivel pelo proprio servidor. O sistema pode sugerir um caminho diferente para cada atendente.
                         </div>
                     </div>
                 </div>
@@ -2344,7 +2348,8 @@
             if (!pathInput || !attendantInput) return;
             const opt = attendantInput.options[attendantInput.selectedIndex];
             const attendantPath = (opt?.dataset?.lastPath || '').trim();
-            pathInput.value = attendantPath || defaultPath;
+            const attendantDefaultPath = (opt?.dataset?.defaultPath || '').trim();
+            pathInput.value = attendantPath || attendantDefaultPath || defaultPath;
         };
 
         const open = () => {

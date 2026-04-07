@@ -36,7 +36,7 @@ from openpyxl import Workbook
 from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
 
 from .ldap_importer import import_ad_users
-from .chamados_excel import export_attendant_logs_to_excel
+from .chamados_excel import export_attendant_logs_to_excel, get_attendant_default_workbook_path
 from .models import (
     ERPUser,
     EmailAlias,
@@ -3650,6 +3650,10 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
                         payload['when_text'] = timezone.localtime(created_at).strftime('%d/%m/%Y %H:%M')
                     bucket['pending'].append(payload)
         context['attendant_pendencias_map'] = attendant_pendencias_map
+        context['attendant_default_workbook_paths'] = {
+            user.id: get_attendant_default_workbook_path(user)
+            for user in ti_users
+        }
         if ti_ids:
             logs_with_path = (
                 TicketWorkLog.objects.filter(attendant_id__in=ti_ids)
@@ -4973,9 +4977,9 @@ def chamados_fill_spreadsheet(request):
         messages.error(request, 'Atendente não encontrado.')
         return redirect('chamados')
 
-    export_path = workbook_path
+    export_path = workbook_path or get_attendant_default_workbook_path(attendant)
     if not export_path:
-        messages.error(request, 'Informe o caminho da planilha.')
+        messages.error(request, 'Informe o caminho da planilha ou configure um caminho padrao por atendente.')
         return redirect('chamados')
 
     ok, exported_count, detail = export_attendant_logs_to_excel(
