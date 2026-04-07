@@ -97,6 +97,7 @@ class Command(BaseCommand):
                     closed_at=now_dt,
                     failure_type=failure_type,
                     action_text=AUTO_PAUSE_NOTE,
+                    requires_manual_resolution=True,
                     priority_label=locked_ticket.get_urgency_display(),
                 )
 

@@ -617,6 +617,8 @@ class TicketWorkLog(models.Model):
     closed_at = models.DateTimeField()
     failure_type = models.CharField(max_length=20, choices=Ticket.FailureType.choices, default=Ticket.FailureType.NA)
     action_text = models.TextField(blank=True, default='')
+    requires_manual_resolution = models.BooleanField(default=False)
+    manual_resolution_completed_at = models.DateTimeField(null=True, blank=True)
     priority_label = models.CharField(max_length=60, blank=True, default='')
     exported_at = models.DateTimeField(null=True, blank=True)
     exported_path = models.CharField(max_length=500, blank=True, default='')

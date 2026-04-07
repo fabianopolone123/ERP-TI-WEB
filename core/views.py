@@ -3695,6 +3695,7 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
             user.id: get_attendant_default_workbook_path(user)
             for user in ti_users
         }
+        pending_manual_resolution_items = []
         if ti_ids:
             logs_with_path = (
                 TicketWorkLog.objects.filter(attendant_id__in=ti_ids)
@@ -3710,7 +3711,31 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
                 path_value = (row.get('exported_path') or '').strip()
                 if path_value:
                     last_paths[aid] = path_value
+            pending_logs = (
+                TicketWorkLog.objects.filter(
+                    attendant_id__in=ti_ids,
+                    requires_manual_resolution=True,
+                )
+                .select_related('ticket', 'attendant')
+                .order_by('closed_at', 'id')
+            )
+            for item in pending_logs:
+                pending_manual_resolution_items.append(
+                    {
+                        'work_log_id': item.id,
+                        'ticket_id': item.ticket_id,
+                        'ticket_title': item.ticket.title,
+                        'attendant_id': item.attendant_id,
+                        'attendant_name': item.attendant.full_name,
+                        'closed_at_text': timezone.localtime(item.closed_at).strftime('%d/%m/%Y %H:%M') if item.closed_at else '',
+                        'opened_at_text': timezone.localtime(item.opened_at).strftime('%d/%m/%Y %H:%M') if item.opened_at else '',
+                        'status_label': item.ticket.get_status_display(),
+                        'current_action_text': (item.action_text or '').strip(),
+                    }
+                )
         context['attendant_last_workbook_paths'] = last_paths
+        context['manual_resolution_pending_items'] = pending_manual_resolution_items
+        context['manual_resolution_pending_count'] = len(pending_manual_resolution_items)
         ti_requester_subquery = ERPUser.objects.filter(
             department__iexact='TI',
             username__iexact=OuterRef('created_by__username'),
@@ -3779,18 +3804,33 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
         in_progress_ids = [t.id for t in in_progress_tickets if t.id]
         if in_progress_ids:
             for cycle in TicketAttendantCycle.objects.filter(ticket_id__in=in_progress_ids).only(
-                'ticket_id', 'attendant_id', 'current_cycle_started_at', 'manual_resolution_pending', 'manual_resolution_pending_since'
+                'ticket_id', 'attendant_id', 'current_cycle_started_at'
             ):
                 if cycle.current_cycle_started_at:
                     bucket = ticket_cycle_map.setdefault(cycle.ticket_id, {})
                     bucket[cycle.attendant_id] = True
-                if cycle.manual_resolution_pending:
-                    pending_bucket = ticket_manual_resolution_map.setdefault(cycle.ticket_id, {})
-                    pending_bucket[cycle.attendant_id] = (
-                        timezone.localtime(cycle.manual_resolution_pending_since).strftime('%d/%m/%Y %H:%M')
-                        if cycle.manual_resolution_pending_since
-                        else ''
-                    )
+            pending_resolution_rows = (
+                TicketWorkLog.objects.filter(
+                    ticket_id__in=in_progress_ids,
+                    requires_manual_resolution=True,
+                )
+                .order_by('ticket_id', 'attendant_id', '-closed_at', '-id')
+                .values('ticket_id', 'attendant_id', 'closed_at')
+            )
+            for row in pending_resolution_rows:
+                ticket_id = row.get('ticket_id')
+                attendant_id = row.get('attendant_id')
+                if not ticket_id or not attendant_id:
+                    continue
+                pending_bucket = ticket_manual_resolution_map.setdefault(ticket_id, {})
+                if attendant_id in pending_bucket:
+                    continue
+                closed_at = row.get('closed_at')
+                pending_bucket[attendant_id] = (
+                    timezone.localtime(closed_at).strftime('%d/%m/%Y %H:%M')
+                    if closed_at
+                    else ''
+                )
         for ticket in in_progress_tickets:
             if not ticket.current_cycle_started_at or not ticket.assigned_to_id:
                 continue
@@ -5074,6 +5114,65 @@ def chamados_fill_spreadsheet(request):
         messages.success(request, f'{attendant.full_name}: {detail}')
     else:
         messages.error(request, f'{attendant.full_name}: {detail}')
+    return redirect('chamados')
+
+
+@login_required
+@require_POST
+def chamados_manual_resolution_update(request):
+    if not is_ti_user(request):
+        return JsonResponse({'ok': False, 'error': 'forbidden'}, status=403)
+
+    work_log_id_raw = (request.POST.get('work_log_id') or '').strip()
+    resolution_text = (request.POST.get('resolution_text') or '').strip()
+    if not work_log_id_raw:
+        messages.error(request, 'Pendencia de resolucao invalida.')
+        return redirect('chamados')
+    if not resolution_text:
+        messages.error(request, 'Informe a resolucao para a pendencia.')
+        return redirect('chamados')
+
+    try:
+        work_log_id = int(work_log_id_raw)
+    except ValueError:
+        messages.error(request, 'Pendencia de resolucao invalida.')
+        return redirect('chamados')
+
+    work_log = (
+        TicketWorkLog.objects.select_related('ticket', 'attendant')
+        .filter(id=work_log_id, requires_manual_resolution=True)
+        .first()
+    )
+    if not work_log:
+        messages.error(request, 'Pendencia de resolucao nao encontrada ou ja preenchida.')
+        return redirect('chamados')
+
+    now_dt = timezone.now()
+    work_log.action_text = resolution_text
+    work_log.requires_manual_resolution = False
+    work_log.manual_resolution_completed_at = now_dt
+    work_log.save(update_fields=['action_text', 'requires_manual_resolution', 'manual_resolution_completed_at'])
+
+    remaining_pending = TicketWorkLog.objects.filter(
+        ticket_id=work_log.ticket_id,
+        attendant_id=work_log.attendant_id,
+        requires_manual_resolution=True,
+    ).exists()
+    if not remaining_pending:
+        TicketAttendantCycle.objects.filter(
+            ticket_id=work_log.ticket_id,
+            attendant_id=work_log.attendant_id,
+            manual_resolution_pending=True,
+        ).update(
+            manual_resolution_pending=False,
+            manual_resolution_pending_since=None,
+            updated_at=now_dt,
+        )
+
+    messages.success(
+        request,
+        f'{work_log.attendant.full_name}: resolucao manual registrada para o chamado #{work_log.ticket_id}.',
+    )
     return redirect('chamados')
 
 

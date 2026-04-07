@@ -283,7 +283,11 @@ def export_attendant_logs_to_excel(*, attendant: ERPUser, workbook_path: str) ->
         )
 
     logs = list(
-        TicketWorkLog.objects.filter(attendant=attendant, exported_at__isnull=True)
+        TicketWorkLog.objects.filter(
+            attendant=attendant,
+            exported_at__isnull=True,
+            requires_manual_resolution=False,
+        )
         .select_related('ticket__created_by')
         .order_by('closed_at', 'id')
     )
