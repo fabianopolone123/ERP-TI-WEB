@@ -17,6 +17,7 @@ class ERPUser(models.Model):
     is_active = models.BooleanField(default=True)
     is_hidden_from_users = models.BooleanField(default=False)
     can_view_requisitions_readonly = models.BooleanField(default=False)
+    auto_pause_play_tickets_at_end_of_day = models.BooleanField(default=False)
     email_usage = models.CharField(max_length=40, blank=True, default='')
     email_last_sign_in = models.CharField(max_length=40, blank=True, default='')
 
@@ -629,6 +630,8 @@ class TicketAttendantCycle(models.Model):
     ticket = models.ForeignKey(Ticket, on_delete=models.CASCADE, related_name='attendant_cycles')
     attendant = models.ForeignKey(ERPUser, on_delete=models.CASCADE, related_name='ticket_cycles')
     current_cycle_started_at = models.DateTimeField(null=True, blank=True)
+    manual_resolution_pending = models.BooleanField(default=False)
+    manual_resolution_pending_since = models.DateTimeField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:

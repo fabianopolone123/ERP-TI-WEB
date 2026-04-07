@@ -67,6 +67,7 @@
                                         <th>Ramal</th>
                                         <th>Com e-mail</th>
                                         <th>Req. leitura</th>
+                                        <th>Auto-pausa 17:45</th>
                                         <th>Ativo</th>
                                         <th>Origem</th>
                                         <th>Ação</th>
@@ -101,6 +102,20 @@
                                                     </label>
                                                 </form>
                                             </td>
+                                            <td>
+                                                {% if user.department|upper == 'TI' %}
+                                                    <form method="post" class="inline-form">
+                                                        {% csrf_token %}
+                                                        <input type="hidden" name="action" value="set_auto_pause_play_tickets_at_end_of_day" />
+                                                        <input type="hidden" name="user_id" value="{{ user.id }}" />
+                                                        <label style="display:inline-flex; align-items:center; gap:6px; cursor:pointer;" title="As 17:45 o sistema tira do play os chamados em execucao deste atendente e marca para resolucao manual posterior.">
+                                                            <input type="checkbox" name="auto_pause_play_tickets_at_end_of_day" value="1" {% if user.auto_pause_play_tickets_at_end_of_day %}checked{% endif %} onchange="this.form.submit()" />
+                                                        </label>
+                                                    </form>
+                                                {% else %}
+                                                    <span class="muted">-</span>
+                                                {% endif %}
+                                            </td>
                                             <td>{% if user.is_active %}Sim{% else %}Não{% endif %}</td>
                                             <td>{% if user.is_manual %}Manual{% else %}AD{% endif %}</td>
                                             <td>
@@ -114,7 +129,7 @@
                                         </tr>
                                     {% empty %}
                                         <tr>
-                                            <td colspan="11" class="muted">
+                                            <td colspan="12" class="muted">
                                                 Nenhum usuário cadastrado.
                                             </td>
                                         </tr>

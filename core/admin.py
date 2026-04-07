@@ -13,6 +13,7 @@ class ERPUserAdmin(admin.ModelAdmin):
         'email',
         'extension',
         'username',
+        'auto_pause_play_tickets_at_end_of_day',
         'is_active',
     )
     list_filter = ('department', 'is_active')

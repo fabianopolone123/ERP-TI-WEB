@@ -815,6 +815,30 @@ def _get_ticket_attendant_cycle(ticket: Ticket, attendant_id: int, create: bool 
     return cycle
 
 
+def _clear_cycle_manual_resolution_flag(cycle: TicketAttendantCycle | None):
+    if not cycle:
+        return
+    update_fields = []
+    if cycle.manual_resolution_pending:
+        cycle.manual_resolution_pending = False
+        update_fields.append('manual_resolution_pending')
+    if cycle.manual_resolution_pending_since is not None:
+        cycle.manual_resolution_pending_since = None
+        update_fields.append('manual_resolution_pending_since')
+    if update_fields:
+        update_fields.append('updated_at')
+        cycle.save(update_fields=update_fields)
+
+
+def _mark_cycle_manual_resolution_flag(cycle: TicketAttendantCycle | None, when_dt=None):
+    if not cycle:
+        return
+    when_value = when_dt or timezone.now()
+    cycle.manual_resolution_pending = True
+    cycle.manual_resolution_pending_since = when_value
+    cycle.save(update_fields=['manual_resolution_pending', 'manual_resolution_pending_since', 'updated_at'])
+
+
 def _sync_ticket_cycle_snapshot(ticket: Ticket):
     """Keeps legacy field aligned with assigned attendant for compatibility."""
     started_at = None
@@ -1027,6 +1051,23 @@ class UsersListView(LoginRequiredMixin, TemplateView):
             if bool(target.can_view_requisitions_readonly) != allow_readonly:
                 target.can_view_requisitions_readonly = allow_readonly
                 target.save(update_fields=['can_view_requisitions_readonly'])
+            return redirect('usuarios')
+
+        if action == 'set_auto_pause_play_tickets_at_end_of_day':
+            user_id_raw = (request.POST.get('user_id') or '').strip()
+            try:
+                user_id = int(user_id_raw)
+            except (TypeError, ValueError):
+                messages.error(request, 'Usuário inválido para atualizar a pausa automática.')
+                return redirect('usuarios')
+            target = ERPUser.objects.filter(id=user_id).first()
+            if not target:
+                messages.error(request, 'Usuário não encontrado.')
+                return redirect('usuarios')
+            enabled = bool(request.POST.get('auto_pause_play_tickets_at_end_of_day'))
+            if bool(target.auto_pause_play_tickets_at_end_of_day) != enabled:
+                target.auto_pause_play_tickets_at_end_of_day = enabled
+                target.save(update_fields=['auto_pause_play_tickets_at_end_of_day'])
             return redirect('usuarios')
 
         if action == 'update_emails_json':
@@ -3734,15 +3775,22 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
             )
 
         ticket_cycle_map: dict[int, dict[int, bool]] = {}
+        ticket_manual_resolution_map: dict[int, dict[int, str]] = {}
         in_progress_ids = [t.id for t in in_progress_tickets if t.id]
         if in_progress_ids:
             for cycle in TicketAttendantCycle.objects.filter(ticket_id__in=in_progress_ids).only(
-                'ticket_id', 'attendant_id', 'current_cycle_started_at'
+                'ticket_id', 'attendant_id', 'current_cycle_started_at', 'manual_resolution_pending', 'manual_resolution_pending_since'
             ):
-                if not cycle.current_cycle_started_at:
-                    continue
-                bucket = ticket_cycle_map.setdefault(cycle.ticket_id, {})
-                bucket[cycle.attendant_id] = True
+                if cycle.current_cycle_started_at:
+                    bucket = ticket_cycle_map.setdefault(cycle.ticket_id, {})
+                    bucket[cycle.attendant_id] = True
+                if cycle.manual_resolution_pending:
+                    pending_bucket = ticket_manual_resolution_map.setdefault(cycle.ticket_id, {})
+                    pending_bucket[cycle.attendant_id] = (
+                        timezone.localtime(cycle.manual_resolution_pending_since).strftime('%d/%m/%Y %H:%M')
+                        if cycle.manual_resolution_pending_since
+                        else ''
+                    )
         for ticket in in_progress_tickets:
             if not ticket.current_cycle_started_at or not ticket.assigned_to_id:
                 continue
@@ -3833,6 +3881,7 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
             }
         context['ticket_meta'] = ticket_meta
         context['ticket_cycle_map'] = ticket_cycle_map
+        context['ticket_manual_resolution_map'] = ticket_manual_resolution_map
 
         context['user_tickets'] = ticket_map
         return context
@@ -4041,6 +4090,7 @@ def move_ticket(request):
                 if source_cycle and source_cycle.current_cycle_started_at:
                     source_cycle.current_cycle_started_at = None
                     source_cycle.save(update_fields=['current_cycle_started_at', 'updated_at'])
+                    _clear_cycle_manual_resolution_flag(source_cycle)
             if ticket.assigned_to_id == source_user_id:
                 remaining = [uid for uid in current_assignees if uid != source_user_id]
                 promoted_id = remaining[0]
@@ -4080,6 +4130,7 @@ def move_ticket(request):
                 )
                 source_cycle.current_cycle_started_at = None
                 source_cycle.save(update_fields=['current_cycle_started_at', 'updated_at'])
+                _clear_cycle_manual_resolution_flag(source_cycle)
 
         ticket.status = destination_status
         ticket.assigned_to = None
@@ -4150,6 +4201,11 @@ def move_ticket(request):
         ticket.save()
         source_cycle.current_cycle_started_at = None
         source_cycle.save(update_fields=['current_cycle_started_at', 'updated_at'])
+        TicketAttendantCycle.objects.filter(ticket=ticket, manual_resolution_pending=True).update(
+            manual_resolution_pending=False,
+            manual_resolution_pending_since=None,
+            updated_at=timezone.now(),
+        )
         if previous_status != Ticket.Status.FECHADO:
             _notify_whatsapp(ticket, event_type="status_closed", event_label="Status atualizado", extra_line="Status atual: Fechado")
             _notify_ticket_email(ticket, event_label="Status atualizado", extra_line="Status atual: Fechado")
@@ -4195,6 +4251,7 @@ def move_ticket(request):
                 )
                 source_cycle.current_cycle_started_at = None
                 source_cycle.save(update_fields=['current_cycle_started_at', 'updated_at'])
+                _clear_cycle_manual_resolution_flag(source_cycle)
 
             ticket.last_failure_type = failure_type
             if ticket.assigned_to_id == source_user_id:
@@ -4240,6 +4297,7 @@ def move_ticket(request):
                 )
                 source_cycle.current_cycle_started_at = None
                 source_cycle.save(update_fields=['current_cycle_started_at', 'updated_at'])
+                _clear_cycle_manual_resolution_flag(source_cycle)
 
         if is_clone_assignment:
             ticket.save()
@@ -4367,7 +4425,7 @@ def ticket_timer_action(request):
 
     if action == 'play':
         if source_cycle.current_cycle_started_at:
-            return JsonResponse({'ok': True, 'running': True})
+            return JsonResponse({'ok': True, 'running': True, 'manual_resolution_pending': bool(source_cycle.manual_resolution_pending)})
         previous_status = ticket.status
         source_cycle.current_cycle_started_at = timezone.now()
         source_cycle.save(update_fields=['current_cycle_started_at', 'updated_at'])
@@ -4394,7 +4452,14 @@ def ticket_timer_action(request):
             to_status=ticket.status,
             note='Atendimento iniciado (Play).',
         )
-        return JsonResponse({'ok': True, 'running': True, 'status': ticket.status})
+        return JsonResponse(
+            {
+                'ok': True,
+                'running': True,
+                'status': ticket.status,
+                'manual_resolution_pending': bool(source_cycle.manual_resolution_pending),
+            }
+        )
 
     # pause
     if not source_cycle.current_cycle_started_at:
@@ -4416,6 +4481,7 @@ def ticket_timer_action(request):
     )
     source_cycle.current_cycle_started_at = None
     source_cycle.save(update_fields=['current_cycle_started_at', 'updated_at'])
+    _clear_cycle_manual_resolution_flag(source_cycle)
     previous_status = ticket.status
     ticket.last_failure_type = failure_type
     has_running_cycles = TicketAttendantCycle.objects.filter(
@@ -4447,7 +4513,15 @@ def ticket_timer_action(request):
         to_status=ticket.status,
         note=f'Atendimento pausado (Pause): {action_note}',
     )
-    return JsonResponse({'ok': True, 'running': False, 'failure_type': failure_type, 'status': ticket.status})
+    return JsonResponse(
+        {
+            'ok': True,
+            'running': False,
+            'failure_type': failure_type,
+            'status': ticket.status,
+            'manual_resolution_pending': bool(source_cycle.manual_resolution_pending),
+        }
+    )
 
 
 def _can_delete_ticket(request, ticket: Ticket) -> bool:
@@ -4707,6 +4781,11 @@ def ticket_delete(request):
         current_cycle_started_at=None,
         updated_at=timezone.now(),
     )
+    TicketAttendantCycle.objects.filter(ticket=ticket, manual_resolution_pending=True).update(
+        manual_resolution_pending=False,
+        manual_resolution_pending_since=None,
+        updated_at=timezone.now(),
+    )
     ticket.current_cycle_started_at = None
     ticket.status = Ticket.Status.CANCELADO
     ticket.save(update_fields=['status', 'current_cycle_started_at', 'updated_at'])
@@ -4742,6 +4821,11 @@ def ticket_reopen(request):
         had_collaborators = ticket.collaborators.exists()
         TicketAttendantCycle.objects.filter(ticket=ticket).exclude(current_cycle_started_at__isnull=True).update(
             current_cycle_started_at=None,
+            updated_at=timezone.now(),
+        )
+        TicketAttendantCycle.objects.filter(ticket=ticket, manual_resolution_pending=True).update(
+            manual_resolution_pending=False,
+            manual_resolution_pending_since=None,
             updated_at=timezone.now(),
         )
         ticket.status = Ticket.Status.PENDENTE
