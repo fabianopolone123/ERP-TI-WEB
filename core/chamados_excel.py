@@ -1,9 +1,11 @@
 import logging
+import os
 import re
 import unicodedata
 from datetime import datetime
 from pathlib import Path
 
+from django.conf import settings
 from django.utils import timezone
 from openpyxl import load_workbook
 
@@ -139,10 +141,71 @@ def _format_duration(opened_at: datetime, closed_at: datetime) -> str:
     return f'{hours:02d}:{mins:02d}'
 
 
+def _looks_like_windows_drive_path(value: str) -> bool:
+    raw = (value or '').strip()
+    return bool(re.match(r'^[A-Za-z]:[\\/]', raw))
+
+
+def _translate_windows_drive_path(value: str) -> str:
+    raw = (value or '').strip()
+    match = re.match(r'^([A-Za-z]):[\\/](.*)$', raw)
+    if not match:
+        return ''
+    mount_root = (getattr(settings, 'CHAMADOS_WINDOWS_DRIVE_MOUNT_ROOT', '/mnt') or '/mnt').strip()
+    suffix = (match.group(2) or '').replace('\\', '/').lstrip('/')
+    translated = Path(mount_root) / match.group(1).lower()
+    for part in [item for item in suffix.split('/') if item]:
+        translated /= part
+    return str(translated)
+
+
+def _resolve_workbook_path(workbook_path: str) -> tuple[Path, list[str]]:
+    raw = (workbook_path or '').strip()
+    configured_default = (getattr(settings, 'CHAMADOS_XLSX_PATH', '') or '').strip()
+    server_path = (getattr(settings, 'CHAMADOS_XLSX_SERVER_PATH', '') or '').strip()
+
+    candidates: list[str] = []
+    if raw:
+        candidates.append(raw)
+
+    if server_path and (not raw or raw == configured_default or _looks_like_windows_drive_path(raw)):
+        candidates.append(server_path)
+
+    if raw and os.name != 'nt' and _looks_like_windows_drive_path(raw):
+        translated = _translate_windows_drive_path(raw)
+        if translated:
+            candidates.append(translated)
+
+    unique_candidates: list[str] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        normalized = (candidate or '').strip()
+        if normalized and normalized not in seen:
+            seen.add(normalized)
+            unique_candidates.append(normalized)
+
+    for candidate in unique_candidates:
+        candidate_path = Path(candidate)
+        if candidate_path.exists():
+            return candidate_path, unique_candidates
+
+    if unique_candidates:
+        return Path(unique_candidates[0]), unique_candidates
+    return Path(raw), unique_candidates
+
+
 def export_attendant_logs_to_excel(*, attendant: ERPUser, workbook_path: str) -> tuple[bool, int, str]:
-    path = Path((workbook_path or '').strip())
+    path, tried_candidates = _resolve_workbook_path(workbook_path)
     if not path.exists():
-        return False, 0, f'Arquivo não encontrado: {path}'
+        tried_text = ', '.join(tried_candidates[:3]) if tried_candidates else str(path)
+        return (
+            False,
+            0,
+            'Arquivo nao encontrado. '
+            f'Tentativas: {tried_text}. '
+            'Se o ERP estiver no Ubuntu, use um caminho acessivel pelo servidor '
+            'ou configure CHAMADOS_XLSX_SERVER_PATH.',
+        )
 
     logs = list(
         TicketWorkLog.objects.filter(attendant=attendant, exported_at__isnull=True)
@@ -188,7 +251,7 @@ def export_attendant_logs_to_excel(*, attendant: ERPUser, workbook_path: str) ->
 
         wb.save(path)
     except PermissionError:
-        return False, 0, f'Sem permissão para gravar na planilha: {path}'
+        return False, 0, f'Sem permissao para gravar na planilha: {path}'
     except Exception as exc:
         logger.exception('Falha ao exportar apontamentos de %s para planilha', attendant.full_name)
         return False, 0, f'Falha ao preencher planilha: {exc}'

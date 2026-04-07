@@ -258,6 +258,8 @@ CHAMADOS_XLSX_PATH = os.environ.get(
     'CHAMADOS_XLSX_PATH',
     r'S:\TI\Documentos\Chamados\Chamados 2026 - Fabiano.xlsx',
 )
+CHAMADOS_XLSX_SERVER_PATH = (os.environ.get('CHAMADOS_XLSX_SERVER_PATH', '') or '').strip()
+CHAMADOS_WINDOWS_DRIVE_MOUNT_ROOT = (os.environ.get('CHAMADOS_WINDOWS_DRIVE_MOUNT_ROOT', '/mnt') or '/mnt').strip()
 
 # Versao do frontend/app para notificar clientes de atualizacao
 APP_VERSION = (os.environ.get('ERP_APP_VERSION', '') or '').strip()

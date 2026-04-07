@@ -3602,7 +3602,10 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
                     }
                 )
             context['wa_contacts'] = contacts
-            context['chamados_xlsx_default_path'] = getattr(settings, 'CHAMADOS_XLSX_PATH', '')
+            context['chamados_xlsx_default_path'] = (
+                getattr(settings, 'CHAMADOS_XLSX_SERVER_PATH', '')
+                or getattr(settings, 'CHAMADOS_XLSX_PATH', '')
+            )
         if not is_ti:
             context['own_tickets'] = (
                 Ticket.objects.filter(created_by=self.request.user).order_by('-created_at')
