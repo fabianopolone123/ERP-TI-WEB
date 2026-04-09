@@ -146,6 +146,11 @@ def _looks_like_windows_drive_path(value: str) -> bool:
     return bool(re.match(r'^[A-Za-z]:[\\/]', raw))
 
 
+def _looks_like_windows_unc_path(value: str) -> bool:
+    raw = (value or '').strip()
+    return raw.startswith('\\\\')
+
+
 def _translate_windows_drive_path(value: str) -> str:
     raw = (value or '').strip()
     match = re.match(r'^([A-Za-z]):[\\/](.*)$', raw)
@@ -154,6 +159,20 @@ def _translate_windows_drive_path(value: str) -> str:
     mount_root = (getattr(settings, 'CHAMADOS_WINDOWS_DRIVE_MOUNT_ROOT', '/mnt') or '/mnt').strip()
     suffix = (match.group(2) or '').replace('\\', '/').lstrip('/')
     translated = Path(mount_root) / match.group(1).lower()
+    for part in [item for item in suffix.split('/') if item]:
+        translated /= part
+    return str(translated)
+
+
+def _translate_windows_unc_path(value: str) -> str:
+    raw = (value or '').strip()
+    match = re.match(r'^\\\\[^\\]+\\([^\\]+)\\?(.*)$', raw)
+    if not match:
+        return ''
+    mount_root = (getattr(settings, 'CHAMADOS_WINDOWS_DRIVE_MOUNT_ROOT', '/mnt') or '/mnt').strip()
+    share_name = (match.group(1) or '').strip().lower()
+    suffix = (match.group(2) or '').replace('\\', '/').lstrip('/')
+    translated = Path(mount_root) / share_name
     for part in [item for item in suffix.split('/') if item]:
         translated /= part
     return str(translated)
@@ -242,6 +261,7 @@ def _resolve_workbook_path(*, attendant: ERPUser, workbook_path: str) -> tuple[P
             or raw == configured_default
             or raw == configured_server_default
             or _looks_like_windows_drive_path(raw)
+            or _looks_like_windows_unc_path(raw)
         )
     ):
         candidates.extend(attendant_candidates)
@@ -250,6 +270,10 @@ def _resolve_workbook_path(*, attendant: ERPUser, workbook_path: str) -> tuple[P
         translated = _translate_windows_drive_path(raw)
         if translated:
             candidates.append(translated)
+    if raw and os.name != 'nt' and _looks_like_windows_unc_path(raw):
+        translated_unc = _translate_windows_unc_path(raw)
+        if translated_unc:
+            candidates.append(translated_unc)
 
     unique_candidates: list[str] = []
     seen: set[str] = set()
