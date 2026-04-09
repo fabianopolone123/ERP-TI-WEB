@@ -2372,6 +2372,14 @@
             completedSearchInput.addEventListener('input', renderCompletedCurrent);
         }
 
+        const pendencyCreateErrorMessages = {
+            forbidden: 'Seu usuario nao pode cadastrar pendencias.',
+            description_required: 'Informe a pendencia antes de cadastrar.',
+            invalid_attendant_id: 'Atendente TI invalido para esta pendencia.',
+            attendant_not_found: 'Atendente TI nao encontrado. Atualize a tela e tente novamente.',
+            attendant_not_available: 'Atendente TI indisponivel no momento.',
+        };
+
         if (createForm && createInput) {
             createForm.addEventListener('submit', async (event) => {
                 event.preventDefault();
@@ -2397,7 +2405,8 @@
                     });
                     const data = await response.json().catch(() => ({}));
                     if (!response.ok || !data.ok) {
-                        alert('Nao foi possivel cadastrar a pendencia.');
+                        const errorKey = String(data.error || '').trim();
+                        alert(pendencyCreateErrorMessages[errorKey] || 'Nao foi possivel cadastrar a pendencia.');
                         return;
                     }
                     upsertItem(currentAttendantId, data.item || {});

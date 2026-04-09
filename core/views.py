@@ -260,6 +260,19 @@ def can_decide_requisitions(request) -> bool:
     return False
 
 
+def _is_ti_department_value(value: str) -> bool:
+    return (value or '').strip().upper() == 'TI'
+
+
+def _active_ti_users_queryset():
+    ti_ids = [
+        user.id
+        for user in ERPUser.objects.filter(is_active=True).only('id', 'department')
+        if _is_ti_department_value(user.department)
+    ]
+    return ERPUser.objects.filter(id__in=ti_ids).order_by('full_name')
+
+
 def _inventory_default_hosts() -> str:
     return (getattr(settings, 'INVENTORY_DEFAULT_HOSTS', '') or '').strip()
 
@@ -3151,12 +3164,8 @@ class PendenciasView(LoginRequiredMixin, TemplateView):
                 messages.error(request, 'Atendente TI invalido.')
                 return redirect('pendencias')
 
-            attendant = ERPUser.objects.filter(
-                id=attendant_id,
-                department__iexact='TI',
-                is_active=True,
-            ).first()
-            if not attendant:
+            attendant = ERPUser.objects.filter(id=attendant_id, is_active=True).first()
+            if not attendant or not _is_ti_department_value(attendant.department):
                 messages.error(request, 'Atendente TI nao encontrado.')
                 return redirect('pendencias')
 
@@ -3183,7 +3192,7 @@ class PendenciasView(LoginRequiredMixin, TemplateView):
         if not is_ti:
             return context
 
-        ti_users = ERPUser.objects.filter(department__iexact='TI', is_active=True).order_by('full_name')
+        ti_users = _active_ti_users_queryset()
         context['ti_users'] = ti_users
         default_attendant = ti_users.filter(full_name__iexact='Fabiano Polone').first() or ti_users.first()
         context['default_pendency_attendant_id'] = default_attendant.id if default_attendant else None
@@ -3256,12 +3265,8 @@ def pendencias_create_api(request):
     except (TypeError, ValueError):
         return JsonResponse({'ok': False, 'error': 'invalid_attendant_id'}, status=400)
 
-    attendant = ERPUser.objects.filter(
-        id=attendant_id,
-        department__iexact='TI',
-        is_active=True,
-    ).first()
-    if not attendant:
+    attendant = ERPUser.objects.filter(id=attendant_id, is_active=True).first()
+    if not attendant or not _is_ti_department_value(attendant.department):
         return JsonResponse({'ok': False, 'error': 'attendant_not_found'}, status=404)
 
     pendency = Pendencia.objects.create(
@@ -3303,7 +3308,7 @@ def pendencias_create_ticket_api(request):
         return JsonResponse({'ok': False, 'error': 'pendency_already_done'}, status=400)
 
     attendant = pendency.attendant
-    if not attendant or not attendant.is_active or (attendant.department or '').strip().upper() != 'TI':
+    if not attendant or not attendant.is_active or not _is_ti_department_value(attendant.department):
         return JsonResponse({'ok': False, 'error': 'attendant_not_available'}, status=400)
 
     description = (pendency.description or '').strip()
@@ -3630,7 +3635,7 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
                 'new_message_subject': email_templates.new_message_subject,
                 'new_message_body': email_templates.new_message_body,
             }
-            ti_users_list = list(ERPUser.objects.filter(department__iexact='TI', is_active=True).order_by('full_name'))
+            ti_users_list = list(_active_ti_users_queryset())
             contacts = []
             for user in ti_users_list:
                 phone = user.mobile or user.phone or ''
@@ -3653,7 +3658,7 @@ class ChamadosView(LoginRequiredMixin, TemplateView):
             )
             return context
 
-        ti_users = list(ERPUser.objects.filter(department__iexact='TI', is_active=True).order_by('full_name'))
+        ti_users = list(_active_ti_users_queryset())
         context['ti_users'] = ti_users
         context['ticket_close_categories'] = list(TicketCloseCategory.objects.order_by('name', 'id'))
         ti_usernames_set = {(item.username or '').strip().lower() for item in ti_users if (item.username or '').strip()}
