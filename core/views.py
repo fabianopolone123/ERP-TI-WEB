@@ -3169,11 +3169,20 @@ class PendenciasView(LoginRequiredMixin, TemplateView):
                 messages.error(request, 'Atendente TI nao encontrado.')
                 return redirect('pendencias')
 
-            Pendencia.objects.create(
-                attendant=attendant,
-                description=description,
-                is_done=False,
-            )
+            try:
+                Pendencia.objects.create(
+                    attendant=attendant,
+                    description=description,
+                    is_done=False,
+                )
+            except DatabaseError:
+                logger.exception(
+                    'Falha ao cadastrar pendencia manualmente. attendant_id=%s description=%r',
+                    attendant.id,
+                    description,
+                )
+                messages.error(request, 'Falha ao salvar a pendencia. Verifique o banco e tente novamente.')
+                return redirect('pendencias')
             messages.success(request, 'Pendencia cadastrada com sucesso.')
             return redirect('pendencias')
 
@@ -3253,7 +3262,10 @@ def pendencias_toggle_status_api(request):
 @require_POST
 def pendencias_create_api(request):
     if not is_ti_user(request):
-        return JsonResponse({'ok': False, 'error': 'forbidden'}, status=403)
+        return JsonResponse(
+            {'ok': False, 'error': 'forbidden', 'message': 'Seu usuario nao pode cadastrar pendencias.'},
+            status=403,
+        )
 
     attendant_id_raw = (request.POST.get('attendant_id') or '').strip()
     description = (request.POST.get('description') or '').strip()
@@ -3263,17 +3275,38 @@ def pendencias_create_api(request):
     try:
         attendant_id = int(attendant_id_raw)
     except (TypeError, ValueError):
-        return JsonResponse({'ok': False, 'error': 'invalid_attendant_id'}, status=400)
+        return JsonResponse(
+            {'ok': False, 'error': 'invalid_attendant_id', 'message': 'Atendente TI invalido para esta pendencia.'},
+            status=400,
+        )
 
     attendant = ERPUser.objects.filter(id=attendant_id, is_active=True).first()
     if not attendant or not _is_ti_department_value(attendant.department):
-        return JsonResponse({'ok': False, 'error': 'attendant_not_found'}, status=404)
+        return JsonResponse(
+            {'ok': False, 'error': 'attendant_not_found', 'message': 'Atendente TI nao encontrado.'},
+            status=404,
+        )
 
-    pendency = Pendencia.objects.create(
-        attendant=attendant,
-        description=description,
-        is_done=False,
-    )
+    try:
+        pendency = Pendencia.objects.create(
+            attendant=attendant,
+            description=description,
+            is_done=False,
+        )
+    except DatabaseError:
+        logger.exception(
+            'Falha ao cadastrar pendencia via API. attendant_id=%s description=%r',
+            attendant.id,
+            description,
+        )
+        return JsonResponse(
+            {
+                'ok': False,
+                'error': 'save_failed',
+                'message': 'Falha ao salvar a pendencia no banco.',
+            },
+            status=500,
+        )
     when_text = timezone.localtime(pendency.created_at).strftime('%d/%m/%Y %H:%M') if pendency.created_at else ''
     return JsonResponse(
         {

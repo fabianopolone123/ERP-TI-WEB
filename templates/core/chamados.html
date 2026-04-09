@@ -2378,6 +2378,7 @@
             invalid_attendant_id: 'Atendente TI invalido para esta pendencia.',
             attendant_not_found: 'Atendente TI nao encontrado. Atualize a tela e tente novamente.',
             attendant_not_available: 'Atendente TI indisponivel no momento.',
+            save_failed: 'Falha ao salvar a pendencia no banco.',
         };
 
         if (createForm && createInput) {
@@ -2406,7 +2407,8 @@
                     const data = await response.json().catch(() => ({}));
                     if (!response.ok || !data.ok) {
                         const errorKey = String(data.error || '').trim();
-                        alert(pendencyCreateErrorMessages[errorKey] || 'Nao foi possivel cadastrar a pendencia.');
+                        const errorMessage = String(data.message || '').trim();
+                        alert(errorMessage || pendencyCreateErrorMessages[errorKey] || 'Nao foi possivel cadastrar a pendencia.');
                         return;
                     }
                     upsertItem(currentAttendantId, data.item || {});
